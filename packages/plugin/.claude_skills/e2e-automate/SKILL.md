@@ -101,67 +101,81 @@ rm -f e2e-tests/plans/*.md
 
 Calculate a quality score from the aggregated pipeline data and display a formatted summary.
 
-**Quality Score Formula:**
+**Quality Score Formula (adaptive weights — skipped phases are excluded):**
 
 ```
-qualityScore = (
-  inputProcessingScore * 0.25 +    // (successful configs / total configs) × 100
-  selectorDiscoveryScore * 0.20 +   // (validated selectors / total discovered) × 100, or 0 if no exploration
-  testExecutionScore * 0.30 +       // (passed tests / total tests) × 100, or 70 if execution skipped
-  healingSuccessScore * 0.25        // (auto-fixed / total failures) × 100, or 50 if healing skipped
-)
+Components (only include phases that actually ran):
+  inputProcessingScore   = (successful configs / total configs) × 100     [always active]
+  selectorDiscoveryScore = (validated selectors / total discovered) × 100 [if explore: true]
+  testExecutionScore     = (passed tests / total tests) × 100            [if runGeneratedCases: true]
+  healingSuccessScore    = (auto-fixed / total failures) × 100           [if healing ran]
+
+Weights are redistributed among ACTIVE components only:
+  - Generation only (explore + no execution): input=0.40, selectors=0.60
+  - Generation + execution (no healing needed): input=0.25, selectors=0.25, execution=0.50
+  - Full pipeline (all phases ran): input=0.20, selectors=0.20, execution=0.35, healing=0.25
+
+This ensures a perfect generation-only run scores 100/100, not 76.5.
 ```
 
 **Rating:** 95-100 Excellent ⭐⭐⭐⭐⭐ | 85-94 Very Good ⭐⭐⭐⭐ | 75-84 Good ⭐⭐⭐ | 60-74 Fair ⭐⭐ | 0-59 Poor ⭐
 
 **Status:** score>=95 → "READY FOR PRODUCTION" | >=85 → "READY WITH MINOR FIXES" | >=75 → "REQUIRES ATTENTION" | >=60 → "NEEDS IMPROVEMENT" | else → "SIGNIFICANT ISSUES"
 
-**Display format:**
+**Display format (use markdown sections — NOT ASCII box art):**
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║             E2E AUTOMATION FINAL REVIEW                      ║
-║                  [{current date/time}]                        ║
-╚══════════════════════════════════════════════════════════════╝
+```markdown
+# E2E AUTOMATION FINAL REVIEW
+**{module name}** — {current date}
 
-📊 QUALITY SCORE: {score}/100 {stars}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{rating}
+---
 
-🎯 GENERATION SUMMARY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Configs Processed:  {successful}/{total}
-  Feature Files:      {count} created
-  Step Definitions:   {count} files ({totalSteps} steps)
-  Scenarios:          {count} total
+## 📊 Quality Score: {score}/100 {stars}
+**{status}**
 
-📁 GENERATED FILES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  {list each .feature and steps.js with full path}
+---
 
-🧪 TEST EXECUTION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  {if tests ran: Passed: X/Y (Z%), Duration: Ns}
-  {if skipped: "Skipped (runGeneratedCases: false)"}
+## 🎯 Generation Summary
+- **Configs Processed:** {successful}/{total}
+- **Feature Files:** {count} created
+- **Step Definitions:** {count} files ({totalSteps} steps)
+- **Scenarios:** {count} total
+- **Duration:** {total pipeline time from Phase 1 start to Phase 10 end}
 
-🔧 HEALING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  {if healing ran: Attempts: N, Auto-fixed: N, Success Rate: N%}
-  {if skipped: "Skipped"}
+---
 
-⏭️  SKIPPED PHASES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  {list each skipped phase and reason}
+## 📁 Generated Files
+- `{project_root}/{path_to_feature_file}`
+- `{project_root}/{path_to_steps_file}`
+- `{project_root}/{path_to_seed_file}`
 
-📋 NEXT STEPS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  1. Run tests: pnpm test:bdd
-  2. Fix failures: /e2e-heal
-  3. View report: pnpm report:playwright
+---
 
-╔══════════════════════════════════════════════════════════════╗
-║  STATUS: {overallStatus}                                     ║
-╚══════════════════════════════════════════════════════════════╝
+## 🧪 Test Execution
+{if tests ran: **Passed:** X/Y (Z%) | **Duration:** Ns}
+{if skipped: Skipped — `runGeneratedCases: false`}
+
+---
+
+## 🔧 Healing
+{if healing ran: **Attempts:** N | **Auto-fixed:** N | **Success Rate:** N%}
+{if skipped: Skipped — no test failures or execution skipped}
+
+---
+
+## ⏭️ Skipped Phases
+{list each: Phase N — reason (config flag)}
+
+---
+
+## 📋 Next Steps
+1. Run tests: `pnpm test:bdd`
+2. Fix failures: `/e2e-heal`
+3. View report: `pnpm report:playwright`
+
+---
+
+**STATUS: {overallStatus}**
 ```
 
 ## Progress Display

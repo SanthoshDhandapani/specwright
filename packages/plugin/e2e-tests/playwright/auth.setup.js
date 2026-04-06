@@ -1,5 +1,5 @@
 /**
- * Authentication Setup — react-template two-step localStorage login
+ * Authentication Setup — two-step localStorage login
  *
  * Flow:
  * 1. Navigate to /signin
@@ -7,7 +7,9 @@
  * 3. Wait for password field → fill password → click login submit
  * 4. Handle 2FA if twoFactorCodeInput appears
  * 5. Wait for redirect to /home
- * 6. Save storageState (captures localStorage: tfauth-token, tfcurrent-user)
+ * 6. Save storageState (captures localStorage auth tokens)
+ *
+ * Update authenticationData.js with your app's login form testIDs and credentials.
  */
 import { test as setup } from '@playwright/test';
 import path from 'path';

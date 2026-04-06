@@ -1,22 +1,32 @@
 {
   "name": "@specwright/plugin",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "Drop-in E2E test automation framework plugin — Playwright BDD + Claude Code agents",
   "license": "MIT",
-  "type": "module",
   "bin": {
-    "specwright-install": "./install.sh"
+    "specwright-plugin": "./cli.js"
   },
   "files": [
+    "cli.js",
     "install.sh",
     "PLUGIN.md",
+    "README.md",
     "README-TESTING.md",
     "playwright.config.ts",
     "package.json.snippet",
     ".gitignore.snippet",
-    ".claude_*",
+    ".claude_agents/",
+    ".claude_skills/",
+    "mcp.json.template",
+    ".claude_rules/",
+    ".claude_agent-memory/",
+    ".claude_memory_MEMORY.md",
+    ".claude_README.md",
     "e2e-tests/"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "playwright",
     "bdd",
@@ -24,6 +34,13 @@
     "testing",
     "automation",
     "claude",
-    "ai"
-  ]
+    "ai",
+    "specwright"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SanthoshDhandapani/specwright.git",
+    "directory": "packages/plugin"
+  },
+  "homepage": "https://github.com/SanthoshDhandapani/specwright"
 }

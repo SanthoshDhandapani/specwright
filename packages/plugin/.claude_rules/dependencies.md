@@ -21,13 +21,6 @@
 
 ---
 
-### `@fourkites/elemental-*` (Elemental Design System)
-
-**Context:** Internal UI component library used in the application.
-**Decision/Finding:** Multiple packages — `elemental-design-system`, `elemental-blocks`. When writing E2E selectors, check if components come from Elemental — they may have specific `data-testid` patterns or ARIA structures.
-
----
-
 ### Zustand + TanStack Query
 
 **Context:** State management.

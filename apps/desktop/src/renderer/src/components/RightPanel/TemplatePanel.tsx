@@ -20,8 +20,96 @@ interface TemplateEntry {
   runGeneratedCases: boolean;
 }
 
+/** Built-in quick-start templates — always available, use BASE_URL from settings */
+function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
+  return [
+    {
+      templateName: "🔍 Quick Explore",
+      mode: "explorer",
+      moduleName: "HomePage",
+      category: "@Modules",
+      subModules: [],
+      fileName: "homepage",
+      pageURL: baseUrl || "http://localhost:5173",
+      steps: ["Navigate to the home page and explore all interactive elements"],
+      filePath: "",
+      suitName: "",
+      jiraURL: "",
+      explore: true,
+      runExploredCases: false,
+      runGeneratedCases: false,
+    },
+    {
+      templateName: "🧭 Page Navigation",
+      mode: "explorer",
+      moduleName: "Navigation",
+      category: "@Modules",
+      subModules: [],
+      fileName: "navigation",
+      pageURL: baseUrl || "http://localhost:5173",
+      steps: [
+        "Navigate to the home page",
+        "Verify the page title and main heading",
+        "Click each navigation link and verify the URL changes",
+        "Verify the active nav item is highlighted",
+      ],
+      filePath: "",
+      suitName: "",
+      jiraURL: "",
+      explore: true,
+      runExploredCases: false,
+      runGeneratedCases: false,
+    },
+    {
+      templateName: "📝 Form & CRUD",
+      mode: "explorer",
+      moduleName: "FormTest",
+      category: "@Modules",
+      subModules: [],
+      fileName: "form_test",
+      pageURL: "",
+      steps: [
+        "Navigate to a page with a form",
+        "Fill all required fields with generated data",
+        "Submit the form and verify success message",
+        "Verify the created item appears in the list",
+        "Edit the item and verify changes persist",
+        "Delete the item and verify removal",
+      ],
+      filePath: "",
+      suitName: "",
+      jiraURL: "",
+      explore: true,
+      runExploredCases: false,
+      runGeneratedCases: false,
+    },
+    {
+      templateName: "🔐 Auth Flow",
+      mode: "explorer",
+      moduleName: "Authentication",
+      category: "@Modules",
+      subModules: [],
+      fileName: "authentication",
+      pageURL: "",
+      steps: [
+        "Navigate to the sign-in page",
+        "Verify sign-in form is displayed",
+        "Sign in with valid credentials",
+        "Verify user is authenticated (name/avatar visible)",
+        "Sign out and verify redirect to sign-in page",
+      ],
+      filePath: "",
+      suitName: "",
+      jiraURL: "",
+      explore: true,
+      runExploredCases: false,
+      runGeneratedCases: false,
+    },
+  ];
+}
+
 export default function TemplatePanel(): React.JSX.Element {
-  const { projectPath, projectState } = useConfigStore();
+  const { projectPath, projectState, envVars } = useConfigStore();
   const { addCard, updateCard, serialize } = useInstructionStore();
   const { startRun } = usePipelineStore();
 
@@ -32,12 +120,18 @@ export default function TemplatePanel(): React.JSX.Element {
   const [insertedAction, setInsertedAction] = useState<"idle" | "choosing">("idle");
 
   const isReady = projectState === "ready" && Boolean(projectPath);
+  const builtInTemplates = getBuiltInTemplates(envVars.BASE_URL || "");
 
-  // Load templates when project is ready
+  // Load project-specific templates when project is ready
   useEffect(() => {
     if (!isReady) return;
     window.specwright.project.readTemplates(projectPath).then((data) => {
-      setExampleTemplates(data as unknown as TemplateEntry[]);
+      const templates = data as unknown as TemplateEntry[];
+      // Filter out generic placeholders like @YourModule
+      const meaningful = templates.filter(
+        (t) => t.moduleName && !t.moduleName.includes("Your")
+      );
+      setExampleTemplates(meaningful);
     });
     window.specwright.project.readCustomTemplates(projectPath).then((data) => {
       setCustomTemplates(data as unknown as TemplateEntry[]);
@@ -74,7 +168,8 @@ export default function TemplatePanel(): React.JSX.Element {
     await window.specwright.project.writeInstructions(projectPath, instructions);
     const userMessage = `Run the /e2e-automate skill to execute the full E2E test automation pipeline. The instructions.js file has been saved and is ready. Read it from e2e-tests/instructions.js and execute all phases.`;
     startRun(userMessage);
-    await window.specwright.pipeline.start({ userMessage });
+    const { skipPermissions } = useConfigStore.getState();
+    await window.specwright.pipeline.start({ userMessage, skipPermissions });
   }, [projectPath, serialize, startRun]);
 
   const handleSaveAndClose = useCallback(async () => {
@@ -210,11 +305,23 @@ export default function TemplatePanel(): React.JSX.Element {
           </div>
         )}
 
-        {/* Example templates from instructions.example.js */}
+        {/* Built-in quick-start templates */}
+        {isReady && (
+          <div className="space-y-2">
+            <p className="text-slate-500 text-xs flex items-center gap-1.5">
+              <span>🚀</span> Quick Start
+            </p>
+            {builtInTemplates.map((tmpl, i) =>
+              renderTemplateCard(tmpl, `builtin-${i}`)
+            )}
+          </div>
+        )}
+
+        {/* Project-specific templates from instructions.example.js */}
         {isReady && exampleTemplates.length > 0 && (
           <div className="space-y-2">
             <p className="text-slate-500 text-xs flex items-center gap-1.5">
-              <span>📋</span> Example Templates
+              <span>📋</span> Project Templates
             </p>
             {exampleTemplates.map((tmpl, i) =>
               renderTemplateCard(tmpl, `example-${i}`)

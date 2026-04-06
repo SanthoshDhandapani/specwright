@@ -11,8 +11,11 @@
  */
 
 import { expect } from '@playwright/test';
-import _ from 'lodash';
 import { generateValueForField } from './testDataGenerator.js';
+
+// Simple replacements for lodash — avoids a dependency for 2 functions
+const snakeCase = (str) => str.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/[\s\-]+/g, '_').toLowerCase();
+const kebabCase = (str) => str.replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\s_]+/g, '-').toLowerCase();
 
 // ─────────────────────────────────────────────────────────────
 // FIELD_TYPES — declarative type constants
@@ -76,7 +79,7 @@ export async function processDataTable(page, dataTable, config = {}) {
       }
       // Cache SharedGenerated values for later <from_test_data> reads
       if (valueType === 'sharedgenerated') {
-        const cacheKey = mapping[fieldName] || _.snakeCase(fieldName);
+        const cacheKey = mapping[fieldName] || snakeCase(fieldName);
         if (!page.testData) page.testData = {};
         page.testData[cacheKey] = value;
         // Also write to featureDataCache for cross-scenario persistence
@@ -90,7 +93,7 @@ export async function processDataTable(page, dataTable, config = {}) {
       }
     } else if (value === '<from_test_data>') {
       // Read: look up from page.testData or featureDataCache
-      const cacheKey = mapping[fieldName] || _.snakeCase(fieldName);
+      const cacheKey = mapping[fieldName] || snakeCase(fieldName);
       if (page.testData?.[cacheKey] !== undefined) {
         value = page.testData[cacheKey];
         console.log(`📖 Read "${fieldName}" → ${cacheKey}: ${value}`);
@@ -146,7 +149,7 @@ export async function validateExpectations(page, dataTable, config = {}) {
 
     // ── Resolve <from_test_data> placeholder ──
     if (expectedValue === '<from_test_data>') {
-      const cacheKey = mapping[fieldName] || _.snakeCase(fieldName);
+      const cacheKey = mapping[fieldName] || snakeCase(fieldName);
       if (page.testData?.[cacheKey] !== undefined) {
         expectedValue = page.testData[cacheKey];
         console.log(`✅ Validate "${fieldName}" → ${cacheKey}: ${expectedValue}`);
@@ -184,7 +187,7 @@ export async function validateExpectations(page, dataTable, config = {}) {
  * Tries: testID → name → placeholder → label → CSS fallback
  */
 export async function fillFieldByName(container, fieldName, value) {
-  const fieldKebab = _.kebabCase(fieldName);
+  const fieldKebab = kebabCase(fieldName);
 
   const strategies = [
     () => container.getByTestId(fieldKebab),
@@ -221,7 +224,7 @@ export async function fillFieldByName(container, fieldName, value) {
  * Opens the dropdown, finds the option by text, clicks it.
  */
 export async function selectDropDownByTestId(page, fieldName, value, autoKebab = true) {
-  const testId = autoKebab ? _.kebabCase(fieldName) : fieldName;
+  const testId = autoKebab ? kebabCase(fieldName) : fieldName;
 
   const dropdownContainer = page.getByTestId(testId);
   await dropdownContainer.waitFor({ state: 'visible', timeout: 5000 });

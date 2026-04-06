@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("specwright", {
       systemPrompt?: string;
       userMessage: string;
       mode?: "claude-code";
+      skipPermissions?: boolean;
     }) => ipcRenderer.invoke("pipeline:start", payload),
 
     abort: () => ipcRenderer.invoke("pipeline:abort"),

@@ -16,6 +16,7 @@ interface ConfigState {
   envVars: EnvVars;
   bootstrapLog: string[];
   loaded: boolean;
+  skipPermissions: boolean;
 
   hydrate: () => Promise<void>;
   pickAndBootstrap: () => Promise<void>;
@@ -24,6 +25,7 @@ interface ConfigState {
   removeEnvVar: (key: string) => void;
   saveEnv: () => Promise<void>;
   appendBootstrapLog: (line: string) => void;
+  setSkipPermissions: (skip: boolean) => void;
 }
 
 const DEFAULT_ENV: EnvVars = { BASE_URL: "", TEST_ENV: "qat" };
@@ -34,6 +36,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   envVars: { ...DEFAULT_ENV },
   bootstrapLog: [],
   loaded: false,
+  skipPermissions: true,
 
   hydrate: async () => {
     const projectPath = await window.specwright.project.getPath();
@@ -99,5 +102,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   appendBootstrapLog: (line) => {
     set((s) => ({ bootstrapLog: [...s.bootstrapLog, line] }));
+  },
+
+  setSkipPermissions: (skip) => {
+    set({ skipPermissions: skip });
   },
 }));

@@ -7,15 +7,20 @@
 set -e
 
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-TARGET_DIR="$(pwd)"
+TARGET_DIR=""
 SKIP_AUTH=false
 
-# Parse arguments
+# Parse arguments — first non-flag argument is the target directory
 for arg in "$@"; do
   case $arg in
     --skip-auth) SKIP_AUTH=true ;;
+    -*) ;; # skip unknown flags
+    *) [ -z "$TARGET_DIR" ] && TARGET_DIR="$arg" ;;
   esac
 done
+
+# Default to current directory if no target specified
+TARGET_DIR="${TARGET_DIR:-$(pwd)}"
 
 echo "╔══════════════════════════════════════════════╗"
 echo "║  E2E Automation Plugin — Installing          ║"
@@ -107,6 +112,70 @@ echo "📦 Step 5: Installing documentation..."
 cp "$PLUGIN_DIR/README-TESTING.md" "$TARGET_DIR/"
 echo "  ✅ README-TESTING.md installed"
 
+# ── Step 5b: Install .mcp.json (MCP server config for Claude Code) ──
+if [ ! -f "$TARGET_DIR/.mcp.json" ]; then
+  echo "📦 Step 5b: Installing .mcp.json (MCP server config)..."
+  cp "$PLUGIN_DIR/mcp.json.template" "$TARGET_DIR/.mcp.json"
+  echo "  ✅ .mcp.json installed — Claude Code will discover e2e-automation tools"
+else
+  echo "⏭️  Step 5b: .mcp.json already exists — skipping"
+fi
+
+# ── Step 6: Merge dependencies + scripts into package.json ──
+echo "📦 Step 6: Merging dependencies and scripts into package.json..."
+if [ -f "$TARGET_DIR/package.json" ]; then
+  node -e "
+    const fs = require('fs');
+    const path = require('path');
+
+    const targetPkgPath = path.join('$TARGET_DIR', 'package.json');
+    const snippetPath = path.join('$PLUGIN_DIR', 'package.json.snippet');
+
+    const pkg = JSON.parse(fs.readFileSync(targetPkgPath, 'utf-8'));
+    const snippet = JSON.parse(fs.readFileSync(snippetPath, 'utf-8'));
+
+    // Merge devDependencies
+    if (snippet.devDependencies) {
+      pkg.devDependencies = { ...(pkg.devDependencies || {}), ...snippet.devDependencies };
+    }
+
+    // Merge scripts (don't overwrite existing)
+    if (snippet.scripts) {
+      pkg.scripts = pkg.scripts || {};
+      for (const [key, val] of Object.entries(snippet.scripts)) {
+        if (!pkg.scripts[key]) {
+          pkg.scripts[key] = val;
+        }
+      }
+    }
+
+    fs.writeFileSync(targetPkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    console.log('  ✅ package.json updated (devDependencies + scripts merged)');
+  "
+else
+  echo "  ⚠️  No package.json found in target — skipping dependency merge"
+  echo "     Manually merge contents of package.json.snippet into your package.json"
+fi
+
+# ── Step 7: Append .gitignore entries ──
+echo "📦 Step 7: Updating .gitignore..."
+if [ -f "$TARGET_DIR/.gitignore" ]; then
+  # Only append lines that don't already exist
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    [[ "$line" == \#* ]] && continue
+    grep -qF "$line" "$TARGET_DIR/.gitignore" 2>/dev/null || echo "$line" >> "$TARGET_DIR/.gitignore"
+  done < "$PLUGIN_DIR/.gitignore.snippet"
+  echo "  ✅ .gitignore updated"
+else
+  cp "$PLUGIN_DIR/.gitignore.snippet" "$TARGET_DIR/.gitignore"
+  echo "  ✅ .gitignore created"
+fi
+
+# ── Step 8: Create migrations/files directory ──
+mkdir -p "$TARGET_DIR/e2e-tests/data/migrations/files"
+touch "$TARGET_DIR/e2e-tests/data/migrations/files/.gitkeep"
+
 # ── Done ──
 echo ""
 echo "╔══════════════════════════════════════════════╗"
@@ -115,29 +184,24 @@ echo "╚═══════════════════════�
 echo ""
 echo "📋 Next steps:"
 echo ""
-echo "  1. Merge devDependencies + scripts from e2e-plugin/package.json.snippet"
-echo "     into your package.json, then run: pnpm install"
+echo "  1. Install dependencies: pnpm install"
 echo ""
-echo "  2. Install Playwright browsers: pnpx playwright install"
+echo "  2. Install Playwright browsers: npx playwright install"
 echo ""
-echo "  3. Append lines from e2e-plugin/.gitignore.snippet"
-echo "     to your .gitignore"
-echo ""
-echo "  4. Update e2e-tests/data/authenticationData.js"
+echo "  3. Update e2e-tests/data/authenticationData.js"
 echo "     → Set your app's login form testIDs"
 echo ""
-echo "  5. Update e2e-tests/data/testConfig.js"
+echo "  4. Update e2e-tests/data/testConfig.js"
 echo "     → Set your app's routes"
 echo ""
-echo "  6. Set credentials in .env:"
+echo "  5. Set credentials in .env:"
 echo "     TEST_USER_EMAIL=your-email@example.com"
 echo "     TEST_USER_PASSWORD=your-password"
 echo "     BASE_URL=http://localhost:5173"
 echo ""
-echo "  7. Start dev server and run tests:"
+echo "  6. Start dev server and run tests:"
 echo "     pnpm test:bdd:auth    # Run authentication tests"
 echo "     pnpm test:bdd         # Run all tests (except auth)"
-echo "     pnpm test:bdd:all     # Run everything including auth"
 echo ""
-echo "  8. Generate more tests: /e2e-automate (Claude Code CLI)"
+echo "  7. Generate more tests: /e2e-automate (Claude Code CLI)"
 echo ""

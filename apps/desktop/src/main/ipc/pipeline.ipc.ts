@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from "electron";
-import { ClaudeAgentRunner } from "@specwright/agent-runner";
+import { ClaudeAgentRunner, PlaywrightMcpClient } from "@specwright/agent-runner";
 import type { McpServerConfig } from "@specwright/agent-runner";
 import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService } from "../services/ProjectService";
@@ -25,12 +25,26 @@ export function registerPipelineIpc(
         systemPrompt?: string;
         userMessage: string;
         mode?: "claude-code";
+        skipPermissions?: boolean;
       }
     ) => {
       const win = getWindow();
       if (!win) return;
 
       const projectPath = configService.getProjectPath() || undefined;
+
+      // Clear planner agent-memory so Claude can't skip live exploration
+      if (projectPath) {
+        const memoryPaths = [
+          path.join(projectPath, ".claude", "agent-memory", "playwright-test-planner", "MEMORY.md"),
+          path.join(projectPath, ".claude_agent-memory", "playwright-test-planner", "MEMORY.md"),
+        ];
+        for (const memPath of memoryPaths) {
+          if (fs.existsSync(memPath)) {
+            fs.writeFileSync(memPath, "# Planner Memory\n\n(Cleared at pipeline start — explore the live application)\n");
+          }
+        }
+      }
 
       // Resolve system prompt
       let systemPrompt = payload.systemPrompt ?? "";
@@ -48,6 +62,19 @@ export function registerPipelineIpc(
       if (!systemPrompt) {
         systemPrompt = projectService.loadOrchestratorPrompt(projectPath);
       }
+
+      // When skip permissions is enabled, tell the AI it doesn't need to ask
+      if (payload.skipPermissions) {
+        systemPrompt += `\n\nIMPORTANT: All tool permissions are pre-approved. Do NOT ask the user to grant permission or approve any tool call. Do NOT pause for approval. All tools execute automatically. Proceed directly.`;
+      }
+
+      // Browser exploration guidance — Specwright handles it automatically
+      systemPrompt += `\n\nBROWSER EXPLORATION:
+Specwright automatically explores the target application when you reach Phase 4.
+You will receive live page snapshots (accessibility data with element roles, names, data-testid attributes) as a message.
+Use the provided snapshot data to write your seed file and test plan.
+Do NOT attempt to call browser MCP tools yourself — Specwright handles all browser interaction.
+Do NOT delegate browser tasks to sub-agents. Agent memory is cleared at pipeline start.`;
 
       // Append env credentials to user message
       let userMessage = payload.userMessage;
@@ -73,17 +100,16 @@ export function registerPipelineIpc(
       win.webContents.send("pipeline:log", {
         line: `[pipeline] System prompt: ${systemPrompt.length} chars`,
       });
+
       // Load MCP servers: project's .mcp.json + always include Playwright MCP
       const screenshotDir = projectPath
         ? path.join(projectPath, ".playwright-mcp")
         : ".playwright-mcp";
 
-      const mcpServers: Record<string, McpServerConfig> = {
-        "microsoft-playwright": {
-          command: "npx",
-          args: ["@playwright/mcp@latest", "--output-dir", screenshotDir],
-        },
-      };
+      // Don't pass Playwright MCP to Claude — Specwright handles browser
+      // exploration via PlaywrightMcpClient in the onExplore callback.
+      // Only load project-specific MCP servers from .mcp.json.
+      const mcpServers: Record<string, McpServerConfig> = {};
       if (projectPath) {
         const mcpJsonPath = path.join(projectPath, ".mcp.json");
         if (fs.existsSync(mcpJsonPath)) {
@@ -115,6 +141,7 @@ export function registerPipelineIpc(
           userMessage,
           cwd: projectPath,
           mcpServers,
+          skipPermissions: payload.skipPermissions,
           onToken: (token) => {
             win.webContents.send("pipeline:token", { token });
           },
@@ -134,6 +161,48 @@ export function registerPipelineIpc(
             return new Promise<boolean>((resolve) => {
               pendingPermissions.set(request.id, resolve);
             });
+          },
+          onExplore: async (url: string) => {
+            win.webContents.send("pipeline:log", {
+              line: `[explorer] Phase 4 detected — exploring ${url}…`,
+            });
+
+            const mcpClient = new PlaywrightMcpClient();
+            try {
+              await mcpClient.connect({
+                outputDir: screenshotDir,
+                onLog: (line) => win.webContents.send("pipeline:log", { line }),
+              });
+
+              const result = await mcpClient.explore(url);
+
+              if (!result.snapshot) {
+                win.webContents.send("pipeline:log", {
+                  line: `[explorer] No snapshot captured${result.error ? `: ${result.error}` : ""}`,
+                });
+                return null;
+              }
+
+              win.webContents.send("pipeline:log", {
+                line: `[explorer] Snapshot captured — ${result.snapshot.length} chars, ${result.pageSnapshots.length} sub-pages`,
+              });
+
+              // Format as context message for Claude
+              let msg = `Here is the LIVE browser exploration data from ${url}:\n\n`;
+              msg += `## Page Accessibility Snapshot\n\`\`\`\n${result.snapshot}\n\`\`\`\n\n`;
+              for (const page of result.pageSnapshots) {
+                msg += `## Sub-page: ${page.url}\n\`\`\`\n${page.snapshot}\n\`\`\`\n\n`;
+              }
+              msg += `Use these real selectors and elements to write the seed file and test plan. Do NOT use cached memory or agent-memory data.`;
+              return msg;
+            } catch (err) {
+              win.webContents.send("pipeline:log", {
+                line: `[explorer] Exploration error: ${String(err)}`,
+              });
+              return null;
+            } finally {
+              await mcpClient.disconnect().catch(() => {});
+            }
           },
         });
 
@@ -220,9 +289,6 @@ export function registerPipelineIpc(
 
     const seedContent = readFile("e2e-tests/playwright/generated/seed.spec.js");
 
-    // Load agent prompts as conventions — these contain ALL coding rules,
-    // feature file format, step definition patterns, FIELD_TYPES, etc.
-    // This eliminates the need for Claude to re-read fixtures, testConfig, stepHelpers.
     const agentFiles = [
       ".claude/agents/code-generator.md",
       ".claude/agents/bdd-generator.md",
@@ -236,7 +302,6 @@ export function registerPipelineIpc(
       }
     }
 
-    // Also include testConfig.js content (routes, timeouts) — small file, avoids a Read call
     const testConfigContent = readFile("e2e-tests/data/testConfig.js");
     if (testConfigContent) {
       agentContents.push(`## testConfig.js (routes and timeouts)\n\`\`\`javascript\n${testConfigContent}\n\`\`\``);

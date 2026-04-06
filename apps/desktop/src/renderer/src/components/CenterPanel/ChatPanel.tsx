@@ -74,6 +74,7 @@ function ChatInput(): React.JSX.Element {
     startRun(msg);
     setInput("");
 
+    const { skipPermissions } = useConfigStore.getState();
     await window.specwright.pipeline.start({
       systemPromptPath: selectedPreset || undefined,
       systemPrompt: selectedPreset
@@ -81,6 +82,7 @@ function ChatInput(): React.JSX.Element {
         : "You are a helpful AI assistant.",
       userMessage: msg,
       mode: runMode,
+      skipPermissions,
     });
   }, [input, isRunning, canRun, hasClaudeCode, selectedPreset, startRun]);
 

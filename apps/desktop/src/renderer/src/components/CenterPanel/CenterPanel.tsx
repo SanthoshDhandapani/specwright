@@ -101,8 +101,10 @@ function AgentOutputPanel(): React.JSX.Element {
       ].filter(Boolean).join("\n");
 
       startRun(text);
+      const { skipPermissions } = useConfigStore.getState();
       await window.specwright.pipeline.start({
         userMessage: continuationPrompt,
+        skipPermissions,
       });
     }
   }, [inputText, isRunning, injectUserMessage]);
@@ -202,8 +204,15 @@ function AgentOutputPanel(): React.JSX.Element {
                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
                   </span>
                 )}
-                {msg.isStreaming && msg.content && (
+                {msg.isStreaming && msg.content && !activeTool && (
                   <span className="inline-block w-0.5 h-4 bg-brand-400 ml-0.5 align-middle animate-pulse" />
+                )}
+                {msg.isStreaming && activeTool && (
+                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-700/50">
+                    <span className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-yellow-300 text-xs font-mono">{activeTool}</span>
+                    <span className="text-slate-500 text-xs">running…</span>
+                  </div>
                 )}
               </div>
               {/* Copy button — appears on hover */}

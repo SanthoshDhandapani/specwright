@@ -1,0 +1,286 @@
+import React, { useEffect, useState, useCallback } from "react";
+import { useConfigStore } from "@renderer/store/config.store";
+import { useInstructionStore, type InstructionCard as ICard } from "@renderer/store/instruction.store";
+import { usePipelineStore } from "@renderer/store/pipeline.store";
+
+interface TemplateEntry {
+  templateName: string;
+  mode: ICard["mode"];
+  moduleName: string;
+  category: ICard["category"];
+  subModules: string[];
+  fileName: string;
+  pageURL: string;
+  steps: string[];
+  filePath: string;
+  suitName: string;
+  jiraURL: string;
+  explore: boolean;
+  runExploredCases: boolean;
+  runGeneratedCases: boolean;
+}
+
+export default function TemplatePanel(): React.JSX.Element {
+  const { projectPath, projectState } = useConfigStore();
+  const { addCard, updateCard, serialize } = useInstructionStore();
+  const { startRun } = usePipelineStore();
+
+  const [exampleTemplates, setExampleTemplates] = useState<TemplateEntry[]>([]);
+  const [customTemplates, setCustomTemplates] = useState<TemplateEntry[]>([]);
+  const [savingName, setSavingName] = useState("");
+  const [showSaveInput, setShowSaveInput] = useState(false);
+  const [insertedAction, setInsertedAction] = useState<"idle" | "choosing">("idle");
+
+  const isReady = projectState === "ready" && Boolean(projectPath);
+
+  // Load templates when project is ready
+  useEffect(() => {
+    if (!isReady) return;
+    window.specwright.project.readTemplates(projectPath).then((data) => {
+      setExampleTemplates(data as unknown as TemplateEntry[]);
+    });
+    window.specwright.project.readCustomTemplates(projectPath).then((data) => {
+      setCustomTemplates(data as unknown as TemplateEntry[]);
+    });
+  }, [isReady, projectPath]);
+
+  const handleInsert = useCallback(
+    (tmpl: TemplateEntry) => {
+      const id = addCard();
+      updateCard(id, {
+        mode: tmpl.mode || "explorer",
+        moduleName: tmpl.moduleName,
+        category: tmpl.category,
+        subModules: tmpl.subModules || [],
+        fileName: tmpl.fileName,
+        pageURL: tmpl.pageURL || "",
+        steps: tmpl.steps.length > 0 ? tmpl.steps : [""],
+        filePath: tmpl.filePath || "",
+        suitName: tmpl.suitName || "",
+        jiraURL: tmpl.jiraURL || "",
+        explore: tmpl.explore,
+        runExploredCases: tmpl.runExploredCases,
+        runGeneratedCases: tmpl.runGeneratedCases,
+      });
+      setInsertedAction("choosing");
+    },
+    [addCard, updateCard]
+  );
+
+  const handleSaveAndExecute = useCallback(async () => {
+    setInsertedAction("idle");
+    if (!projectPath) return;
+    const instructions = serialize();
+    await window.specwright.project.writeInstructions(projectPath, instructions);
+    const userMessage = `Run the /e2e-automate skill to execute the full E2E test automation pipeline. The instructions.js file has been saved and is ready. Read it from e2e-tests/instructions.js and execute all phases.`;
+    startRun(userMessage);
+    await window.specwright.pipeline.start({ userMessage });
+  }, [projectPath, serialize, startRun]);
+
+  const handleSaveAndClose = useCallback(async () => {
+    setInsertedAction("idle");
+    if (!projectPath) return;
+    const instructions = serialize();
+    await window.specwright.project.writeInstructions(projectPath, instructions);
+  }, [projectPath, serialize]);
+
+  const handleSaveAsTemplate = useCallback(async () => {
+    if (!savingName.trim() || !projectPath) return;
+    const cards = serialize();
+    if (cards.length === 0) return;
+
+    const firstCard = cards[0] as Record<string, unknown>;
+    const newTemplate: TemplateEntry = {
+      templateName: savingName.trim(),
+      mode: (firstCard.mode as ICard["mode"]) || "explorer",
+      moduleName: (firstCard.moduleName as string) || "",
+      category: (firstCard.category as ICard["category"]) || "@Modules",
+      subModules: (firstCard.subModules as string[]) || [],
+      fileName: (firstCard.fileName as string) || "",
+      pageURL: (firstCard.pageURL as string) || "",
+      steps: (firstCard.steps as string[]) || [],
+      filePath: (firstCard.filePath as string) || "",
+      suitName: (firstCard.suitName as string) || "",
+      jiraURL: (firstCard.jiraURL as string) || "",
+      explore: firstCard.explore === true,
+      runExploredCases: firstCard.runExploredCases === true,
+      runGeneratedCases: firstCard.runGeneratedCases === true,
+    };
+
+    const updated = [...customTemplates, newTemplate];
+    await window.specwright.project.writeCustomTemplates(projectPath, updated);
+    setCustomTemplates(updated);
+    setSavingName("");
+    setShowSaveInput(false);
+  }, [savingName, projectPath, customTemplates, serialize]);
+
+  const handleDeleteCustom = useCallback(
+    async (index: number) => {
+      if (!projectPath) return;
+      const updated = customTemplates.filter((_, i) => i !== index);
+      await window.specwright.project.writeCustomTemplates(projectPath, updated);
+      setCustomTemplates(updated);
+    },
+    [projectPath, customTemplates]
+  );
+
+  const renderTemplateCard = (
+    tmpl: TemplateEntry,
+    key: string,
+    onDelete?: () => void
+  ): React.JSX.Element => {
+    let urlPath = "";
+    try { urlPath = tmpl.pageURL ? new URL(tmpl.pageURL).pathname : ""; } catch { /* ignore */ }
+
+    return (
+      <div
+        key={key}
+        className="bg-slate-800 border border-slate-700 rounded-lg p-3 space-y-2"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-brand-400 text-xs">
+              {tmpl.category === "@Workflows" ? "🔄" : "📋"}
+            </span>
+            <span className="text-slate-200 text-xs font-medium truncate">
+              {tmpl.templateName}
+            </span>
+          </div>
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="text-slate-600 hover:text-red-400 text-xs flex-shrink-0 transition-colors"
+              title="Delete template"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <p className="text-slate-500 text-xs truncate">
+          {tmpl.moduleName}
+          {tmpl.steps.length > 0 ? ` · ${tmpl.steps.length} step${tmpl.steps.length > 1 ? "s" : ""}` : ""}
+          {urlPath ? ` · ${urlPath}` : ""}
+        </p>
+
+        <button
+          onClick={() => handleInsert(tmpl)}
+          disabled={!isReady}
+          className="w-full text-center text-brand-400 hover:text-brand-300 disabled:text-slate-600 text-xs border border-slate-700 hover:border-brand-700 disabled:border-slate-800 rounded px-2 py-1 transition-colors"
+        >
+          Insert →
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-700 flex-shrink-0">
+        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">
+          Templates
+        </p>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto scrollable px-3 py-2 space-y-3">
+        {!isReady && (
+          <p className="text-slate-600 text-xs text-center py-4">
+            Select a project to load templates.
+          </p>
+        )}
+
+        {/* Action toast after insert */}
+        {insertedAction === "choosing" && (
+          <div className="bg-brand-900/30 border border-brand-700/50 rounded-lg p-3 space-y-2">
+            <p className="text-brand-300 text-xs font-medium">Template inserted!</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveAndExecute}
+                className="flex-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded px-2 py-1.5 transition-colors"
+              >
+                ▶ Save & Execute
+              </button>
+              <button
+                onClick={handleSaveAndClose}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded px-2 py-1.5 transition-colors"
+              >
+                💾 Save & Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Example templates from instructions.example.js */}
+        {isReady && exampleTemplates.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-slate-500 text-xs flex items-center gap-1.5">
+              <span>📋</span> Example Templates
+            </p>
+            {exampleTemplates.map((tmpl, i) =>
+              renderTemplateCard(tmpl, `example-${i}`)
+            )}
+          </div>
+        )}
+
+        {/* Custom user templates */}
+        {isReady && (
+          <div className="space-y-2">
+            <p className="text-slate-500 text-xs flex items-center gap-1.5">
+              <span>⭐</span> Custom Templates
+            </p>
+
+            {customTemplates.length === 0 && !showSaveInput && (
+              <p className="text-slate-600 text-xs py-2 text-center">
+                No custom templates yet.
+              </p>
+            )}
+
+            {customTemplates.map((tmpl, i) =>
+              renderTemplateCard(tmpl, `custom-${i}`, () => handleDeleteCustom(i))
+            )}
+
+            {/* Save current as template */}
+            {showSaveInput ? (
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  value={savingName}
+                  onChange={(e) => setSavingName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveAsTemplate();
+                    if (e.key === "Escape") { setShowSaveInput(false); setSavingName(""); }
+                  }}
+                  placeholder="Template name…"
+                  autoFocus
+                  className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+                />
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleSaveAsTemplate}
+                    disabled={!savingName.trim()}
+                    className="flex-1 bg-brand-600 hover:bg-brand-500 disabled:bg-slate-700 text-white text-xs rounded px-2 py-1 transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => { setShowSaveInput(false); setSavingName(""); }}
+                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded px-2 py-1 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSaveInput(true)}
+                className="w-full text-slate-400 hover:text-brand-400 text-xs border border-dashed border-slate-700 hover:border-brand-700 rounded px-2 py-1.5 transition-colors"
+              >
+                + Save current as template
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

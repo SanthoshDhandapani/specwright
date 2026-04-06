@@ -1,0 +1,23 @@
+node_modules/
+dist/
+out/
+.turbo/
+*.log
+.DS_Store
+.env
+.env.local
+apps/desktop/out/
+apps/desktop/dist/
+
+# E2E framework artifacts
+.features-gen/
+.playwright-mcp/
+test-results/
+reports/
+e2e-tests/playwright/auth-storage/.auth/user.json
+e2e-tests/playwright/test-data/*.json
+e2e-tests/playwright/test-data/**/*.json
+
+# MCP server local deps
+packages/mcp-server/node_modules/
+packages/mcp-server/package-lock.json

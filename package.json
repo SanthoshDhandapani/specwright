@@ -1,0 +1,29 @@
+{
+  "name": "specwright",
+  "version": "0.1.0",
+  "private": false,
+  "description": "AI-powered E2E test automation — Playwright BDD framework plugin + Electron desktop app + Claude Code agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/specwright/specwright.git"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.87"
+  }
+}

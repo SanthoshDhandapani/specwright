@@ -1,0 +1,21 @@
+{
+  "name": "@specwright/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server for E2E test automation — configure, explore, plan, and check pipeline status",
+  "license": "MIT",
+  "main": "index.js",
+  "bin": {
+    "specwright-mcp": "./index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "keywords": [
+    "mcp",
+    "playwright",
+    "e2e",
+    "testing",
+    "automation"
+  ]
+}

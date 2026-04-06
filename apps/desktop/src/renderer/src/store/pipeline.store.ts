@@ -36,6 +36,8 @@ interface PipelineState {
   phases: Phase[];
   errorMessage: string | null;
   pendingPermission: PendingPermission | null;
+  /** Currently running tool name (shown in chat while streaming pauses) */
+  activeTool: string | null;
 
   startRun: (userMessage: string) => void;
   injectUserMessage: (text: string) => void;
@@ -48,6 +50,7 @@ interface PipelineState {
   setPhaseStatus: (id: number, status: PhaseStatus, durationMs?: number) => void;
   showPermission: (request: PendingPermission) => void;
   clearPermission: () => void;
+  setActiveTool: (toolName: string | null) => void;
 }
 
 // Phases match SKILL.md /e2e-automate pipeline exactly
@@ -76,6 +79,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   phases: PHASES.map((p) => ({ ...p })),
   errorMessage: null,
   pendingPermission: null,
+  activeTool: null,
 
   startRun: (userMessage) =>
     set((s) => ({
@@ -174,4 +178,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 
   clearPermission: () =>
     set({ pendingPermission: null }),
+
+  setActiveTool: (toolName) =>
+    set({ activeTool: toolName }),
 }));

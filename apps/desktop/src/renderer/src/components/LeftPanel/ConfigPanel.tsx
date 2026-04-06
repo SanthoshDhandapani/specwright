@@ -7,6 +7,7 @@ export default function ConfigPanel(): React.JSX.Element {
   const {
     projectPath, projectState, envVars, loaded,
     pickAndBootstrap, setEnvVar, removeEnvVar, saveEnv,
+    skipPermissions, setSkipPermissions,
   } = useConfigStore();
 
   const [customVarKey, setCustomVarKey] = useState("");
@@ -56,9 +57,18 @@ export default function ConfigPanel(): React.JSX.Element {
     }
   };
 
-  // Custom vars: anything that isn't BASE_URL, TEST_ENV, TEST_USERNAME, TEST_PASSWORD
-  const systemKeys = new Set(["BASE_URL", "TEST_ENV", "TEST_USERNAME", "TEST_PASSWORD"]);
-  const customVars = Object.entries(envVars).filter(([k]) => !systemKeys.has(k));
+  // Keys with dedicated UI controls — not shown in the generic custom vars list
+  const managedKeys = new Set([
+    "BASE_URL", "TEST_ENV", "TEST_USERNAME", "TEST_PASSWORD",
+    "HEADLESS", "TEST_TIMEOUT", "ENABLE_SCREENSHOTS", "ENABLE_VIDEO_RECORDING", "ENABLE_TRACING",
+    // Framework internals — preserved but hidden
+    "BASE_ENV", "NODE_ENV", "BROWSER", "CHROME_ARGS",
+    "CUCUMBER_REPORT_PATH", "CODEGEN_OUTPUT_PATH",
+    "RETAIN_VIDEO_ON_SUCCESS", "VITE_BUILD_ENVIRONMENT",
+  ]);
+
+  // Only truly custom user-added vars show in the generic list
+  const customVars = Object.entries(envVars).filter(([k]) => !managedKeys.has(k));
 
   const isReady = projectState === "ready";
 
@@ -138,19 +148,21 @@ export default function ConfigPanel(): React.JSX.Element {
               />
             </div>
 
-            {/* Environment */}
-            <div>
-              <label className="block text-slate-300 text-xs mb-1">Environment</label>
-              <select
-                value={envVars.TEST_ENV ?? "qat"}
-                onChange={(e) => { setEnvVar("TEST_ENV", e.target.value); saveEnv(); }}
-                className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
-              >
-                {ENVS.map((env) => (
-                  <option key={env} value={env}>{env}</option>
-                ))}
-              </select>
-            </div>
+            {/* Environment — only shown if TEST_ENV has a value in .env.testing */}
+            {envVars.TEST_ENV && (
+              <div>
+                <label className="block text-slate-300 text-xs mb-1">Environment</label>
+                <select
+                  value={envVars.TEST_ENV ?? "qat"}
+                  onChange={(e) => { setEnvVar("TEST_ENV", e.target.value); saveEnv(); }}
+                  className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
+                >
+                  {ENVS.map((env) => (
+                    <option key={env} value={env}>{env}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Auth */}
             <div className="space-y-2">
@@ -189,6 +201,101 @@ export default function ConfigPanel(): React.JSX.Element {
                     />
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* Test Execution Settings */}
+            <div className="space-y-2.5">
+              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Test Execution</p>
+
+              {/* Headless */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-slate-300 text-xs">Headless Mode</span>
+                <button
+                  onClick={() => { setEnvVar("HEADLESS", envVars.HEADLESS === "true" ? "false" : "true"); saveEnv(); }}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${envVars.HEADLESS === "true" ? "bg-brand-600" : "bg-slate-600"}`}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${envVars.HEADLESS === "true" ? "left-4" : "left-0.5"}`} />
+                </button>
+              </label>
+
+              {/* Test Timeout */}
+              <div>
+                <label className="block text-slate-300 text-xs mb-1">Timeout (ms)</label>
+                <input
+                  type="number"
+                  value={envVars.TEST_TIMEOUT ?? "120000"}
+                  onChange={(e) => setEnvVar("TEST_TIMEOUT", e.target.value)}
+                  onBlur={handleBlurSave}
+                  className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+
+              {/* Screenshots */}
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300 text-xs">Screenshots</span>
+                <select
+                  value={envVars.ENABLE_SCREENSHOTS === "true" ? "failure" : "off"}
+                  onChange={(e) => { setEnvVar("ENABLE_SCREENSHOTS", e.target.value === "off" ? "false" : "true"); saveEnv(); }}
+                  className="bg-slate-700 text-slate-200 text-xs rounded px-2 py-1 border border-slate-600 focus:outline-none focus:border-brand-500"
+                >
+                  <option value="failure">On Failure</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+
+              {/* Video Recording */}
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300 text-xs">Video Recording</span>
+                <select
+                  value={
+                    envVars.ENABLE_VIDEO_RECORDING !== "true" ? "off" :
+                    envVars.RETAIN_VIDEO_ON_SUCCESS === "true" ? "always" : "failure"
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEnvVar("ENABLE_VIDEO_RECORDING", val === "off" ? "false" : "true");
+                    setEnvVar("RETAIN_VIDEO_ON_SUCCESS", val === "always" ? "true" : "false");
+                    saveEnv();
+                  }}
+                  className="bg-slate-700 text-slate-200 text-xs rounded px-2 py-1 border border-slate-600 focus:outline-none focus:border-brand-500"
+                >
+                  <option value="failure">On Failure</option>
+                  <option value="always">Always</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+
+              {/* Tracing */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-slate-300 text-xs">Tracing</span>
+                <button
+                  onClick={() => { setEnvVar("ENABLE_TRACING", envVars.ENABLE_TRACING === "true" ? "false" : "true"); saveEnv(); }}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${envVars.ENABLE_TRACING === "true" ? "bg-brand-600" : "bg-slate-600"}`}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${envVars.ENABLE_TRACING === "true" ? "left-4" : "left-0.5"}`} />
+                </button>
+              </label>
+
+              <hr className="border-slate-700 my-1" />
+
+              {/* Skip Permissions */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <div>
+                  <span className="text-slate-300 text-xs">Auto-Approve All</span>
+                  <p className="text-slate-600 text-xs mt-0.5">Skip permission prompts</p>
+                </div>
+                <button
+                  onClick={() => setSkipPermissions(!skipPermissions)}
+                  className={`w-8 h-4 rounded-full transition-colors relative flex-shrink-0 ${skipPermissions ? "bg-amber-500" : "bg-slate-600"}`}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${skipPermissions ? "left-4" : "left-0.5"}`} />
+                </button>
+              </label>
+              {skipPermissions && (
+                <p className="text-amber-400/80 text-xs pl-1">
+                  ⚠ All tool calls (Bash, Write, etc.) will run without asking
+                </p>
               )}
             </div>
 

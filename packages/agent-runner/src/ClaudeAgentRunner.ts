@@ -39,11 +39,19 @@ export interface AgentRunOptions {
   model?: string;
   allowedTools?: string[];
   mcpServers?: Record<string, McpServerConfig>;
+  /** Skip all permission prompts — auto-approve every tool call. Use with caution. */
+  skipPermissions?: boolean;
   onToken: (token: string) => void;
   onLog?: (line: string) => void;
   onToolStart?: (toolName: string, toolId: string) => void;
   onToolEnd?: (toolName: string, toolId: string, durationMs: number) => void;
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>;
+  /**
+   * Called when Phase 4 exploration is detected in Claude's output.
+   * Receives the target URL. Return formatted snapshot data to inject
+   * into the conversation, or null to skip.
+   */
+  onExplore?: (url: string) => Promise<string | null>;
 }
 
 /** Build a human-readable description of what a tool call wants to do. */
@@ -114,15 +122,18 @@ export class ClaudeAgentRunner {
       model,
       allowedTools,
       mcpServers,
+      skipPermissions,
       onToken,
       onLog,
       onToolStart,
       onToolEnd,
       onPermissionRequest,
+      onExplore,
     } = options;
 
     this.abortCtrl = new AbortController();
     let fullText = "";
+    let explorationTriggered = false;
 
     // Track tool call timings and input details
     const toolTimings = new Map<string, {
@@ -149,21 +160,34 @@ export class ClaudeAgentRunner {
           abortController: this.abortCtrl,
           includePartialMessages: true,
 
+          // Skip all permission prompts when enabled
+          ...(skipPermissions ? { allowDangerouslySkipPermissions: true } : {}),
+
           // MCP servers (Playwright, e2e-automation, etc.)
           mcpServers: mcpServers ?? {},
 
           // Auto-allow safe tools; Bash still goes through canUseTool for approval
-          allowedTools: allowedTools ?? [
-            "Read", "Glob", "Grep", "Agent", "Skill", "ToolSearch",
-            "Write", "Edit",  // file creation/editing is expected during generation
-          ],
+          allowedTools: skipPermissions
+            ? undefined  // all tools auto-approved when skip permissions is on
+            : (allowedTools ?? [
+                "Read", "Glob", "Grep", "Agent", "Skill", "ToolSearch",
+                "Write", "Edit",
+              ]),
 
-          // Permission callback — called for tools not in allowedTools
+          // Permission callback — ALWAYS provide to handle MCP consent flows.
+          // When skipPermissions is on, auto-approve everything including MCP tools.
+          // When off, route through the UI permission prompt.
           canUseTool: async (
             toolName: string,
             input: Record<string, unknown>,
             opts
           ): Promise<PermissionResult> => {
+            // Auto-approve everything when skip permissions is enabled
+            if (skipPermissions) {
+              onLog?.(`[permission] Auto-approved: ${toolName}`);
+              return { behavior: "allow", updatedInput: input };
+            }
+
             const title = opts.title ?? buildDescription(toolName, input);
             const description = opts.description ?? buildDescription(toolName, input);
 
@@ -269,6 +293,25 @@ export class ClaudeAgentRunner {
               if (token) {
                 fullText += token;
                 onToken(token);
+
+                // Phase 4 detection: when Claude mentions Phase 4 + a URL,
+                // trigger code-driven browser exploration and inject results
+                if (!explorationTriggered && onExplore) {
+                  const phase4Match = fullText.match(/phase\s*4[^]*?(https?:\/\/[^\s"'`\)]+)/i);
+                  if (phase4Match) {
+                    explorationTriggered = true;
+                    const targetUrl = phase4Match[1];
+                    onLog?.(`[explorer] Phase 4 detected — exploring ${targetUrl}`);
+                    onExplore(targetUrl).then((snapshot) => {
+                      if (snapshot && this.messageQueue) {
+                        this.messageQueue.push(snapshot, "next");
+                        onLog?.("[explorer] Snapshot injected into conversation");
+                      }
+                    }).catch((err) => {
+                      onLog?.(`[explorer] Exploration failed: ${String(err)}`);
+                    });
+                  }
+                }
               }
             }
           }

@@ -46,6 +46,7 @@ interface SpecwrightAPI {
       systemPrompt?: string;
       userMessage: string;
       mode?: "claude-code";
+      skipPermissions?: boolean;
     }) => Promise<void>;
     abort: () => Promise<void>;
     interrupt: () => Promise<void>;

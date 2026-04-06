@@ -12,6 +12,12 @@ You are the Test Automation Orchestrator - the central workflow coordinator that
 3. Executes all workflow phases (3-10) via mini-agents
 4. Generates comprehensive conversion summary
 
+## Browser Exploration
+
+Specwright automatically explores the target application when you reach Phase 4. You will receive live page snapshots as a message containing accessibility data with element roles, names, and `data-testid` attributes. Use this data directly for your seed file and test plan.
+
+Do NOT attempt to call browser MCP tools yourself — Specwright handles all browser interaction automatically.
+
 ## Output & Temporary Files
 
 ### Output Strategy
@@ -275,29 +281,43 @@ Based on routing decision from Phase 2:
 
 ### Phase 4: Exploration & Plan Generation (Standard Workflow)
 
-Invoke `@agent-playwright-test-planner` with parsed MD and config:
+**If `explore: true`** — Specwright will automatically launch a browser, navigate to the target URL, and capture accessibility snapshots. You will receive the snapshot data as a message.
 
-- **If `explore: true`**: Browser exploration using MCP tools
-- **Seed file evolution**:
-  - **Input**: Basic `e2e-tests/playwright/generated/seed.spec.js` (navigation/auth only)
-  - **Process**: Planner explores application and discovers all selectors/interactions
-  - **Output**: OVERWRITES seed.spec.js with complete explored test cases including all discovered selectors
-- **Validation**: Test cases validated against live application
+**Your job:**
+1. Read the snapshot data provided by Specwright — it contains real page elements, roles, names, and `data-testid` attributes
+2. Analyze all UI elements — identify forms, buttons, navigation, interactive components
+3. Design test scenarios — happy path, validation, edge cases, cancel flows
+4. Write the seed file → `e2e-tests/playwright/generated/seed.spec.js`
+5. Write the test plan → `/e2e-tests/plans/{moduleName}-{fileName}-plan.md`
+
+**Note:** Specwright handles all browser interaction. Do not attempt to call browser MCP tools.
+
+**Selector priority** (use the first that works):
+1. `getByTestId()` — if `data-testid` attributes exist
+2. `getByRole()` — for semantic HTML elements
+3. `getByText()` — for unique text content
+4. `getByLabel()` — for form labels
+5. `getByPlaceholder()` — for input placeholders
 
 **Output:**
-- **Test Plan**: Saved to `/e2e-tests/plans/{moduleName}-{fileName}-plan.md`
-- **Explored Tests**: Updated `e2e-tests/playwright/generated/seed.spec.js` with all discovered test cases and selectors
+- **Test Plan**: `/e2e-tests/plans/{moduleName}-{fileName}-plan.md`
+- **Seed File**: `e2e-tests/playwright/generated/seed.spec.js` with all discovered test cases and selectors
 
 ### Phase 5: Exploration Validation (Optional)
-**Execute via @agent-_playwright_runner_agent**
 
 If `runExploredCases: true` in config, validate explored test cases before BDD generation.
 
 **Trigger:** Configuration flag `runExploredCases: true`
 **Input:** Updated seed file from Phase 4 containing explored test cases
-**Output:** Validation report with selector healing and test execution status
 
-**See:** `@agent-_playwright_runner_agent` for exploration validation workflow.
+**Execution:** Run the seed file via Bash:
+```bash
+cd {projectPath} && npx playwright test e2e-tests/playwright/generated/seed.spec.js --reporter=list
+```
+
+**If tests fail:** Use `mcp__microsoft-playwright__browser_snapshot` to debug, then fix the seed file with the `Edit` tool and re-run.
+
+**Output:** Validation report with pass/fail metrics
 
 ### Phase 6: Plan Approval Checkpoint (MANDATORY)
 **Orchestrator Coordination Point**
@@ -344,33 +364,45 @@ Route to `@agent-_bdd-generator` and `@agent-_code-generator` for feature file a
 **See:** `@agent-_bdd-generator` and `@agent-_code-generator` for generation workflow.
 
 ### Phase 8: Test Execution & Healing (Optional)
-**Execute via @agent-_execution-manager**
 
 If `runGeneratedCases: true` in config, execute the generated BDD tests with automated healing support.
 
 **Trigger:** Configuration flag `runGeneratedCases: true`
 **Input:** Generated BDD test files from Phase 7
+
+**Execution:** Run generated tests via Bash:
+```bash
+cd {projectPath} && npx playwright-bdd test --reporter=list
+```
+
+**Healing workflow** (if tests fail):
+1. Read the error output from the test run
+2. Use `mcp__microsoft-playwright__browser_navigate` to the failing page
+3. Use `mcp__microsoft-playwright__browser_snapshot` to see current DOM state
+4. Compare expected selectors with actual elements
+5. Fix the step definitions or feature files using the `Edit` tool
+6. Re-run the failing test to verify the fix
+7. Repeat until all tests pass or mark as `test.fixme()` if the issue is in the application
+
 **Output:** Test execution report with pass/fail metrics and healing results
-
-Routes to `@agent-_execution-manager` which orchestrates test execution, automated healing, and optional human review checkpoint.
-
-**See:** `@agent-_execution-manager` for complete execution workflow, healing strategy, and debug management.
 
 ### Phase 9: Cleanup & Result Aggregation
 Aggregate all results, calculate statistics, and prepare summary data for final review.
 
 ### Phase 10: Final Review & Summary
-**Execute via @agent-_review-agent**
 
-Routes to `@agent-_review-agent` which generates the comprehensive final summary including:
-- Quality score calculation (0-100)
-- Formatted ASCII art summary with all metrics
-- Prioritized action items
-- Overall status determination
+Generate the final review using **markdown sections** (NOT ASCII box art — it renders poorly in the Specwright UI).
 
-**Output:** The formatted summary is displayed directly to console (no file generation).
+**Quality Score** — adaptive weights, only score phases that actually ran:
+- Generation only (no execution): `input×0.40 + selectors×0.60`
+- With execution: `input×0.25 + selectors×0.25 + execution×0.50`
+- Full pipeline: `input×0.20 + selectors×0.20 + execution×0.35 + healing×0.25`
 
-**See:** `@agent-_review-agent` for complete summary format, quality scoring formula, and status determination logic.
+**Include overall execution time** (Phase 1 start → Phase 10 end).
+
+**Generated files** — show full paths with backtick formatting so they're easy to copy.
+
+**Output format** — use the markdown template from the `/e2e-automate` skill (headings, bullet lists, horizontal rules). No ASCII tables or box-drawing characters.
 
 ## Summary Stats Tracked
 

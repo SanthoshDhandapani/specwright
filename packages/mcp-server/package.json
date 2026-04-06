@@ -8,6 +8,21 @@
   "bin": {
     "specwright-mcp": "./index.js"
   },
+  "files": [
+    "index.js",
+    "tools/",
+    "utils/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SanthoshDhandapani/specwright.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/SanthoshDhandapani/specwright",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1"
   },
@@ -16,6 +31,8 @@
     "playwright",
     "e2e",
     "testing",
-    "automation"
+    "automation",
+    "specwright",
+    "claude"
   ]
 }

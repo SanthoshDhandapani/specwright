@@ -85,9 +85,11 @@ export default function InstructionsBuilder(): React.JSX.Element {
       if (saveError) { setIsSubmitting(false); return; }
       const userMessage = `Run the /e2e-automate skill to execute the full E2E test automation pipeline. The instructions.js file has been saved and is ready. Read it from e2e-tests/instructions.js and execute all phases.`;
       startRun(userMessage);
+      const { skipPermissions } = useConfigStore.getState();
       await window.specwright.pipeline.start({
         userMessage,
         mode: "claude-code",
+        skipPermissions,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

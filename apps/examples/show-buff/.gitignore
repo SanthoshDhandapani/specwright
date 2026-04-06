@@ -14,9 +14,6 @@ e2e-tests/playwright/auth-storage/.auth/user.json
 e2e-tests/playwright/test-data/*.json
 e2e-tests/playwright/test-data/**/*.json
 
-# Playwright MCP screenshots
-.playwright-mcp/
-
 # Reports
 reports/cucumber-bdd/*
 reports/playwright/*

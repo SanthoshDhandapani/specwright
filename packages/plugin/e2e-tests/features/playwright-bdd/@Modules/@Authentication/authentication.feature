@@ -7,7 +7,7 @@ Feature: Authentication
   @login-form
   Scenario: Verify login form displays email input
     Given I am on the sign-in page
-    Then I should see the heading "Welcome to FourKites!"
+    Then I should see the heading "Welcome to YourApp!"
     And the element with test ID "loginEmail" should be visible
     And the element with test ID "loginEmailSubmit" should be disabled
 
@@ -37,7 +37,7 @@ Feature: Authentication
     Then the element with test ID "loginPassword" should be visible
     When I enter password "WrongPassword123"
     And I click the login submit button
-    Then I should see the text "Email does not exist on FourKites"
+    Then I should see the text "Email does not exist on YourApp"
 
   @login-empty-email
   Scenario: Empty email validation

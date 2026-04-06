@@ -114,32 +114,70 @@ export class ProjectService {
     }
   }
 
-  readEnv(projectPath: string): EnvVars {
-    const envPath = path.join(projectPath, ".env");
-    if (!fs.existsSync(envPath)) return { BASE_URL: "", TEST_ENV: "qat" };
-
-    const raw = fs.readFileSync(envPath, "utf-8");
-    const result: EnvVars = { BASE_URL: "", TEST_ENV: "qat" };
+  /**
+   * Parse a .env file into key-value pairs.
+   * Skips comments and empty lines.
+   */
+  private parseEnvFile(filePath: string): Record<string, string> {
+    if (!fs.existsSync(filePath)) return {};
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const result: Record<string, string> = {};
     for (const line of raw.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
       const eqIdx = trimmed.indexOf("=");
       if (eqIdx < 0) continue;
-      const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim();
-      result[key] = val;
+      result[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
     }
     return result;
   }
 
+  /**
+   * Read testing-related env vars only.
+   * Primary source: e2e-tests/.env.testing (plugin-installed template)
+   * Fallback: .env for system keys (BASE_URL, TEST_ENV, TEST_USERNAME, TEST_PASSWORD)
+   * Never exposes app-specific vars (VITE_*, API keys, etc.)
+   */
+  readEnv(projectPath: string): EnvVars {
+    const testingEnvPath = path.join(projectPath, "e2e-tests/.env.testing");
+    const rootEnvPath = path.join(projectPath, ".env");
+
+    // Start with minimal defaults — only BASE_URL is always needed
+    const result: EnvVars = { BASE_URL: "", TEST_ENV: "" };
+
+    // Read from .env.testing (primary — all testing vars)
+    const testingVars = this.parseEnvFile(testingEnvPath);
+    for (const [key, val] of Object.entries(testingVars)) {
+      result[key] = val;
+    }
+
+    // Fall back to .env ONLY for the 4 system keys if not already set from .env.testing
+    const systemKeys = ["BASE_URL", "TEST_ENV", "TEST_USERNAME", "TEST_PASSWORD"];
+    const rootVars = this.parseEnvFile(rootEnvPath);
+    for (const key of systemKeys) {
+      if (!result[key] && rootVars[key]) {
+        result[key] = rootVars[key];
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Write testing env vars to e2e-tests/.env.testing.
+   * Never modifies the project's root .env (protects app secrets).
+   */
   writeEnv(projectPath: string, vars: EnvVars): void {
-    const lines: string[] = [];
+    const testingEnvPath = path.join(projectPath, "e2e-tests/.env.testing");
+    fs.mkdirSync(path.dirname(testingEnvPath), { recursive: true });
+
+    const lines: string[] = ["# E2E Testing Environment — managed by Specwright"];
     for (const [key, val] of Object.entries(vars)) {
       if (val !== undefined && val !== null) {
         lines.push(`${key}=${val}`);
       }
     }
-    fs.writeFileSync(path.join(projectPath, ".env"), lines.join("\n") + "\n", "utf-8");
+    fs.writeFileSync(testingEnvPath, lines.join("\n") + "\n", "utf-8");
   }
 
   /** Resolve the instructions.js path for a project. */

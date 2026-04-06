@@ -1,0 +1,278 @@
+import React, { useState } from "react";
+import { useInstructionStore, type InstructionCard as ICard } from "@renderer/store/instruction.store";
+
+interface Props {
+  card: ICard;
+  index: number;
+}
+
+const MODE_OPTIONS = [
+  { value: "explorer", label: "Explorer" },
+  { value: "csv", label: "CSV" },
+  { value: "virtuoso", label: "Virtuoso" },
+] as const;
+
+const CATEGORY_OPTIONS = [
+  { value: "@Modules", label: "@Modules" },
+  { value: "@Workflows", label: "@Workflows" },
+] as const;
+
+export default function InstructionCard({ card, index }: Props): React.JSX.Element {
+  const { updateCard, removeCard, addStep, removeStep, updateStep, addSubModule, removeSubModule } =
+    useInstructionStore();
+
+  const [subModuleInput, setSubModuleInput] = useState("");
+
+  const update = (patch: Partial<ICard>): void => updateCard(card.id, patch);
+
+  const handleAddSubModule = (): void => {
+    if (subModuleInput.trim()) {
+      addSubModule(card.id, subModuleInput);
+      setSubModuleInput("");
+    }
+  };
+
+  const isExplorer = card.mode === "explorer";
+  const isVirtuoso = card.mode === "virtuoso";
+  const isCsv = card.mode === "csv";
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <span className="text-brand-400 text-xs font-semibold uppercase tracking-wider">
+          Instruction {index + 1}
+        </span>
+        <button
+          onClick={() => removeCard(card.id)}
+          className="text-slate-600 hover:text-red-400 transition-colors text-base leading-none"
+          title="Remove instruction"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Row: Mode + Category */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Mode</label>
+          <select
+            value={card.mode}
+            onChange={(e) => update({ mode: e.target.value as ICard["mode"] })}
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
+          >
+            {MODE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Category</label>
+          <select
+            value={card.category}
+            onChange={(e) => update({ category: e.target.value as ICard["category"] })}
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
+          >
+            {CATEGORY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Row: Module + File name */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Module name</label>
+          <div className="flex items-center">
+            <span className="text-slate-500 text-xs pr-1">@</span>
+            <input
+              type="text"
+              value={card.moduleName}
+              onChange={(e) => update({ moduleName: e.target.value })}
+              placeholder="MyModule"
+              className="flex-1 bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">File name</label>
+          <input
+            type="text"
+            value={card.fileName}
+            onChange={(e) => update({ fileName: e.target.value })}
+            placeholder="my-feature"
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+          />
+        </div>
+      </div>
+
+      {/* Sub-modules */}
+      <div>
+        <label className="block text-slate-400 text-xs mb-1">Sub-modules</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={subModuleInput}
+            onChange={(e) => setSubModuleInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubModule(); } }}
+            placeholder="@SubModule (press Enter)"
+            className="flex-1 bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+          />
+          <button
+            onClick={handleAddSubModule}
+            className="bg-slate-600 hover:bg-slate-500 text-slate-200 text-xs rounded px-2 py-1.5 transition-colors"
+          >
+            + tag
+          </button>
+        </div>
+        {card.subModules.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {card.subModules.map((tag, i) => (
+              <span
+                key={i}
+                className="flex items-center gap-1 bg-brand-900/40 text-brand-300 text-xs rounded px-2 py-0.5 border border-brand-800"
+              >
+                {tag}
+                <button
+                  onClick={() => removeSubModule(card.id, i)}
+                  className="text-brand-500 hover:text-red-400 ml-0.5"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Page URL — Explorer only */}
+      {isExplorer && (
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Page URL</label>
+          <input
+            type="text"
+            value={card.pageURL}
+            onChange={(e) => update({ pageURL: e.target.value })}
+            placeholder="https://app.example.com/dashboard"
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+          />
+        </div>
+      )}
+
+      {/* Source file — CSV / Virtuoso */}
+      {(isCsv || isVirtuoso) && (
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Source file path</label>
+          <input
+            type="text"
+            value={card.filePath}
+            onChange={(e) => update({ filePath: e.target.value })}
+            placeholder="/path/to/test-cases.csv"
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+          />
+        </div>
+      )}
+
+      {/* Suite name — Virtuoso */}
+      {isVirtuoso && (
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Suite name</label>
+          <input
+            type="text"
+            value={card.suitName}
+            onChange={(e) => update({ suitName: e.target.value })}
+            placeholder="My Test Suite"
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+          />
+        </div>
+      )}
+
+      {/* Steps — Explorer only */}
+      {isExplorer && (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-slate-400 text-xs">Steps</label>
+            <button
+              onClick={() => addStep(card.id)}
+              className="text-brand-400 hover:text-brand-300 text-xs transition-colors"
+            >
+              + add step
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {card.steps.map((step, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <span className="text-slate-600 text-xs w-4 text-right flex-shrink-0">{i + 1}.</span>
+                <input
+                  type="text"
+                  value={step}
+                  onChange={(e) => updateStep(card.id, i, e.target.value)}
+                  placeholder={`Step ${i + 1} description…`}
+                  className="flex-1 bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+                />
+                {card.steps.length > 1 && (
+                  <button
+                    onClick={() => removeStep(card.id, i)}
+                    className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Jira URL */}
+      <div>
+        <label className="block text-slate-400 text-xs mb-1">
+          Jira URL <span className="text-slate-600">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={card.jiraURL}
+          onChange={(e) => update({ jiraURL: e.target.value })}
+          placeholder="https://jira.example.com/browse/PROJ-123"
+          className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+        />
+      </div>
+
+      {/* Checkboxes */}
+      <div className="flex flex-wrap gap-4 pt-1">
+        {isExplorer && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={card.explore}
+              onChange={(e) => update({ explore: e.target.checked })}
+              className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
+            />
+            <span className="text-slate-300 text-xs">Explore</span>
+          </label>
+        )}
+        {isExplorer && card.explore && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={card.runExploredCases}
+              onChange={(e) => update({ runExploredCases: e.target.checked })}
+              className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
+            />
+            <span className="text-slate-300 text-xs">Run explored cases</span>
+          </label>
+        )}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={card.runGeneratedCases}
+            onChange={(e) => update({ runGeneratedCases: e.target.checked })}
+            className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
+          />
+          <span className="text-slate-300 text-xs">Run generated cases</span>
+        </label>
+      </div>
+    </div>
+  );
+}

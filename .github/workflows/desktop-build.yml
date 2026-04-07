@@ -1,0 +1,74 @@
+name: Desktop Build
+
+# Trigger manually or via tag like "desktop-v0.1.0"
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Target platform"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - mac
+          - windows
+          - linux
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            dist_cmd: pnpm --filter @specwright/desktop dist:mac
+          - os: windows-latest
+            platform: windows
+            dist_cmd: pnpm --filter @specwright/desktop dist:win
+          # - os: ubuntu-latest
+          #   platform: linux
+          #   dist_cmd: pnpm --filter @specwright/desktop dist:linux
+    runs-on: ${{ matrix.os }}
+    if: >
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == matrix.platform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace dependencies
+        run: pnpm --filter @specwright/agent-runner build
+
+      - name: Build desktop distributables
+        run: ${{ matrix.dist_cmd }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: specwright-${{ matrix.platform }}
+          path: |
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.zip
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.AppImage
+          retention-days: 30

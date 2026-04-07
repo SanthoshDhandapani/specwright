@@ -28,8 +28,8 @@ importers:
         specifier: ^0.12.21
         version: 0.12.21(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
       '@assistant-ui/react-markdown':
-        specifier: ^0.12.7
-        version: 0.12.7(@assistant-ui/react@0.12.21(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1)))(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^0.12.8
+        version: 0.12.8(@assistant-ui/react@0.12.21(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1)))(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@specwright/agent-runner':
         specifier: workspace:*
         version: link:../../packages/agent-runner
@@ -227,10 +227,10 @@ packages:
       zustand:
         optional: true
 
-  '@assistant-ui/react-markdown@0.12.7':
-    resolution: {integrity: sha512-ggZniDxKnaytQniw8AJbG5YPT0coT1s/W3zBfYsoA8wuaUupzSsiGFmWmbv9qZsb1sn0uBEyjyyEglZAKB4ZkQ==}
+  '@assistant-ui/react-markdown@0.12.8':
+    resolution: {integrity: sha512-3oFtpnOlSBjT9A23zjDjGtAbZu0AIdZ4Zxmp5VtzRH67946j4ltIsgwFukm3D7B6T+Z63YJMxTyZDzY1AsJU1Q==}
     peerDependencies:
-      '@assistant-ui/react': ^0.12.21
+      '@assistant-ui/react': ^0.12.22
       '@types/react': '*'
       react: ^18 || ^19
     peerDependenciesMeta:
@@ -3399,7 +3399,7 @@ snapshots:
       react: 18.3.1
       zustand: 5.0.12(@types/react@18.3.28)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
 
-  '@assistant-ui/react-markdown@0.12.7(@assistant-ui/react@0.12.21(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1)))(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@assistant-ui/react-markdown@0.12.8(@assistant-ui/react@0.12.21(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1)))(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@assistant-ui/react': 0.12.21(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

@@ -16,7 +16,7 @@
     "clean": "rm -rf out dist"
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.12.21",
+    "@assistant-ui/react": "^0.12.24",
     "@assistant-ui/react-markdown": "^0.12.8",
     "@specwright/agent-runner": "workspace:*",
     "@specwright/plugin": "workspace:*",

@@ -90,7 +90,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       pendingPermission: null,
       phases: PHASES.map((p) => ({ ...p })),
       messages: [
-        ...s.messages,
+        // Clear isStreaming on all previous messages
+        ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
         { id: makeId(), role: "user",      content: userMessage, isStreaming: false },
         { id: makeId(), role: "assistant", content: "",          isStreaming: true  },
       ],
@@ -99,7 +100,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   injectUserMessage: (text) =>
     set((s) => ({
       messages: [
-        ...s.messages,
+        // Clear isStreaming on all previous messages
+        ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
         { id: makeId(), role: "user",      content: text, isStreaming: false },
         { id: makeId(), role: "assistant", content: "",   isStreaming: true  },
       ],

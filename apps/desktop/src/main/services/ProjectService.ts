@@ -44,69 +44,71 @@ export class ProjectService {
     this.resourcesDir = resourcesDir;
   }
 
-  async bootstrap(projectPath: string): Promise<BootstrapResult> {
+  async bootstrap(
+    projectPath: string,
+    options: { skipAuth?: boolean } = {}
+  ): Promise<BootstrapResult> {
     try {
       // Ensure directory exists
       fs.mkdirSync(projectPath, { recursive: true });
 
-      const dirs = [
-        "e2e-tests/playwright/auth-storage/.auth",
-        "e2e-tests/features/playwright-bdd/@Modules",
-        "e2e-tests/features/playwright-bdd/@Workflows",
-        "e2e-tests/features/playwright-bdd/shared",
-      ];
-      for (const dir of dirs) {
-        fs.mkdirSync(path.join(projectPath, dir), { recursive: true });
+      // Ensure a package.json exists (the plugin merges into it, doesn't create from scratch)
+      const pkgPath = path.join(projectPath, "package.json");
+      if (!fs.existsSync(pkgPath)) {
+        fs.writeFileSync(
+          pkgPath,
+          JSON.stringify(
+            {
+              name: path.basename(projectPath),
+              version: "1.0.0",
+              description: "Playwright BDD E2E test suite (scaffolded by Specwright)",
+            },
+            null,
+            2
+          ),
+          "utf-8"
+        );
       }
 
-      // Write scaffold files from templates
-      this.writeTemplate(projectPath, "package.json", this.packageJsonTemplate());
-      this.writeTemplate(projectPath, "playwright.config.ts", this.playwrightConfigTemplate());
-      this.writeTemplate(projectPath, ".env", this.envTemplate());
-      this.writeTemplate(projectPath, ".gitignore", this.gitignoreTemplate());
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/playwright/fixtures.js",
-        this.fixturesTemplate()
-      );
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/playwright/global.setup.js",
-        this.globalSetupTemplate()
-      );
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/playwright/global.teardown.js",
-        this.globalTeardownTemplate()
-      );
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/features/playwright-bdd/shared/navigation.steps.js",
-        this.navigationStepsTemplate()
-      );
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/features/playwright-bdd/shared/common.steps.js",
-        this.commonStepsTemplate()
-      );
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/features/playwright-bdd/shared/global-hooks.js",
-        this.globalHooksTemplate()
-      );
-      this.writeTemplate(
-        projectPath,
-        "e2e-tests/instructions.js",
-        this.instructionsTemplate()
-      );
+      // Run @specwright/plugin init — installs the full E2E framework:
+      // .claude/ (8 agents, 8 skills, 5 rules), e2e-tests/ (fixtures, helpers,
+      // shared steps, data config), playwright.config.ts, .mcp.json, README-TESTING.md
+      const authFlag = "--skip-auth";
 
-      // Run npm install
-      execSync("npm install", {
+      // Resolve the plugin's install.sh from the workspace (or fall back to npx)
+      // Desktop app uses --non-interactive to skip all prompts
+      let pluginCmd: string;
+      try {
+        const pluginDir = path.dirname(
+          require.resolve("@specwright/plugin/cli.js")
+        );
+        pluginCmd = `node "${path.join(pluginDir, "cli.js")}" init "${projectPath}" ${authFlag} --non-interactive`;
+      } catch {
+        // Plugin not in workspace — use npx (downloads from npm)
+        pluginCmd = `npx @specwright/plugin init "${projectPath}" ${authFlag} --non-interactive`;
+      }
+
+      execSync(pluginCmd, {
         cwd: projectPath,
         shell: true,
         stdio: "pipe",
         timeout: 120_000,
       });
+
+      // Install dependencies — best-effort. This can fail if the target is
+      // inside a monorepo (npm walks up and conflicts with the workspace root).
+      // The plugin init above is the critical step; deps can be installed manually.
+      try {
+        execSync("npm install --ignore-scripts", {
+          cwd: projectPath,
+          shell: true,
+          stdio: "pipe",
+          timeout: 120_000,
+        });
+      } catch {
+        // Non-fatal — deps may already be hoisted by the parent workspace,
+        // or the user can run `pnpm install` / `npm install` manually.
+      }
 
       return { success: true };
     } catch (err: unknown) {
@@ -287,7 +289,7 @@ export class ProjectService {
     return (
       fs.existsSync(path.join(projectPath, "package.json")) &&
       fs.existsSync(path.join(projectPath, "playwright.config.ts")) &&
-      fs.existsSync(path.join(projectPath, "node_modules"))
+      fs.existsSync(path.join(projectPath, "e2e-tests/playwright/fixtures.js"))
     );
   }
 

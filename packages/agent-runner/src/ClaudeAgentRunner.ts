@@ -134,6 +134,7 @@ export class ClaudeAgentRunner {
     this.abortCtrl = new AbortController();
     let fullText = "";
     let explorationTriggered = false;
+    const loggedSessions = new Set<string>();
 
     // Track tool call timings and input details
     const toolTimings = new Map<string, {
@@ -370,23 +371,31 @@ export class ClaudeAgentRunner {
           continue;
         }
 
-        // System init
+        // System init — deduplicate (sub-agents emit many system events)
         if (type === "system") {
           const sys = message as Record<string, unknown>;
-          const model = sys.model as string ?? "";
-          onLog?.(`[pipeline] Session ${sys.session_id ?? ""} model=${model}`);
+          const sessionId = (sys.session_id as string) ?? "";
+          const model = (sys.model as string) ?? "";
 
-          // Log MCP server status from system init event
-          const mcpStatus = sys.mcp_servers as Array<Record<string, unknown>> ?? [];
-          for (const server of mcpStatus) {
-            const name = server.name as string;
-            const status = server.status as string;
-            if (status === "connected") {
-              onLog?.(`[mcp] ✓ ${name}`);
-            } else if (status === "failed") {
-              onLog?.(`[mcp] ✕ ${name} — FAILED`);
-            } else if (status === "needs-auth") {
-              onLog?.(`[mcp] ⚠ ${name} — needs auth`);
+          // Only log session info once per session, and only when model is known
+          if (model && !loggedSessions.has(sessionId)) {
+            loggedSessions.add(sessionId);
+            onLog?.(`[pipeline] Session ${sessionId} model=${model}`);
+
+            // Log MCP server status only for the primary session (first one)
+            if (loggedSessions.size === 1) {
+              const mcpStatus = sys.mcp_servers as Array<Record<string, unknown>> ?? [];
+              for (const server of mcpStatus) {
+                const name = server.name as string;
+                const status = server.status as string;
+                if (status === "connected") {
+                  onLog?.(`[mcp] ✓ ${name}`);
+                } else if (status === "failed") {
+                  onLog?.(`[mcp] ✕ ${name} — FAILED`);
+                } else if (status === "needs-auth") {
+                  onLog?.(`[mcp] ⚠ ${name} — needs auth`);
+                }
+              }
             }
           }
           continue;

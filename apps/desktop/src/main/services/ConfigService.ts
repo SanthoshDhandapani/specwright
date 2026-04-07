@@ -1,4 +1,4 @@
-import { dialog } from "electron";
+import { dialog, BrowserWindow } from "electron";
 
 interface ConfigSchema {
   projectPath: string;
@@ -28,11 +28,14 @@ export class ConfigService {
     this.store.set("projectPath", p);
   }
 
-  async pickProjectFolder(): Promise<string | null> {
-    const result = await dialog.showOpenDialog({
+  async pickProjectFolder(parentWindow?: BrowserWindow | null): Promise<string | null> {
+    const options = {
       title: "Select or Create Project Folder",
-      properties: ["openDirectory", "createDirectory"],
-    });
+      properties: ["openDirectory", "createDirectory"] as const,
+    };
+    const result = parentWindow
+      ? await dialog.showOpenDialog(parentWindow, options)
+      : await dialog.showOpenDialog(options);
     if (!result.canceled && result.filePaths.length > 0) {
       return result.filePaths[0];
     }

@@ -1,6 +1,6 @@
 {
   "name": "@specwright/plugin",
-  "version": "0.1.5",
+  "version": "0.1.8",
   "description": "Drop-in E2E test automation framework plugin — Playwright BDD + Claude Code agents",
   "license": "MIT",
   "bin": {

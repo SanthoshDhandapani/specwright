@@ -49,64 +49,61 @@ function AgentOutputPanel(): React.JSX.Element {
     if (!text) return;
     setInputText("");
     inputRef.current?.focus();
-    injectUserMessage(text);
 
     if (isRunning) {
-      // Pipeline active — inject message into current session
-      window.specwright.pipeline.sendMessage(text);
-    } else {
-      // Pipeline finished (approval checkpoint or completion).
-      // Start a continuation run with FULL context snapshot — no re-reading needed.
-      const { startRun, phases, messages } = usePipelineStore.getState();
-
-      // Read context files from disk (plan + seed + conventions)
-      const ctx = await window.specwright.pipeline.readContextFiles();
-
-      // Build dynamic phase context
-      const completedPhases = phases
-        .filter(p => p.status === "done")
-        .map(p => `${p.id}. ${p.label}`)
-        .join(", ");
-      const nextPhase = phases.find(p => p.status === "pending");
-
-      // Get last assistant output (contains scenarios, selectors, phase summaries)
-      const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant" && m.content);
-      const sessionOutput = lastAssistantMsg?.content.slice(-3000) ?? "";
-
-      const continuationPrompt = [
-        `User response: ${text}`,
-        ``,
-        completedPhases ? `Completed phases: ${completedPhases}` : ``,
-        nextPhase ? `Next phase to execute: ${nextPhase.id}. ${nextPhase.label}` : `Continue with remaining phases.`,
-        ``,
-        `## CONTEXT FROM PREVIOUS SESSION (DO NOT re-read these files — all content is below)`,
-        ``,
-        ctx.plan ? `### Test Plan\n\`\`\`\n${ctx.plan}\n\`\`\`\n` : ``,
-        ctx.seed ? `### Seed File (Validated Selectors)\n\`\`\`javascript\n${ctx.seed}\n\`\`\`\n` : ``,
-        `### Agent Instructions (code-generator + bdd-generator + testConfig)`,
-        `The following contains COMPLETE coding conventions, FIELD_TYPES reference, processDataTable patterns,`,
-        `feature file format, step definition structure, import paths, and testConfig routes.`,
-        `You do NOT need to read fixtures.js, stepHelpers.js, testConfig.js, global-hooks.js, or any shared steps.`,
-        ``,
-        ctx.conventions,
-        ``,
-        `### Previous Session Output (last 3000 chars)`,
-        sessionOutput,
-        ``,
-        `## CRITICAL INSTRUCTIONS`,
-        `- You have ALL the context above including complete agent instructions, test plan, seed file, and testConfig.`,
-        `- Do NOT use Read tool on: fixtures.js, stepHelpers.js, testConfig.js, global-hooks.js, navigation.steps.js, common.steps.js, auth.steps.js`,
-        `- Do NOT use Glob to scan existing features or steps — you have the plan and conventions already.`,
-        `- Go DIRECTLY to file creation: mkdir directories then Write the .feature and steps.js files.`,
-        `- Use the code-generator and bdd-generator instructions above for exact patterns.`,
-      ].filter(Boolean).join("\n");
-
-      startRun(text);
+      // Pipeline active — try to inject into current session
+      const delivered = await window.specwright.pipeline.sendMessage(text);
+      if (delivered) {
+        injectUserMessage(text);
+        return; // message delivered to live session
+      }
+      // Session already ended (e.g., approval checkpoint) — fall through to resume/continuation
+    }
+    {
+      const { startRun, lastSessionId } = usePipelineStore.getState();
       const { skipPermissions } = useConfigStore.getState();
-      await window.specwright.pipeline.start({
-        userMessage: continuationPrompt,
-        skipPermissions,
-      });
+
+      // Add user message bubble + empty assistant placeholder
+      startRun(text);
+
+      if (lastSessionId) {
+        // Resume the previous session — SDK loads full conversation history
+        await window.specwright.pipeline.start({
+          userMessage: text,
+          skipPermissions,
+          resumeSessionId: lastSessionId,
+        });
+      } else {
+        // No session to resume — start fresh continuation with context injection
+        const { phases, messages } = usePipelineStore.getState();
+        const ctx = await window.specwright.pipeline.readContextFiles();
+        const completedPhases = phases
+          .filter(p => p.status === "done")
+          .map(p => `${p.id}. ${p.label}`)
+          .join(", ");
+        const nextPhase = phases.find(p => p.status === "pending");
+        const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant" && m.content);
+        const sessionOutput = lastAssistantMsg?.content.slice(-3000) ?? "";
+
+        const continuationPrompt = [
+          `User response: ${text}`,
+          ``,
+          completedPhases ? `Completed phases: ${completedPhases}` : ``,
+          nextPhase ? `Next phase to execute: ${nextPhase.id}. ${nextPhase.label}` : `Continue with remaining phases.`,
+          ``,
+          `## CONTEXT FROM PREVIOUS SESSION`,
+          ctx.plan ? `### Test Plan\n\`\`\`\n${ctx.plan}\n\`\`\`\n` : ``,
+          ctx.seed ? `### Seed File\n\`\`\`javascript\n${ctx.seed}\n\`\`\`\n` : ``,
+          ctx.conventions,
+          `### Previous Session Output (last 3000 chars)`,
+          sessionOutput,
+        ].filter(Boolean).join("\n");
+
+        await window.specwright.pipeline.start({
+          userMessage: continuationPrompt,
+          skipPermissions,
+        });
+      }
     }
   }, [inputText, isRunning, injectUserMessage]);
 
@@ -207,41 +204,6 @@ function AgentOutputPanel(): React.JSX.Element {
               <div key={msg.id} className="flex justify-end">
                 <div className="bg-brand-900/40 border border-brand-700/50 rounded-xl px-4 py-2.5 max-w-[85%]">
                   <p className="text-brand-200 text-sm whitespace-pre-wrap select-text cursor-text">{msg.content}</p>
-                </div>
-              </div>
-            );
-          }
-
-          // Explore result message — compact summary card
-          if (msg.role === "explore" && msg.exploreResult) {
-            const er = msg.exploreResult;
-            return (
-              <div key={msg.id} className="group relative">
-                <div className="bg-slate-800 rounded-xl border border-cyan-800/60 overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-cyan-900/30 border-b border-cyan-800/40">
-                    <span className="text-cyan-400 text-sm">Browser Exploration</span>
-                    <span className="text-slate-500 text-xs">— {er.title || er.url}</span>
-                  </div>
-
-                  <div className="px-4 py-3 space-y-2">
-                    <span className="text-cyan-400/70 text-xs font-mono">{er.url}</span>
-
-                    {er.error ? (
-                      <div className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">
-                        {er.error}
-                      </div>
-                    ) : (
-                      <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap select-text cursor-text">
-                        {er.summary || "Exploring..."}
-                      </div>
-                    )}
-
-                    {er.pageCount > 0 && (
-                      <span className="text-slate-500 text-xs">
-                        + {er.pageCount} additional page{er.pageCount > 1 ? "s" : ""} explored
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
             );
@@ -399,7 +361,7 @@ function detectPhaseFromText(text: string, currentPhase: number): number | null 
 }
 
 export default function CenterPanel(): React.JSX.Element {
-  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, appendExploreResult, status } = usePipelineStore();
+  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, status } = usePipelineStore();
   const { projectState, loaded, hydrate, activeTab, setActiveTab } = useConfigStore();
   const lastPhaseRef = React.useRef<number>(0);
 
@@ -446,7 +408,7 @@ export default function CenterPanel(): React.JSX.Element {
   // Wire IPC events once on mount
   useEffect(() => {
     const offToken = window.specwright.pipeline.onToken(({ token }) => handleToken(token));
-    const offDone  = window.specwright.pipeline.onDone(({ fullText }) => {
+    const offDone  = window.specwright.pipeline.onDone(({ fullText, sessionId }) => {
       // Mark the last active phase as done
       if (lastPhaseRef.current > 0) {
         setPhaseStatus(lastPhaseRef.current, "done");
@@ -459,7 +421,7 @@ export default function CenterPanel(): React.JSX.Element {
         setPhaseStatus(id, "done");
       }
 
-      finishRun(fullText);
+      finishRun(fullText, sessionId);
     });
     const offError = window.specwright.pipeline.onError(({ error }) => setError(error));
     const offLog   = window.specwright.pipeline.onLog(({ line }) => {
@@ -501,10 +463,6 @@ export default function CenterPanel(): React.JSX.Element {
     const offToolEnd = window.specwright.pipeline.onToolEnd(() => {
       // No phase transition on tool end — phases end when the next one starts
     });
-    const offExplore = window.specwright.pipeline.onExploreResult((data) => {
-      appendExploreResult(data);
-    });
-
     return () => {
       offToken();
       offDone();
@@ -513,9 +471,8 @@ export default function CenterPanel(): React.JSX.Element {
       offPerm();
       offToolStart();
       offToolEnd();
-      offExplore();
     };
-  }, [handleToken, appendLog, finishRun, setError, setPhaseStatus, showPermission, advanceToPhase, appendExploreResult]);
+  }, [handleToken, appendLog, finishRun, setError, setPhaseStatus, showPermission, advanceToPhase]);
 
   if (!loaded) {
     return (

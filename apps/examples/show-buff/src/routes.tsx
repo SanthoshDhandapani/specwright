@@ -18,6 +18,7 @@ export function AppRouter() {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/home" element={<HomePage />} />
             <Route path="/show/:id" element={<MovieDetailPage />} />
             <Route path="/signin" element={<SignInPage />} />
             <Route

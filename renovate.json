@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    "group:monorepos",
+    "group:recommended"
+  ],
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Group all non-major devDependencies",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "devDependencies (non-major)",
+      "automerge": true
+    },
+    {
+      "description": "Group Playwright updates",
+      "matchPackagePatterns": ["playwright"],
+      "groupName": "Playwright"
+    },
+    {
+      "description": "Group AI SDK updates",
+      "matchPackagePatterns": ["@ai-sdk", "^ai$"],
+      "groupName": "Vercel AI SDK"
+    },
+    {
+      "description": "Group Electron updates",
+      "matchPackagePatterns": ["electron"],
+      "groupName": "Electron"
+    }
+  ],
+  "ignorePaths": [
+    "apps/examples/show-buff/e2e-tests/**"
+  ]
+}

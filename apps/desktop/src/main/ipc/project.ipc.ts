@@ -8,14 +8,16 @@ export function registerProjectIpc(
   getWindow: () => BrowserWindow | null
 ): void {
   ipcMain.handle("project:pick-folder", async () => {
-    return configService.pickProjectFolder();
+    return configService.pickProjectFolder(getWindow());
   });
 
-  ipcMain.handle("project:bootstrap", async (_event, folderPath: string) => {
+  ipcMain.handle(
+    "project:bootstrap",
+    async (_event, folderPath: string, options?: { skipAuth?: boolean }) => {
     const win = getWindow();
     win?.webContents.send("project:bootstrap-log", { line: "[bootstrap] Starting…" });
 
-    const result = await projectService.bootstrap(folderPath);
+    const result = await projectService.bootstrap(folderPath, options);
 
     if (result.success) {
       configService.setProjectPath(folderPath);

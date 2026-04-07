@@ -107,6 +107,117 @@ pnpm test:clean              # Clean reports + .features-gen + test-data
 
 **Tip:** Use `--project serial-execution` for `@serial-execution` features, `--project auth-tests` for `@Authentication`, `--project main-e2e` for everything else.
 
+## Modules vs Workflows
+
+Specwright organizes tests into two categories: **Modules** and **Workflows**. Choosing the right one determines how your tests are scoped, isolated, and executed.
+
+### Modules (`@Modules/`)
+
+A Module tests a **single page or feature area** of your application in isolation.
+
+**When to use:**
+- Testing one page's UI (e.g., HomePage, UserProfile, Settings)
+- Testing a self-contained feature (e.g., Authentication, Search, Notifications)
+- Scenarios are independent — each can run without the others
+- No shared state between scenarios (or state shared only within the same feature file via `@serial-execution`)
+
+**Examples:**
+- `@Modules/@HomePage/` — year tabs, pagination, show cards, search
+- `@Modules/@Authentication/` — sign in, sign out, protected routes
+- `@Modules/@UserProfile/` — edit name, change avatar, delete account
+
+**Structure:**
+```
+@Modules/
+├── @HomePage/
+│   ├── homepage.feature      ← Gherkin scenarios for the home page
+│   └── steps.js              ← Step definitions (scoped to @HomePage only)
+├── @Authentication/
+│   ├── authentication.feature
+│   └── steps.js
+└── @Settings/
+    ├── settings.feature
+    └── steps.js
+```
+
+**Key rules:**
+- Each module gets its own directory under `@Modules/`
+- Steps in `@Modules/@HomePage/steps.js` are **only visible** to features inside `@HomePage/` (path-based tag scoping)
+- If a step is needed by multiple modules, move it to `shared/`
+- Modules run in **parallel by default** — add `@serial-execution` only if scenarios share state
+
+### Workflows (`@Workflows/`)
+
+A Workflow tests a **cross-module user journey** that spans multiple pages or features with shared data.
+
+**When to use:**
+- Testing an end-to-end user journey across multiple pages
+- Scenario B depends on data created by Scenario A (e.g., "create a list" then "add items to that list")
+- Data must survive across feature files (not just scenarios within one file)
+- The flow mimics a real user session: sign in → do something → verify elsewhere
+
+**Examples:**
+- Sign in → create a watchlist → add shows → verify on favorites page
+- Register → set up profile → invite team member → verify invite received
+- Create order → process payment → check confirmation → verify email
+
+**Structure:**
+```
+@Workflows/
+└── @UserJourney/
+    ├── @0-Precondition/          ← Runs FIRST (serial), creates shared data
+    │   ├── setup.feature         ← @precondition @cross-feature-data @serial-execution
+    │   └── steps.js
+    ├── @1-VerifyFavorites/       ← Runs AFTER precondition, loads shared data
+    │   ├── verify.feature        ← @workflow-consumer
+    │   └── steps.js
+    └── @2-VerifyLists/
+        ├── verify.feature
+        └── steps.js
+```
+
+**Key rules:**
+- Precondition directories start with `@0-` and use `@serial-execution` + `@precondition` + `@cross-feature-data` tags
+- Consumer directories start with `@1-`, `@2-`, etc. and use `@workflow-consumer` tag
+- Consumers load shared data with: `Given I load predata from "workflow-name"`
+- Data flows via the 3-layer persistence: `page.testData` → `featureDataCache` → scoped JSON files
+- Steps that touch multiple modules **must** live in `shared/`, not inside `@`-prefixed directories
+
+### Quick Decision Guide
+
+| Question | Module | Workflow |
+|----------|--------|----------|
+| Tests one page/feature? | Yes | No |
+| Tests a multi-page user journey? | No | Yes |
+| Scenarios are independent? | Yes | Not always |
+| Needs data from another feature file? | No | Yes |
+| Can run in any order? | Yes | No (precondition → consumers) |
+| Default execution | Parallel | Precondition serial, consumers parallel |
+
+### Configuring in `instructions.js`
+
+```javascript
+// Module — single page
+{
+  moduleName: 'HomePage',
+  category: '@Modules',
+  pageURL: 'http://localhost:5173',
+  // ...
+}
+
+// Workflow — cross-module journey
+{
+  moduleName: 'UserJourney',
+  category: '@Workflows',
+  pageURL: 'http://localhost:5173',
+  // ...
+}
+```
+
+The `category` field determines where the generated files are placed: `@Modules/@HomePage/` or `@Workflows/@UserJourney/`.
+
+---
+
 ## Writing Tests
 
 ### Feature Files

@@ -204,7 +204,9 @@ e2e-tests/features/playwright-bdd/
 
 ## ShowBuff Demo
 
-**ShowBuff** (`apps/examples/show-buff/`) is a TV show discovery app built as the primary demo target:
+**ShowBuff** (`apps/examples/show-buff/`) is a TV show discovery app built as the primary demo target.
+
+**Try it live:** [specwright-show-buff.vercel.app](https://specwright-show-buff.vercel.app/)
 
 - Browse top TV shows by year (TVMaze API — free, no key needed)
 - Show detail pages with cast, images, synopsis
@@ -213,7 +215,7 @@ e2e-tests/features/playwright-bdd/
 - Favorites and Watchlist (protected routes)
 - All interactive elements have `data-testid` for reliable E2E testing
 
-### Run it:
+### Run locally:
 
 ```bash
 cd apps/examples/show-buff
@@ -347,5 +349,5 @@ MIT
 ---
 
 <p align="center">
-  Built with <a href="https://claude.ai/code">Claude Code</a> + <a href="https://playwright.dev">Playwright</a> + <a href="https://www.electronjs.org">Electron</a>
+  Made with ❤️ on <a href="https://playwright.dev">Playwright</a>
 </p>

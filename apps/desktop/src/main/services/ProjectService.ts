@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
 
 export interface EnvVars {
   BASE_URL: string;
@@ -95,20 +95,16 @@ export class ProjectService {
         timeout: 120_000,
       });
 
-      // Install dependencies — best-effort. This can fail if the target is
-      // inside a monorepo (npm walks up and conflicts with the workspace root).
-      // The plugin init above is the critical step; deps can be installed manually.
-      try {
-        execSync("npm install --ignore-scripts", {
-          cwd: projectPath,
-          shell: true,
-          stdio: "pipe",
-          timeout: 120_000,
-        });
-      } catch {
-        // Non-fatal — deps may already be hoisted by the parent workspace,
-        // or the user can run `pnpm install` / `npm install` manually.
-      }
+      // Install dependencies in background — non-blocking so the app doesn't freeze
+      exec("npm install --ignore-scripts", {
+        cwd: projectPath,
+        shell: true,
+        timeout: 120_000,
+      }, (err) => {
+        if (err) {
+          console.warn("[bootstrap] npm install failed (non-fatal):", err.message);
+        }
+      });
 
       return { success: true };
     } catch (err: unknown) {

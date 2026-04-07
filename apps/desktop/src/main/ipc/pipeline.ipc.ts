@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from "electron";
-import { ClaudeAgentRunner, AiSdkRunner } from "@specwright/agent-runner";
+import { ClaudeAgentRunner, AiSdkRunner, PlaywrightMcpClient } from "@specwright/agent-runner";
 import type { McpServerConfig } from "@specwright/agent-runner";
 import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService } from "../services/ProjectService";
@@ -204,6 +204,65 @@ Generate the .feature and steps.js files directly without exploring the codebase
               return new Promise<boolean>((resolve) => {
                 pendingPermissions.set(request.id, resolve);
               });
+            },
+            onExplore: async (url: string) => {
+              win.webContents.send("pipeline:log", {
+                line: `[explorer] Starting browser exploration of ${url}`,
+              });
+              const explorer = new PlaywrightMcpClient();
+              try {
+                await explorer.connect({
+                  outputDir: screenshotDir,
+                  onLog: (line) => {
+                    win.webContents.send("pipeline:log", { line });
+                  },
+                });
+                const result = await explorer.explore(url);
+                await explorer.disconnect();
+
+                // Send exploration summary to renderer for display in chat
+                // Only send the summary text — not raw snapshots or screenshots
+                win.webContents.send("pipeline:explore-result", {
+                  url: result.url,
+                  title: result.title,
+                  summary: result.summary,
+                  pageCount: result.pageSnapshots.length,
+                  error: result.error ?? null,
+                });
+
+                // Format snapshot for Claude's context injection
+                const lines: string[] = [
+                  `# Live Browser Exploration — ${result.title}`,
+                  `URL: ${result.url}`,
+                  "",
+                  "## Accessibility Snapshot (landing page)",
+                  result.snapshot,
+                ];
+                if (result.pageSnapshots.length > 0) {
+                  lines.push("", "## Additional Page Snapshots");
+                  for (const ps of result.pageSnapshots) {
+                    lines.push(`\n### ${ps.url}`, ps.snapshot);
+                  }
+                }
+                if (result.error) {
+                  lines.push("", `## Exploration Error`, result.error);
+                }
+                return lines.join("\n");
+              } catch (err) {
+                const msg = `Exploration failed: ${String(err)}`;
+                win.webContents.send("pipeline:log", {
+                  line: `[explorer] ${msg}`,
+                });
+                win.webContents.send("pipeline:explore-result", {
+                  url,
+                  title: "",
+                  summary: "",
+                  pageCount: 0,
+                  error: msg,
+                });
+                try { await explorer.disconnect(); } catch { /* ignore */ }
+                return null;
+              }
             },
           });
         }

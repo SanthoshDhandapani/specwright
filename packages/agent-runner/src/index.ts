@@ -8,7 +8,7 @@ export { AiSdkRunner } from "./AiSdkRunner";
 export type { AiSdkRunOptions } from "./AiSdkRunner";
 
 export { PlaywrightMcpClient } from "./PlaywrightMcpClient";
-export type { ExplorationResult, McpToolResult, PlaywrightMcpOptions } from "./PlaywrightMcpClient";
+export type { ExplorationResult, DiscoveredElementGroup, McpToolResult, PlaywrightMcpOptions } from "./PlaywrightMcpClient";
 
 export {
   SeedFileSchema,

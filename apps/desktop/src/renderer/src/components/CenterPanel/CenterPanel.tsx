@@ -2,13 +2,14 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 // import PipelineStepper from "./PipelineStepper"; // parked — phase detection needs rework
 import WelcomeScreen from "./WelcomeScreen";
 import InstructionsBuilder from "./InstructionsBuilder";
+import HealerPanel from "./HealerPanel";
 import PermissionPrompt from "./PermissionPrompt";
-import { usePipelineStore, type ChatMessage } from "@renderer/store/pipeline.store";
+import { usePipelineStore, type ChatMessage, MAX_PHASE_ID, BDD_GENERATION_PHASE_ID } from "@renderer/store/pipeline.store";
 import { useConfigStore } from "@renderer/store/config.store";
 
 // ── Streaming output panel (shown while pipeline runs / after done) ──────────
 function AgentOutputPanel(): React.JSX.Element {
-  const { messages, logLines, status, errorMessage, clearFeed, injectUserMessage } = usePipelineStore();
+  const { messages, logLines, status, errorMessage, clearFeed, injectUserMessage, startRun, phases } = usePipelineStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [inputText, setInputText] = useState("");
@@ -116,6 +117,17 @@ function AgentOutputPanel(): React.JSX.Element {
     }
   }, [handleSend]);
 
+  const handleRunTests = useCallback(async () => {
+    const userMessage = `Run the generated BDD tests using: pnpm bddgen && npx playwright test --project setup --project main-e2e\n\nShow the results summary. If any tests fail, show which scenarios failed and why.`;
+    startRun(userMessage);
+    const { skipPermissions } = useConfigStore.getState();
+    await window.specwright.pipeline.start({
+      userMessage,
+      mode: "claude-code",
+      skipPermissions,
+    });
+  }, [startRun]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar */}
@@ -157,12 +169,23 @@ function AgentOutputPanel(): React.JSX.Element {
             </>
           )}
           {!isRunning && (
-            <button
-              onClick={clearFeed}
-              className="text-slate-400 hover:text-white text-xs border border-slate-700 hover:border-slate-500 rounded px-2 py-0.5 transition-colors"
-            >
-              ← Back to Instructions
-            </button>
+            <>
+              {/* Show Run Tests only if BDD generation phase completed */}
+              {phases.some((p) => p.id >= BDD_GENERATION_PHASE_ID && p.status === "done") && (
+                <button
+                  onClick={handleRunTests}
+                  className="text-emerald-400 hover:text-emerald-300 text-xs border border-emerald-800 hover:border-emerald-600 rounded px-2 py-0.5 transition-colors"
+                >
+                  ▶ Run Tests
+                </button>
+              )}
+              <button
+                onClick={clearFeed}
+                className="text-slate-400 hover:text-white text-xs border border-slate-700 hover:border-slate-500 rounded px-2 py-0.5 transition-colors"
+              >
+                ← Back
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -184,6 +207,41 @@ function AgentOutputPanel(): React.JSX.Element {
               <div key={msg.id} className="flex justify-end">
                 <div className="bg-brand-900/40 border border-brand-700/50 rounded-xl px-4 py-2.5 max-w-[85%]">
                   <p className="text-brand-200 text-sm whitespace-pre-wrap select-text cursor-text">{msg.content}</p>
+                </div>
+              </div>
+            );
+          }
+
+          // Explore result message — compact summary card
+          if (msg.role === "explore" && msg.exploreResult) {
+            const er = msg.exploreResult;
+            return (
+              <div key={msg.id} className="group relative">
+                <div className="bg-slate-800 rounded-xl border border-cyan-800/60 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-cyan-900/30 border-b border-cyan-800/40">
+                    <span className="text-cyan-400 text-sm">Browser Exploration</span>
+                    <span className="text-slate-500 text-xs">— {er.title || er.url}</span>
+                  </div>
+
+                  <div className="px-4 py-3 space-y-2">
+                    <span className="text-cyan-400/70 text-xs font-mono">{er.url}</span>
+
+                    {er.error ? (
+                      <div className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">
+                        {er.error}
+                      </div>
+                    ) : (
+                      <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap select-text cursor-text">
+                        {er.summary || "Exploring..."}
+                      </div>
+                    )}
+
+                    {er.pageCount > 0 && (
+                      <span className="text-slate-500 text-xs">
+                        + {er.pageCount} additional page{er.pageCount > 1 ? "s" : ""} explored
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -324,7 +382,7 @@ function detectPhaseFromTool(toolName: string, toolDetail: string): number | nul
  */
 function detectPhaseFromText(text: string, currentPhase: number): number | null {
   const next = currentPhase + 1;
-  if (next > 10) return null;
+  if (next > MAX_PHASE_ID) return null;
 
   // Only check the LAST LINE of streamed text — not a tail window
   const lines = text.split("\n").filter(l => l.trim());
@@ -341,8 +399,8 @@ function detectPhaseFromText(text: string, currentPhase: number): number | null 
 }
 
 export default function CenterPanel(): React.JSX.Element {
-  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, status } = usePipelineStore();
-  const { projectState, loaded, hydrate } = useConfigStore();
+  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, appendExploreResult, status } = usePipelineStore();
+  const { projectState, loaded, hydrate, activeTab, setActiveTab } = useConfigStore();
   const lastPhaseRef = React.useRef<number>(0);
 
   // Load config on mount
@@ -352,23 +410,23 @@ export default function CenterPanel(): React.JSX.Element {
 
   const { showPermission } = usePipelineStore();
 
-  // Helper: advance stepper to a phase (with sequential guard + gap filling)
+  // Helper: advance stepper to a phase (forward-only, fills gaps as "done")
   const advanceToPhase = useCallback((phaseId: number) => {
     if (!phaseId || phaseId === lastPhaseRef.current) return;
     // Only advance forward, never backward
     if (phaseId < lastPhaseRef.current) return;
-    // Allow skipping at most 3 phases (e.g., 3→6 OK, 3→10 not)
-    if (phaseId - lastPhaseRef.current > 3 && lastPhaseRef.current > 0) return;
+
+    // Mark the current phase as done
+    if (lastPhaseRef.current > 0) {
+      setPhaseStatus(lastPhaseRef.current, "done");
+    }
 
     // Fill gaps: mark any skipped phases between current and target as "done"
-    // (e.g., jumping from Phase 1 → Phase 3 auto-completes Phase 2)
+    // (e.g., jumping from Phase 4 → Phase 7 auto-completes 5 and 6)
     for (let i = lastPhaseRef.current + 1; i < phaseId; i++) {
       setPhaseStatus(i, "done");
     }
 
-    if (lastPhaseRef.current > 0) {
-      setPhaseStatus(lastPhaseRef.current, "done");
-    }
     setActivePhase(phaseId);
     lastPhaseRef.current = phaseId;
   }, [setActivePhase, setPhaseStatus]);
@@ -389,9 +447,18 @@ export default function CenterPanel(): React.JSX.Element {
   useEffect(() => {
     const offToken = window.specwright.pipeline.onToken(({ token }) => handleToken(token));
     const offDone  = window.specwright.pipeline.onDone(({ fullText }) => {
+      // Mark the last active phase as done
       if (lastPhaseRef.current > 0) {
         setPhaseStatus(lastPhaseRef.current, "done");
       }
+
+      // Mark all remaining phases beyond the last detected as done.
+      // The pipeline completed successfully, so any phases after the last
+      // detected one (e.g., Cleanup, Final Review) are done too.
+      for (let id = lastPhaseRef.current + 1; id <= MAX_PHASE_ID; id++) {
+        setPhaseStatus(id, "done");
+      }
+
       finishRun(fullText);
     });
     const offError = window.specwright.pipeline.onError(({ error }) => setError(error));
@@ -434,6 +501,9 @@ export default function CenterPanel(): React.JSX.Element {
     const offToolEnd = window.specwright.pipeline.onToolEnd(() => {
       // No phase transition on tool end — phases end when the next one starts
     });
+    const offExplore = window.specwright.pipeline.onExploreResult((data) => {
+      appendExploreResult(data);
+    });
 
     return () => {
       offToken();
@@ -443,8 +513,9 @@ export default function CenterPanel(): React.JSX.Element {
       offPerm();
       offToolStart();
       offToolEnd();
+      offExplore();
     };
-  }, [handleToken, appendLog, finishRun, setError, setPhaseStatus, showPermission, advanceToPhase]);
+  }, [handleToken, appendLog, finishRun, setError, setPhaseStatus, showPermission, advanceToPhase, appendExploreResult]);
 
   if (!loaded) {
     return (
@@ -463,17 +534,43 @@ export default function CenterPanel(): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Pipeline stepper — parked for now, phase detection needs rework
-      {showOutput && (
-        <div className="flex-shrink-0 border-b border-slate-700">
-          <PipelineStepper />
+      {/* Tab bar — shown when pipeline is NOT running */}
+      {!showOutput && (
+        <div className="flex-shrink-0 border-b border-slate-700 bg-slate-900/60 px-4">
+          <div className="flex gap-0">
+            <button
+              onClick={() => setActiveTab("explorer")}
+              className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                activeTab === "explorer"
+                  ? "border-brand-500 text-brand-400"
+                  : "border-transparent text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              Explorer
+            </button>
+            <button
+              onClick={() => setActiveTab("healer")}
+              className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+                activeTab === "healer"
+                  ? "border-emerald-500 text-emerald-400"
+                  : "border-transparent text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              Healer
+            </button>
+          </div>
         </div>
       )}
-      */}
 
-      {/* Main content: instructions builder OR agent output */}
+      {/* Main content: tab panels OR agent output */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {showOutput ? <AgentOutputPanel /> : <InstructionsBuilder />}
+        {showOutput ? (
+          <AgentOutputPanel />
+        ) : activeTab === "healer" ? (
+          <HealerPanel />
+        ) : (
+          <InstructionsBuilder />
+        )}
       </div>
     </div>
   );

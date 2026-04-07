@@ -13,11 +13,20 @@ export interface Phase {
 
 export type PipelineStatus = "idle" | "running" | "done" | "error" | "aborted";
 
+export interface ExploreResult {
+  url: string;
+  title: string;
+  summary: string;
+  pageCount: number;
+  error: string | null;
+}
+
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "explore";
   content: string;
   isStreaming: boolean;
+  exploreResult?: ExploreResult;
 }
 
 export interface PendingPermission {
@@ -51,9 +60,11 @@ interface PipelineState {
   showPermission: (request: PendingPermission) => void;
   clearPermission: () => void;
   setActiveTool: (toolName: string | null) => void;
+  appendExploreResult: (data: ExploreResult) => void;
 }
 
 // Phases match SKILL.md /e2e-automate pipeline exactly
+// Single source of truth for pipeline phases — update this array when phases change.
 const PHASES: Phase[] = [
   { id: 1,  label: "Initialization",           agentName: null,                        status: "pending", startedAt: null, durationMs: null },
   { id: 2,  label: "Detection & Routing",      agentName: null,                        status: "pending", startedAt: null, durationMs: null },
@@ -66,6 +77,12 @@ const PHASES: Phase[] = [
   { id: 9,  label: "Cleanup",                  agentName: null,                        status: "pending", startedAt: null, durationMs: null },
   { id: 10, label: "Final Review",             agentName: null,                        status: "pending", startedAt: null, durationMs: null },
 ];
+
+/** Derived constants — all phase logic should reference these, not hardcoded numbers. */
+export const PHASE_COUNT = PHASES.length;
+export const MAX_PHASE_ID = PHASES[PHASES.length - 1].id;
+/** The phase where BDD generation starts — "Run Tests" is available once this phase is done. */
+export const BDD_GENERATION_PHASE_ID = PHASES.find((p) => p.label === "/e2e-generate")!.id;
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -183,4 +200,18 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 
   setActiveTool: (toolName) =>
     set({ activeTool: toolName }),
+
+  appendExploreResult: (data) =>
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        {
+          id: makeId(),
+          role: "explore" as const,
+          content: "",
+          isStreaming: false,
+          exploreResult: data,
+        },
+      ],
+    })),
 }));

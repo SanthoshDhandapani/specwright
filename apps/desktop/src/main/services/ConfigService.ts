@@ -28,6 +28,21 @@ export class ConfigService {
     this.store.set("projectPath", p);
   }
 
+  async pickFiles(parentWindow?: BrowserWindow | null): Promise<string[]> {
+    const options = {
+      title: "Select files or directories to heal",
+      properties: ["openFile", "openDirectory", "multiSelections"] as const,
+      filters: [
+        { name: "Test files", extensions: ["feature", "js", "ts"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    };
+    const result = parentWindow
+      ? await dialog.showOpenDialog(parentWindow, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? [] : result.filePaths;
+  }
+
   async pickProjectFolder(parentWindow?: BrowserWindow | null): Promise<string | null> {
     const options = {
       title: "Select or Create Project Folder",

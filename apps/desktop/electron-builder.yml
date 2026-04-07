@@ -1,0 +1,58 @@
+appId: com.specwright.desktop
+productName: Specwright
+copyright: Copyright (c) 2026 Specwright
+
+# electron-vite outputs to out/
+directories:
+  buildResources: build
+  output: dist
+
+# Include the compiled app from electron-vite
+files:
+  - out/**/*
+  - "!out/tsconfig.node.tsbuildinfo"
+  - package.json
+  - node_modules/**/*
+
+# Extra resources bundled alongside the app (not inside asar)
+extraResources:
+  - from: src/main/resources
+    to: resources
+    filter:
+      - "**/*"
+
+# macOS
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Windows
+win:
+  target:
+    - nsis
+    - portable
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+
+# Linux
+linux:
+  target:
+    - AppImage
+  category: Development
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"

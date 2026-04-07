@@ -10,6 +10,8 @@ export interface EnvVars {
   [key: string]: string | undefined;
 }
 
+export type ActiveTab = "explorer" | "healer";
+
 interface ConfigState {
   projectPath: string;
   projectState: ProjectState;
@@ -17,6 +19,7 @@ interface ConfigState {
   bootstrapLog: string[];
   loaded: boolean;
   skipPermissions: boolean;
+  activeTab: ActiveTab;
 
   hydrate: () => Promise<void>;
   pickAndBootstrap: () => Promise<void>;
@@ -26,6 +29,7 @@ interface ConfigState {
   saveEnv: () => Promise<void>;
   appendBootstrapLog: (line: string) => void;
   setSkipPermissions: (skip: boolean) => void;
+  setActiveTab: (tab: ActiveTab) => void;
 }
 
 const DEFAULT_ENV: EnvVars = { BASE_URL: "", TEST_ENV: "qat" };
@@ -37,6 +41,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   bootstrapLog: [],
   loaded: false,
   skipPermissions: true,
+  activeTab: "explorer",
 
   hydrate: async () => {
     const projectPath = await window.specwright.project.getPath();
@@ -106,5 +111,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   setSkipPermissions: (skip) => {
     set({ skipPermissions: skip });
+  },
+  setActiveTab: (tab) => {
+    set({ activeTab: tab });
   },
 }));

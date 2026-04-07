@@ -404,6 +404,27 @@ Generate the final review using **markdown sections** (NOT ASCII box art — it 
 
 **Output format** — use the markdown template from the `/e2e-automate` skill (headings, bullet lists, horizontal rules). No ASCII tables or box-drawing characters.
 
+**CRITICAL — Next Steps section at the end of Phase 10:**
+
+After the quality score and generated files list, you MUST end with a "Next Steps" section that tells the user how to run the generated tests. This section is what the Specwright desktop UI uses to show the "Run Tests" button.
+
+**Always end Phase 10 with this exact format:**
+
+```
+---
+
+## Next Steps
+1. Run tests: `pnpm test:bdd`
+2. Fix failures: `/e2e-heal`
+3. View report: `pnpm report:playwright`
+
+---
+
+**STATUS: READY FOR PRODUCTION**
+```
+
+The `**STATUS: READY FOR PRODUCTION**` line signals to Specwright that the pipeline completed successfully and test cases are ready to execute. The "Run Tests" button in the Specwright UI will execute the generated BDD tests automatically.
+
 ## Summary Stats Tracked
 
 | Stat | Description |

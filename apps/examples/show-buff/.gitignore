@@ -19,3 +19,4 @@ reports/cucumber-bdd/*
 reports/playwright/*
 reports/json/*
 reports/screenshots/*
+.playwright-mcp/

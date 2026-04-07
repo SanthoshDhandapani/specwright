@@ -252,7 +252,8 @@ export class PlaywrightMcpClient {
    */
   async explore(
     url: string,
-    navRefs?: string[]
+    navRefs?: string[],
+    onProgress?: (step: string) => void,
   ): Promise<ExplorationResult> {
     const result: ExplorationResult = {
       url,
@@ -265,22 +266,27 @@ export class PlaywrightMcpClient {
 
     try {
       // Step 1: Navigate
+      onProgress?.(`🌐 Navigating to ${url}...`);
       const navResult = await this.navigate(url);
-      result.title = navResult;
+      // Extract clean page title from raw MCP output (contains "Page Title: ..." line)
+      const titleMatch = navResult.match(/Page Title:\s*(.+)/);
+      result.title = titleMatch?.[1]?.trim() || url;
+      onProgress?.(`📄 Page loaded: ${result.title}`);
 
       // Step 2: Snapshot the landing page (must be sequential — MCP server
       // can't handle concurrent tool calls on the same connection)
+      onProgress?.("🔍 Scanning page elements...");
       result.snapshot = await this.snapshot();
 
       // Step 2b: Build summary from the accessibility tree returned by browser_snapshot.
-      // The snapshot text contains lines like "- heading "Title" [ref=s1]", "- button "Submit" [ref=s2]".
-      // We extract the roles/names directly — these come from the MCP tool, not hardcoded by us.
       const { groups, summary } = PlaywrightMcpClient.summarizeAccessibilityTree(result.snapshot);
       result.discoveredElements = groups;
       result.summary = summary;
       this.onLog?.(`[mcp-client] Summary: ${groups.length} element groups discovered`);
+      onProgress?.(`✅ ${summary}`);
 
       // Step 3: Screenshot (best-effort, after snapshot completes)
+      onProgress?.("📸 Taking screenshot...");
       try {
         result.screenshot = await this.screenshot();
       } catch {
@@ -289,6 +295,7 @@ export class PlaywrightMcpClient {
 
       // Step 4: If nav refs provided, click each and snapshot
       if (navRefs && navRefs.length > 0) {
+        onProgress?.(`🔗 Exploring ${navRefs.length} additional pages...`);
         for (const ref of navRefs) {
           try {
             await this.click(ref);

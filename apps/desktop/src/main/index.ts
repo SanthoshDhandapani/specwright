@@ -88,3 +88,14 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
+
+// Clean up zombie MCP/Playwright child processes on quit
+app.on("before-quit", () => {
+  try {
+    const { execSync } = require("child_process");
+    // Kill any playwright-mcp or specwright-mcp processes spawned by this app
+    execSync("pkill -f 'playwright-mcp|@playwright/mcp|@specwright/mcp-server|playwright run-test-mcp-server' 2>/dev/null || true", { stdio: "ignore" });
+  } catch {
+    // ignore — best effort cleanup
+  }
+});

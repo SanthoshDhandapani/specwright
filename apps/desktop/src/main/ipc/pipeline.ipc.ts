@@ -10,6 +10,8 @@ let activeRunner: ClaudeAgentRunner | AiSdkRunner | null = null;
 
 // Pending permission requests: id → resolve function
 const pendingPermissions = new Map<string, (allowed: boolean) => void>();
+// Last completed session ID — used for resume
+let lastSessionId: string | null = null;
 
 export function registerPipelineIpc(
   configService: ConfigService,
@@ -28,6 +30,8 @@ export function registerPipelineIpc(
         skipPermissions?: boolean;
         /** Runner engine: "claude-agent-sdk" (default) or "ai-sdk" (Vercel AI SDK) */
         runner?: "claude-agent-sdk" | "ai-sdk";
+        /** Resume a previous session instead of starting fresh */
+        resumeSessionId?: string;
       }
     ) => {
       const win = getWindow();
@@ -120,7 +124,12 @@ Generate the .feature and steps.js files directly without exploring the codebase
             const mcpConfig = JSON.parse(fs.readFileSync(mcpJsonPath, "utf-8"));
             const projectServers = mcpConfig.mcpServers ?? {};
             for (const [name, config] of Object.entries(projectServers)) {
-              mcpServers[name] = config as McpServerConfig;
+              const cfg = config as Record<string, unknown>;
+              // Skip non-stdio servers (streamable-http, sse) — Agent SDK only supports command-based
+              if (cfg.type && cfg.type !== "stdio") continue;
+              // Skip if already defined (e.g., playwright-test added above)
+              if (mcpServers[name]) continue;
+              mcpServers[name] = cfg as McpServerConfig;
             }
             win.webContents.send("pipeline:log", {
               line: `[pipeline] MCP servers: ${Object.keys(mcpServers).join(", ")}`,
@@ -185,6 +194,7 @@ Generate the .feature and steps.js files directly without exploring the codebase
             systemPrompt,
             userMessage,
             cwd: projectPath,
+            resumeSessionId: payload.resumeSessionId,
             mcpServers,
             skipPermissions: payload.skipPermissions,
             onToken: (token) => {
@@ -217,18 +227,12 @@ Generate the .feature and steps.js files directly without exploring the codebase
                     win.webContents.send("pipeline:log", { line });
                   },
                 });
-                const result = await explorer.explore(url);
-                await explorer.disconnect();
-
-                // Send exploration summary to renderer for display in chat
-                // Only send the summary text — not raw snapshots or screenshots
-                win.webContents.send("pipeline:explore-result", {
-                  url: result.url,
-                  title: result.title,
-                  summary: result.summary,
-                  pageCount: result.pageSnapshots.length,
-                  error: result.error ?? null,
+                // Stream exploration progress as live tokens
+                win.webContents.send("pipeline:token", { token: "\n\n**Browser Exploration:**\n" });
+                const result = await explorer.explore(url, undefined, (step) => {
+                  win.webContents.send("pipeline:token", { token: `${step}\n` });
                 });
+                await explorer.disconnect();
 
                 // Format snapshot for Claude's context injection
                 const lines: string[] = [
@@ -253,13 +257,6 @@ Generate the .feature and steps.js files directly without exploring the codebase
                 win.webContents.send("pipeline:log", {
                   line: `[explorer] ${msg}`,
                 });
-                win.webContents.send("pipeline:explore-result", {
-                  url,
-                  title: "",
-                  summary: "",
-                  pageCount: 0,
-                  error: msg,
-                });
                 try { await explorer.disconnect(); } catch { /* ignore */ }
                 return null;
               }
@@ -267,7 +264,11 @@ Generate the .feature and steps.js files directly without exploring the codebase
           });
         }
 
-        win.webContents.send("pipeline:done", { fullText });
+        // Save session ID for potential resume
+        if (activeRunner instanceof ClaudeAgentRunner) {
+          lastSessionId = activeRunner.getLastSessionId();
+        }
+        win.webContents.send("pipeline:done", { fullText, sessionId: lastSessionId });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         win.webContents.send("pipeline:error", { error: msg });
@@ -286,14 +287,13 @@ Generate the .feature and steps.js files directly without exploring the codebase
     }
   });
 
-  ipcMain.handle("pipeline:send-message", (_event, { text, priority }: { text: string; priority?: "now" | "next" }) => {
+  ipcMain.handle("pipeline:send-message", (_event, { text, priority }: { text: string; priority?: "now" | "next" }): boolean => {
     if (activeRunner && activeRunner instanceof ClaudeAgentRunner) {
       const win = getWindow();
-      win?.webContents.send("pipeline:log", {
-        line: `[user] ${text}`,
-      });
-      activeRunner.sendMessage(text, priority ?? "now");
+      win?.webContents.send("pipeline:log", { line: `[user] ${text}` });
+      return activeRunner.sendMessage(text, priority ?? "now");
     }
+    return false;
   });
 
   ipcMain.handle("pipeline:interrupt", async () => {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, nativeImage, shell } from "electron";
 import { join } from "path";
 import { ConfigService } from "./services/ConfigService";
 import { ProjectService } from "./services/ProjectService";
@@ -30,6 +30,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     title: "Specwright",
+    icon: join(__dirname, "../../build/icon.png"),
     backgroundColor: "#0f172a",
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
@@ -59,6 +60,15 @@ function createWindow(): BrowserWindow {
 app.whenReady().then(async () => {
   // Init store (dynamic import required for ESM-only electron-store v10)
   await configService.init();
+
+  // Set dock icon on macOS — use PNG (more reliable than .icns for nativeImage)
+  const iconPng = join(__dirname, "../../build/icon.png");
+  if (process.platform === "darwin" && app.dock) {
+    const dockIcon = nativeImage.createFromPath(iconPng);
+    if (!dockIcon.isEmpty()) {
+      app.dock.setIcon(dockIcon);
+    }
+  }
 
   const win = createWindow();
 

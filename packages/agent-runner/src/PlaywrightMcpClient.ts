@@ -209,6 +209,22 @@ export class PlaywrightMcpClient {
   }
 
   /**
+   * Wait for the page to stabilize after navigation or click.
+   * Uses browser_wait_for when available, falls back to a brief delay.
+   */
+  async waitForPageStable(): Promise<void> {
+    try {
+      await this.callTool("browser_wait_for", {
+        state: "load",
+        timeout: 2000,
+      });
+    } catch {
+      // Fallback if browser_wait_for is not supported
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  /**
    * Close the browser.
    */
   async closeBrowser(): Promise<void> {
@@ -240,10 +256,11 @@ export class PlaywrightMcpClient {
       const navResult = await this.navigate(url);
       result.title = navResult;
 
-      // Step 2: Snapshot the landing page
+      // Step 2: Snapshot the landing page (must be sequential — MCP server
+      // can't handle concurrent tool calls on the same connection)
       result.snapshot = await this.snapshot();
 
-      // Step 3: Screenshot
+      // Step 3: Screenshot (best-effort, after snapshot completes)
       try {
         result.screenshot = await this.screenshot();
       } catch {
@@ -255,8 +272,8 @@ export class PlaywrightMcpClient {
         for (const ref of navRefs) {
           try {
             await this.click(ref);
-            // Wait briefly for page to load
-            await new Promise((r) => setTimeout(r, 1000));
+            // Wait for page to stabilize after click
+            await this.waitForPageStable();
             const pageSnapshot = await this.snapshot();
             result.pageSnapshots.push({
               url: ref,

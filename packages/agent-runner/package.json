@@ -10,7 +10,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "ai": "^6.0.149",
+    "@ai-sdk/anthropic": "^3.0.67",
+    "@ai-sdk/mcp": "^1.0.35",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

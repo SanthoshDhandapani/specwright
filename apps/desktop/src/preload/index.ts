@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld("specwright", {
       userMessage: string;
       mode?: "claude-code";
       skipPermissions?: boolean;
+      resumeSessionId?: string;
     }) => ipcRenderer.invoke("pipeline:start", payload),
 
     abort: () => ipcRenderer.invoke("pipeline:abort"),
@@ -56,7 +57,7 @@ contextBridge.exposeInMainWorld("specwright", {
       ipcRenderer.on("pipeline:token", (_e, data) => cb(data));
       return () => ipcRenderer.removeAllListeners("pipeline:token");
     },
-    onDone: (cb: (data: { fullText: string }) => void) => {
+    onDone: (cb: (data: { fullText: string; sessionId?: string }) => void) => {
       ipcRenderer.on("pipeline:done", (_e, data) => cb(data));
       return () => ipcRenderer.removeAllListeners("pipeline:done");
     },

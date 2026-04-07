@@ -41,6 +41,8 @@ export interface AgentRunOptions {
   mcpServers?: Record<string, McpServerConfig>;
   /** Skip all permission prompts — auto-approve every tool call. Use with caution. */
   skipPermissions?: boolean;
+  /** Resume a previous session instead of starting fresh. Pass the session ID from getLastSessionId(). */
+  resumeSessionId?: string;
   onToken: (token: string) => void;
   onLog?: (line: string) => void;
   onToolStart?: (toolName: string, toolId: string) => void;
@@ -113,6 +115,10 @@ export class ClaudeAgentRunner {
   private abortCtrl: AbortController | null = null;
   private activeQuery: QueryFnReturn | null = null;
   private messageQueue: MessageQueue | null = null;
+  /** Session ID from the last completed run — used for resumption. */
+  private lastSessionId: string | null = null;
+  /** Last run options — needed for session resumption with same config. */
+  private lastRunOptions: AgentRunOptions | null = null;
 
   async run(options: AgentRunOptions): Promise<string> {
     const {
@@ -123,6 +129,7 @@ export class ClaudeAgentRunner {
       allowedTools,
       mcpServers,
       skipPermissions,
+      resumeSessionId,
       onToken,
       onLog,
       onToolStart,
@@ -132,9 +139,11 @@ export class ClaudeAgentRunner {
     } = options;
 
     this.abortCtrl = new AbortController();
+    this.lastRunOptions = options;
     let fullText = "";
     let explorationTriggered = false;
     const loggedSessions = new Set<string>();
+    let hookBlockReason: string | null = null;
 
     // Track tool call timings and input details
     const toolTimings = new Map<string, {
@@ -146,23 +155,32 @@ export class ClaudeAgentRunner {
 
     onLog?.(`[pipeline] Starting Claude Agent SDK…`);
 
-    // Create message queue — push the initial message, SDK will pull it
+    // Create message queue for follow-up messages (user responses during the session).
+    // The initial message goes as a string prompt; follow-up messages stream in via streamInput().
     this.messageQueue = new MessageQueue();
-    this.messageQueue.push(userMessage);
 
     try {
       const { query: sdkQuery } = await loadSDK();
       this.activeQuery = sdkQuery({
-        prompt: this.messageQueue as unknown as AsyncIterable<{ type: "user"; message: { role: "user"; content: string }; parent_tool_use_id: null }>,
+        prompt: userMessage,
         options: {
           systemPrompt,
           cwd: cwd ?? process.cwd(),
           model,
           abortController: this.abortCtrl,
           includePartialMessages: true,
+          includeHookEvents: true,
+          // Resume a previous session — keeps full conversation history
+          ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+          // Don't load filesystem settings — MCP servers are passed explicitly via mcpServers.
+          // Loading ["project"] would also load .mcp.json which can crash if servers need auth.
+          // Loading ["user"] pulls in 20+ claude.ai MCP servers causing slow startup.
 
-          // Skip all permission prompts when enabled
-          ...(skipPermissions ? { allowDangerouslySkipPermissions: true } : {}),
+          // Skip all permission prompts when enabled — needs both flags for Agent SDK v0.1.0+
+          ...(skipPermissions ? {
+            permissionMode: "bypassPermissions" as const,
+            allowDangerouslySkipPermissions: true,
+          } : {}),
 
           // MCP servers (Playwright, e2e-automation, etc.)
           mcpServers: mcpServers ?? {},
@@ -221,7 +239,11 @@ export class ClaudeAgentRunner {
 
       onLog?.(`[pipeline] Session starting…`);
 
-      // MCP status is logged via the "system" event handler below (mcp_servers field)
+      // Wire the message queue for multi-turn conversation.
+      // streamInput() lets the SDK pull follow-up user messages without closing the session.
+      this.activeQuery.streamInput(
+        this.messageQueue as unknown as AsyncIterable<{ type: "user"; message: { role: "user"; content: string }; parent_tool_use_id: null }>
+      );
 
       for await (const message of this.activeQuery) {
         const type = (message as Record<string, unknown>).type as string;
@@ -295,13 +317,15 @@ export class ClaudeAgentRunner {
                 fullText += token;
                 onToken(token);
 
-                // Phase 4 detection: when Claude mentions Phase 4 + a URL,
-                // trigger code-driven browser exploration and inject results
+                // Phase 4 detection: when Claude outputs the Phase 4 heading + a URL,
+                // trigger code-driven browser exploration and inject results.
+                // Must match the actual "## Phase 4" heading, NOT checklist items like "- □ Phase 4:".
+                // Uses a 500-char window after the heading to find the URL.
                 if (!explorationTriggered && onExplore) {
-                  const phase4Match = fullText.match(/phase\s*4[^]*?(https?:\/\/[^\s"'`\)]+)/i);
+                  const phase4Match = fullText.match(/##\s*Phase\s*4[^\n]*\n([\s\S]{0,500}?)(https?:\/\/[^\s"'`\)]+)/i);
                   if (phase4Match) {
                     explorationTriggered = true;
-                    const targetUrl = phase4Match[1];
+                    const targetUrl = phase4Match[2];
                     onLog?.(`[explorer] Phase 4 detected — exploring ${targetUrl}`);
                     onExplore(targetUrl).then((snapshot) => {
                       if (snapshot && this.messageQueue) {
@@ -362,7 +386,21 @@ export class ClaudeAgentRunner {
           const result = message as Record<string, unknown>;
           const cost = (result.total_cost_usd as number) ?? 0;
           const ms = (result.duration_ms as number) ?? 0;
-          onLog?.(`[pipeline] Done — ${ms}ms, cost $${cost.toFixed(4)}`);
+          const usage = result.usage as Record<string, unknown> | undefined;
+          const inputTokens = (usage?.input_tokens as number) ?? 0;
+          const outputTokens = (usage?.output_tokens as number) ?? 0;
+          onLog?.(`[pipeline] Done — ${ms}ms, cost $${cost.toFixed(4)}, tokens: ${inputTokens}in/${outputTokens}out`);
+
+          // Detect hook-blocked scenario: 0 API tokens + hook returned "block".
+          // The block reason was already emitted as visible text in the hook_response handler.
+          if (inputTokens === 0 && outputTokens === 0 && hookBlockReason) {
+            throw new Error(hookBlockReason);
+          }
+
+          // Detect silent failure: 0 tokens but no known block reason
+          if (inputTokens === 0 && outputTokens === 0 && !fullText) {
+            onLog?.(`[pipeline] WARNING: 0 API tokens — prompt may have been blocked by a policy`);
+          }
 
           if (!fullText && result.result) {
             fullText = result.result as string;
@@ -371,15 +409,37 @@ export class ClaudeAgentRunner {
           continue;
         }
 
-        // System init — deduplicate (sub-agents emit many system events)
+        // System messages — init, hooks, state changes
         if (type === "system") {
           const sys = message as Record<string, unknown>;
+          const subtype = (sys.subtype as string) ?? "";
           const sessionId = (sys.session_id as string) ?? "";
           const model = (sys.model as string) ?? "";
+
+          // Detect hook blocking — managed policies can silently block prompts
+          // by returning {"decision": "block", "reason": "..."} from UserPromptSubmit hooks.
+          if (subtype === "hook_response") {
+            const hookEvent = (sys.hook_event as string) ?? "";
+            const output = (sys.output as string) ?? "";
+            try {
+              const parsed = JSON.parse(output) as Record<string, unknown>;
+              if (parsed.decision === "block") {
+                const reason = (parsed.reason as string) ?? "Prompt blocked by a policy";
+                hookBlockReason = reason;
+                onLog?.(`[hook] BLOCKED by ${hookEvent}: ${reason}`);
+                // Emit block reason as visible text so the user sees it in the chat immediately
+                const blockMsg = `\n\n**Blocked by policy:** ${reason}\n`;
+                fullText += blockMsg;
+                onToken(blockMsg);
+              }
+            } catch { /* output isn't JSON — safe to ignore */ }
+          }
 
           // Only log session info once per session, and only when model is known
           if (model && !loggedSessions.has(sessionId)) {
             loggedSessions.add(sessionId);
+            // Track primary session ID for resumption
+            if (loggedSessions.size === 1) this.lastSessionId = sessionId;
             onLog?.(`[pipeline] Session ${sessionId} model=${model}`);
 
             // Log MCP server status only for the primary session (first one)
@@ -418,13 +478,27 @@ export class ClaudeAgentRunner {
   }
 
   /**
-   * Send a message to the running session without stopping it.
-   * Pushes to the message queue — the SDK picks it up as the next user turn.
+   * Send a message to the running session.
+   * If the session is still alive, pushes to the message queue.
+   * Returns true if the message was delivered or will be delivered via resume.
    */
-  sendMessage(text: string, priority: "now" | "next" = "now"): void {
+  sendMessage(text: string, _priority: "now" | "next" = "now"): boolean {
     if (this.messageQueue) {
-      this.messageQueue.push(text, priority);
+      this.messageQueue.push(text, _priority);
+      return true;
     }
+    // Session ended — return false so caller can resume via run() with lastSessionId
+    return false;
+  }
+
+  /** Session ID from the last completed run. Use to resume with `run()`. */
+  getLastSessionId(): string | null {
+    return this.lastSessionId;
+  }
+
+  /** Last run options — needed for session resumption with same config. */
+  getLastRunOptions(): AgentRunOptions | null {
+    return this.lastRunOptions;
   }
 
   /**

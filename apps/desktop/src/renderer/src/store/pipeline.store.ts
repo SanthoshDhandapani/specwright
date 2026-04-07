@@ -47,12 +47,14 @@ interface PipelineState {
   pendingPermission: PendingPermission | null;
   /** Currently running tool name (shown in chat while streaming pauses) */
   activeTool: string | null;
+  /** Session ID from the last completed run — used for resume */
+  lastSessionId: string | null;
 
   startRun: (userMessage: string) => void;
   injectUserMessage: (text: string) => void;
   appendToken: (token: string) => void;
   appendLog: (line: string) => void;
-  finishRun: (fullText: string) => void;
+  finishRun: (fullText: string, sessionId?: string) => void;
   setError: (msg: string) => void;
   clearFeed: () => void;
   setActivePhase: (id: number) => void;
@@ -97,6 +99,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   errorMessage: null,
   pendingPermission: null,
   activeTool: null,
+  lastSessionId: null,
 
   startRun: (userMessage) =>
     set((s) => ({
@@ -140,14 +143,14 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   appendLog: (line) =>
     set((s) => ({ logLines: [...s.logLines, line] })),
 
-  finishRun: (_fullText) =>
+  finishRun: (_fullText, sessionId) =>
     set((s) => {
       const messages = [...s.messages];
       const lastIdx = messages.length - 1;
       if (lastIdx >= 0 && messages[lastIdx].role === "assistant") {
         messages[lastIdx] = { ...messages[lastIdx], isStreaming: false };
       }
-      return { messages, status: "done", pendingPermission: null };
+      return { messages, status: "done", pendingPermission: null, lastSessionId: sessionId ?? null };
     }),
 
   setError: (msg) =>

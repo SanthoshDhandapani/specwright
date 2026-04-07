@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type InstructionMode = "explorer" | "csv" | "virtuoso";
+export type InstructionMode = "explorer" | "csv";
 export type InstructionCategory = "@Modules" | "@Workflows";
 
 export interface InstructionCard {

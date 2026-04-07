@@ -24,9 +24,19 @@ interface ToolEventData {
   durationMs?: number;
 }
 
+interface ExploreResultData {
+  url: string;
+  title: string;
+  summary: string;
+  pageCount: number;
+  error: string | null;
+}
+
 interface SpecwrightAPI {
   project: {
     pickFolder: () => Promise<string | null>;
+    pickFiles: () => Promise<string[]>;
+    uploadTestFile: (sourcePath: string) => Promise<string>;
     bootstrap: (folderPath: string) => Promise<BootstrapResult>;
     getPath: () => Promise<string>;
     setPath: (p: string) => Promise<void>;
@@ -60,6 +70,7 @@ interface SpecwrightAPI {
     onPermissionRequest: (cb: (data: PermissionRequestData) => void) => () => void;
     onToolStart: (cb: (data: ToolEventData) => void) => () => void;
     onToolEnd: (cb: (data: ToolEventData) => void) => () => void;
+    onExploreResult: (cb: (data: ExploreResultData) => void) => () => void;
   };
 }
 

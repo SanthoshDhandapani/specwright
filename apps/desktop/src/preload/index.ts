@@ -1,8 +1,19 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+interface ExploreResultData {
+  url: string;
+  title: string;
+  summary: string;
+  pageCount: number;
+  error: string | null;
+}
+
 contextBridge.exposeInMainWorld("specwright", {
   project: {
     pickFolder: () => ipcRenderer.invoke("project:pick-folder"),
+    pickFiles: () => ipcRenderer.invoke("project:pick-files") as Promise<string[]>,
+    uploadTestFile: (sourcePath: string) =>
+      ipcRenderer.invoke("project:upload-test-file", sourcePath) as Promise<string>,
     bootstrap: (folderPath: string) => ipcRenderer.invoke("project:bootstrap", folderPath),
     getPath: () => ipcRenderer.invoke("project:get-path"),
     setPath: (p: string) => ipcRenderer.invoke("project:set-path", p),
@@ -70,6 +81,10 @@ contextBridge.exposeInMainWorld("specwright", {
     onToolEnd: (cb: (data: { toolName: string; toolId: string; durationMs: number }) => void) => {
       ipcRenderer.on("pipeline:tool-end", (_e, data) => cb(data));
       return () => ipcRenderer.removeAllListeners("pipeline:tool-end");
+    },
+    onExploreResult: (cb: (data: ExploreResultData) => void) => {
+      ipcRenderer.on("pipeline:explore-result", (_e, data) => cb(data));
+      return () => ipcRenderer.removeAllListeners("pipeline:explore-result");
     },
   },
 });

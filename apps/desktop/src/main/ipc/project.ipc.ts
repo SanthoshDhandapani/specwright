@@ -1,4 +1,6 @@
 import { ipcMain, BrowserWindow } from "electron";
+import * as fs from "fs";
+import * as path from "path";
 import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService, EnvVars, InstructionCard } from "../services/ProjectService";
 
@@ -9,6 +11,22 @@ export function registerProjectIpc(
 ): void {
   ipcMain.handle("project:pick-folder", async () => {
     return configService.pickProjectFolder(getWindow());
+  });
+
+  ipcMain.handle("project:pick-files", async () => {
+    return configService.pickFiles(getWindow());
+  });
+
+  // Copy a file into e2e-tests/data/migrations/files/ and return the relative path
+  ipcMain.handle("project:upload-test-file", async (_event, sourcePath: string) => {
+    const projPath = configService.getProjectPath();
+    if (!projPath) throw new Error("No project path");
+    const destDir = path.join(projPath, "e2e-tests/data/migrations/files");
+    fs.mkdirSync(destDir, { recursive: true });
+    const fileName = path.basename(sourcePath);
+    const destPath = path.join(destDir, fileName);
+    fs.copyFileSync(sourcePath, destPath);
+    return `e2e-tests/data/migrations/files/${fileName}`;
   });
 
   ipcMain.handle(

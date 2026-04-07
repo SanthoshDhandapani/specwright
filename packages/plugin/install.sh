@@ -22,8 +22,22 @@ done
 # Default to current directory if no target specified
 TARGET_DIR="${TARGET_DIR:-$(pwd)}"
 
+# Read config from environment (set by cli.js interactive prompts)
+BASE_URL="${SPECWRIGHT_BASE_URL:-http://localhost:5173}"
+PM="${SPECWRIGHT_PM:-pnpm}"
+
+# Helper: copy file only if target doesn't exist (safe for user-customized files)
+safe_copy() {
+  local src="$1" dst="$2"
+  if [ ! -f "$dst" ]; then
+    cp "$src" "$dst"
+  else
+    echo "  ⏭️  $(basename "$dst") already exists — skipping"
+  fi
+}
+
 echo "╔══════════════════════════════════════════════╗"
-echo "║  E2E Automation Plugin — Installing          ║"
+echo "║  Specwright E2E Plugin — Installing           ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 echo "Source: $PLUGIN_DIR"
@@ -34,6 +48,7 @@ fi
 echo ""
 
 # ── Step 1: Copy .claude/ directory ──
+# Always overwrite agents/skills/rules — these are framework code, not user data
 echo "📦 Step 1: Installing .claude/ (agents, skills, rules)..."
 mkdir -p "$TARGET_DIR/.claude/agents/playwright"
 mkdir -p "$TARGET_DIR/.claude/skills"
@@ -47,10 +62,11 @@ cp -r "$PLUGIN_DIR/.claude_agents/"* "$TARGET_DIR/.claude/agents/"
 cp -r "$PLUGIN_DIR/.claude_skills/"* "$TARGET_DIR/.claude/skills/"
 cp -r "$PLUGIN_DIR/.claude_rules/"* "$TARGET_DIR/.claude/rules/"
 cp "$PLUGIN_DIR/.claude_README.md" "$TARGET_DIR/.claude/README.md"
-cp "$PLUGIN_DIR/.claude_memory_MEMORY.md" "$TARGET_DIR/.claude/memory/MEMORY.md"
-cp "$PLUGIN_DIR/.claude_agent-memory/playwright-test-planner/MEMORY.md" "$TARGET_DIR/.claude/agent-memory/playwright-test-planner/"
-cp "$PLUGIN_DIR/.claude_agent-memory/playwright-test-healer/MEMORY.md" "$TARGET_DIR/.claude/agent-memory/playwright-test-healer/"
-cp "$PLUGIN_DIR/.claude_agent-memory/execution-manager/MEMORY.md" "$TARGET_DIR/.claude/agent-memory/execution-manager/"
+# Memory files: only create if missing (preserve learned patterns)
+safe_copy "$PLUGIN_DIR/.claude_memory_MEMORY.md" "$TARGET_DIR/.claude/memory/MEMORY.md"
+safe_copy "$PLUGIN_DIR/.claude_agent-memory/playwright-test-planner/MEMORY.md" "$TARGET_DIR/.claude/agent-memory/playwright-test-planner/MEMORY.md"
+safe_copy "$PLUGIN_DIR/.claude_agent-memory/playwright-test-healer/MEMORY.md" "$TARGET_DIR/.claude/agent-memory/playwright-test-healer/MEMORY.md"
+safe_copy "$PLUGIN_DIR/.claude_agent-memory/execution-manager/MEMORY.md" "$TARGET_DIR/.claude/agent-memory/execution-manager/MEMORY.md"
 echo "  ✅ .claude/ installed"
 
 # ── Step 2: Copy e2e-tests/ infrastructure ──
@@ -62,6 +78,7 @@ mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared"
 mkdir -p "$TARGET_DIR/e2e-tests/utils"
 mkdir -p "$TARGET_DIR/e2e-tests/data"
 
+# Framework files: always overwrite (these are the framework, not user code)
 cp "$PLUGIN_DIR/e2e-tests/playwright/fixtures.js" "$TARGET_DIR/e2e-tests/playwright/"
 cp "$PLUGIN_DIR/e2e-tests/playwright/auth.setup.js" "$TARGET_DIR/e2e-tests/playwright/"
 cp "$PLUGIN_DIR/e2e-tests/playwright/global.setup.js" "$TARGET_DIR/e2e-tests/playwright/"
@@ -69,11 +86,20 @@ cp "$PLUGIN_DIR/e2e-tests/playwright/global.teardown.js" "$TARGET_DIR/e2e-tests/
 cp "$PLUGIN_DIR/e2e-tests/utils/stepHelpers.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/utils/testDataGenerator.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/shared/"*.js "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared/"
-cp "$PLUGIN_DIR/e2e-tests/data/authenticationData.js" "$TARGET_DIR/e2e-tests/data/"
-cp "$PLUGIN_DIR/e2e-tests/data/testConfig.js" "$TARGET_DIR/e2e-tests/data/"
-cp "$PLUGIN_DIR/e2e-tests/instructions.js" "$TARGET_DIR/e2e-tests/"
-cp "$PLUGIN_DIR/e2e-tests/instructions.example.js" "$TARGET_DIR/e2e-tests/"
-cp "$PLUGIN_DIR/e2e-tests/.env.testing" "$TARGET_DIR/e2e-tests/"
+
+# User-configurable files: only create if missing (never overwrite user's config)
+safe_copy "$PLUGIN_DIR/e2e-tests/data/authenticationData.js" "$TARGET_DIR/e2e-tests/data/authenticationData.js"
+safe_copy "$PLUGIN_DIR/e2e-tests/data/testConfig.js" "$TARGET_DIR/e2e-tests/data/testConfig.js"
+safe_copy "$PLUGIN_DIR/e2e-tests/instructions.js" "$TARGET_DIR/e2e-tests/instructions.js"
+safe_copy "$PLUGIN_DIR/e2e-tests/instructions.example.js" "$TARGET_DIR/e2e-tests/instructions.example.js"
+safe_copy "$PLUGIN_DIR/e2e-tests/.env.testing" "$TARGET_DIR/e2e-tests/.env.testing"
+
+# Update BASE_URL in .env.testing with user-provided value (only on fresh install)
+if [ "$BASE_URL" != "http://localhost:5173" ]; then
+  sed -i.bak "s|^BASE_URL=.*|BASE_URL=$BASE_URL|" "$TARGET_DIR/e2e-tests/.env.testing"
+  rm -f "$TARGET_DIR/e2e-tests/.env.testing.bak"
+  echo "  → BASE_URL set to $BASE_URL"
+fi
 
 # Gitkeep files + directory stubs
 touch "$TARGET_DIR/e2e-tests/playwright/auth-storage/.auth/.gitkeep"
@@ -112,13 +138,36 @@ echo "📦 Step 5: Installing documentation..."
 cp "$PLUGIN_DIR/README-TESTING.md" "$TARGET_DIR/"
 echo "  ✅ README-TESTING.md installed"
 
-# ── Step 5b: Install .mcp.json (MCP server config for Claude Code) ──
+# ── Step 5b: Merge .mcp.json (MCP server config for Claude Code) ──
+echo "📦 Step 5b: Configuring .mcp.json (MCP server config)..."
 if [ ! -f "$TARGET_DIR/.mcp.json" ]; then
-  echo "📦 Step 5b: Installing .mcp.json (MCP server config)..."
   cp "$PLUGIN_DIR/mcp.json.template" "$TARGET_DIR/.mcp.json"
-  echo "  ✅ .mcp.json installed — Claude Code will discover e2e-automation tools"
+  echo "  ✅ .mcp.json created — Claude Code will discover e2e-automation tools"
 else
-  echo "⏭️  Step 5b: .mcp.json already exists — skipping"
+  # Merge: add e2e-automation server if not already present
+  node -e "
+    const fs = require('fs');
+    const path = require('path');
+    const targetPath = path.join('$TARGET_DIR', '.mcp.json');
+    const templatePath = path.join('$PLUGIN_DIR', 'mcp.json.template');
+    try {
+      const target = JSON.parse(fs.readFileSync(targetPath, 'utf-8'));
+      const template = JSON.parse(fs.readFileSync(templatePath, 'utf-8'));
+      target.mcpServers = target.mcpServers || {};
+      // Add specwright servers without overwriting existing entries
+      for (const [name, config] of Object.entries(template.mcpServers || {})) {
+        if (!target.mcpServers[name]) {
+          target.mcpServers[name] = config;
+          console.log('  ✅ Added MCP server: ' + name);
+        } else {
+          console.log('  ⏭️  MCP server ' + name + ' already configured — skipping');
+        }
+      }
+      fs.writeFileSync(targetPath, JSON.stringify(target, null, 2) + '\n');
+    } catch (err) {
+      console.log('  ⚠️  Could not merge .mcp.json: ' + err.message);
+    }
+  "
 fi
 
 # ── Step 6: Merge dependencies + scripts into package.json ──
@@ -130,6 +179,7 @@ if [ -f "$TARGET_DIR/package.json" ]; then
 
     const targetPkgPath = path.join('$TARGET_DIR', 'package.json');
     const snippetPath = path.join('$PLUGIN_DIR', 'package.json.snippet');
+    const pm = '$PM';
 
     const pkg = JSON.parse(fs.readFileSync(targetPkgPath, 'utf-8'));
     const snippet = JSON.parse(fs.readFileSync(snippetPath, 'utf-8'));
@@ -140,11 +190,12 @@ if [ -f "$TARGET_DIR/package.json" ]; then
     }
 
     // Merge scripts (don't overwrite existing)
+    // Replace 'pnpm' with the user's package manager in script values
     if (snippet.scripts) {
       pkg.scripts = pkg.scripts || {};
       for (const [key, val] of Object.entries(snippet.scripts)) {
         if (!pkg.scripts[key]) {
-          pkg.scripts[key] = val;
+          pkg.scripts[key] = pm === 'pnpm' ? val : val.replace(/pnpm /g, pm + ' ');
         }
       }
     }
@@ -184,24 +235,20 @@ echo "╚═══════════════════════�
 echo ""
 echo "📋 Next steps:"
 echo ""
-echo "  1. Install dependencies: pnpm install"
+echo "  1. Install dependencies: $PM install"
 echo ""
 echo "  2. Install Playwright browsers: npx playwright install"
 echo ""
-echo "  3. Update e2e-tests/data/authenticationData.js"
-echo "     → Set your app's login form testIDs"
-echo ""
-echo "  4. Update e2e-tests/data/testConfig.js"
+echo "  3. Update e2e-tests/data/testConfig.js"
 echo "     → Set your app's routes"
 echo ""
-echo "  5. Set credentials in .env:"
+echo "  4. Set credentials in e2e-tests/.env.testing:"
 echo "     TEST_USER_EMAIL=your-email@example.com"
 echo "     TEST_USER_PASSWORD=your-password"
-echo "     BASE_URL=http://localhost:5173"
 echo ""
-echo "  6. Start dev server and run tests:"
-echo "     pnpm test:bdd:auth    # Run authentication tests"
-echo "     pnpm test:bdd         # Run all tests (except auth)"
+echo "  5. Start dev server and run tests:"
+echo "     $PM test:bdd:auth    # Run authentication tests"
+echo "     $PM test:bdd         # Run all tests (except auth)"
 echo ""
-echo "  7. Generate more tests: /e2e-automate (Claude Code CLI)"
+echo "  6. Generate more tests: /e2e-automate (Claude Code CLI)"
 echo ""

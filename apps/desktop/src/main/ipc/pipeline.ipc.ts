@@ -1,12 +1,12 @@
 import { ipcMain, BrowserWindow } from "electron";
-import { ClaudeAgentRunner, PlaywrightMcpClient } from "@specwright/agent-runner";
+import { ClaudeAgentRunner, AiSdkRunner } from "@specwright/agent-runner";
 import type { McpServerConfig } from "@specwright/agent-runner";
 import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService } from "../services/ProjectService";
 import * as fs from "fs";
 import * as path from "path";
 
-let activeRunner: ClaudeAgentRunner | null = null;
+let activeRunner: ClaudeAgentRunner | AiSdkRunner | null = null;
 
 // Pending permission requests: id → resolve function
 const pendingPermissions = new Map<string, (allowed: boolean) => void>();
@@ -26,25 +26,14 @@ export function registerPipelineIpc(
         userMessage: string;
         mode?: "claude-code";
         skipPermissions?: boolean;
+        /** Runner engine: "claude-agent-sdk" (default) or "ai-sdk" (Vercel AI SDK) */
+        runner?: "claude-agent-sdk" | "ai-sdk";
       }
     ) => {
       const win = getWindow();
       if (!win) return;
 
       const projectPath = configService.getProjectPath() || undefined;
-
-      // Clear planner agent-memory so Claude can't skip live exploration
-      if (projectPath) {
-        const memoryPaths = [
-          path.join(projectPath, ".claude", "agent-memory", "playwright-test-planner", "MEMORY.md"),
-          path.join(projectPath, ".claude_agent-memory", "playwright-test-planner", "MEMORY.md"),
-        ];
-        for (const memPath of memoryPaths) {
-          if (fs.existsSync(memPath)) {
-            fs.writeFileSync(memPath, "# Planner Memory\n\n(Cleared at pipeline start — explore the live application)\n");
-          }
-        }
-      }
 
       // Resolve system prompt
       let systemPrompt = payload.systemPrompt ?? "";
@@ -68,26 +57,32 @@ export function registerPipelineIpc(
         systemPrompt += `\n\nIMPORTANT: All tool permissions are pre-approved. Do NOT ask the user to grant permission or approve any tool call. Do NOT pause for approval. All tools execute automatically. Proceed directly.`;
       }
 
-      // Browser exploration guidance — Specwright handles it automatically
+      // Browser exploration guidance — agents use Playwright MCP tools via skills
       systemPrompt += `\n\nBROWSER EXPLORATION:
-Specwright automatically explores the target application when you reach Phase 4.
-You will receive live page snapshots (accessibility data with element roles, names, data-testid attributes) as a message.
-Use the provided snapshot data to write your seed file and test plan.
-Do NOT attempt to call browser MCP tools yourself — Specwright handles all browser interaction.
-Do NOT delegate browser tasks to sub-agents. Agent memory is cleared at pipeline start.`;
+The Playwright MCP server is available as "playwright-test" with browser tools (browser_navigate, browser_snapshot, browser_click, browser_type, etc.).
+During Phase 4, invoke the /e2e-plan skill or the playwright-test-planner agent to explore the application.
+The planner agent will:
+1. Navigate to the pageURL from instructions.js
+2. Take browser snapshots to discover elements (roles, names, data-testid attributes)
+3. Click through navigation items, tabs, and interactive elements
+4. Write a detailed seed file and test plan with validated selectors
+5. Update agent memory with discovered patterns
+Agent memory may contain useful selector patterns from previous runs — the planner agent verifies against live snapshots.
 
-      // Append env credentials to user message
+PHASE 7 PERFORMANCE:
+After user approval (Phase 6), proceed DIRECTLY to BDD generation.
+Do NOT spawn Explore or research sub-agents — the plan file and seed file already contain all context needed.
+Read the plan file, read the seed file, then invoke @agent-bdd-generator followed by @agent-code-generator.
+Generate the .feature and steps.js files directly without exploring the codebase first.`;
+
+      // Append env credentials to user message (only pipeline-critical vars)
       let userMessage = payload.userMessage;
       if (projectPath) {
         const env = projectService.readEnv(projectPath);
         const lines: string[] = [];
-        if (env.BASE_URL)       lines.push(`Base URL: ${env.BASE_URL}`);
-        if (env.TEST_ENV)       lines.push(`Environment: ${env.TEST_ENV}`);
-        if (env.TEST_USERNAME)  lines.push(`Username: ${env.TEST_USERNAME}`);
-        if (env.TEST_PASSWORD)  lines.push(`Password: ${env.TEST_PASSWORD}`);
-        const known = new Set(["BASE_URL", "TEST_ENV", "TEST_USERNAME", "TEST_PASSWORD"]);
+        const PIPELINE_VARS = new Set(["BASE_URL", "TEST_ENV", "TEST_USERNAME", "TEST_PASSWORD"]);
         for (const [k, v] of Object.entries(env)) {
-          if (!known.has(k) && v) lines.push(`${k}: ${v}`);
+          if (PIPELINE_VARS.has(k) && v) lines.push(`${k}: ${v}`);
         }
         if (lines.length) {
           userMessage += `\n\n---\nEnvironment configuration:\n${lines.join("\n")}`;
@@ -106,10 +101,18 @@ Do NOT delegate browser tasks to sub-agents. Agent memory is cleared at pipeline
         ? path.join(projectPath, ".playwright-mcp")
         : ".playwright-mcp";
 
-      // Don't pass Playwright MCP to Claude — Specwright handles browser
-      // exploration via PlaywrightMcpClient in the onExplore callback.
-      // Only load project-specific MCP servers from .mcp.json.
-      const mcpServers: Record<string, McpServerConfig> = {};
+      // Load MCP servers: Playwright MCP for browser exploration + project servers from .mcp.json
+      // Server name MUST be "playwright-test" to match agent frontmatter tool prefixes
+      // (e.g., mcp__playwright-test__browser_navigate, mcp__playwright-test__browser_snapshot)
+      const mcpServers: Record<string, McpServerConfig> = {
+        "playwright-test": {
+          command: "npx",
+          args: [
+            "@playwright/mcp@latest",
+            ...(screenshotDir ? ["--output-dir", screenshotDir] : []),
+          ],
+        },
+      };
       if (projectPath) {
         const mcpJsonPath = path.join(projectPath, ".mcp.json");
         if (fs.existsSync(mcpJsonPath)) {
@@ -128,83 +131,82 @@ Do NOT delegate browser tasks to sub-agents. Agent memory is cleared at pipeline
         }
       }
 
+      const runnerType = payload.runner ?? "claude-agent-sdk";
+
       win.webContents.send("pipeline:log", {
-        line: `[pipeline] Launching Claude Agent SDK…`,
+        line: `[pipeline] Launching ${runnerType === "ai-sdk" ? "Vercel AI SDK" : "Claude Agent SDK"}…`,
       });
 
-      activeRunner = new ClaudeAgentRunner();
       pendingPermissions.clear();
 
       try {
-        const fullText = await activeRunner.run({
-          systemPrompt,
-          userMessage,
-          cwd: projectPath,
-          mcpServers,
-          skipPermissions: payload.skipPermissions,
-          onToken: (token) => {
-            win.webContents.send("pipeline:token", { token });
-          },
-          onLog: (line) => {
-            win.webContents.send("pipeline:log", { line });
-          },
-          onToolStart: (toolName, toolId) => {
-            win.webContents.send("pipeline:tool-start", { toolName, toolId });
-          },
-          onToolEnd: (toolName, toolId, durationMs) => {
-            win.webContents.send("pipeline:tool-end", { toolName, toolId, durationMs });
-          },
-          onPermissionRequest: async (request) => {
-            // Send permission request to renderer and wait for user response
-            win.webContents.send("pipeline:permission-request", request);
+        let fullText: string;
 
-            return new Promise<boolean>((resolve) => {
-              pendingPermissions.set(request.id, resolve);
-            });
-          },
-          onExplore: async (url: string) => {
-            win.webContents.send("pipeline:log", {
-              line: `[explorer] Phase 4 detected — exploring ${url}…`,
-            });
+        if (runnerType === "ai-sdk") {
+          // ── Vercel AI SDK runner ──
+          // Native MCP discovery, prompt caching, streaming
+          const aiRunner = new AiSdkRunner();
+          activeRunner = aiRunner;
 
-            const mcpClient = new PlaywrightMcpClient();
-            try {
-              await mcpClient.connect({
-                outputDir: screenshotDir,
-                onLog: (line) => win.webContents.send("pipeline:log", { line }),
-              });
-
-              const result = await mcpClient.explore(url);
-
-              if (!result.snapshot) {
-                win.webContents.send("pipeline:log", {
-                  line: `[explorer] No snapshot captured${result.error ? `: ${result.error}` : ""}`,
-                });
-                return null;
-              }
-
+          fullText = await aiRunner.run({
+            systemPrompt,
+            userMessage,
+            model: "claude-sonnet-4-6",
+            mcpServers,
+            includePlaywrightMcp: true,
+            playwrightMcpArgs: screenshotDir
+              ? ["--output-dir", screenshotDir]
+              : [],
+            maxSteps: 50,
+            onToken: (token) => {
+              win.webContents.send("pipeline:token", { token });
+            },
+            onLog: (line) => {
+              win.webContents.send("pipeline:log", { line });
+            },
+            onToolStart: (toolName) => {
+              win.webContents.send("pipeline:tool-start", { toolName, toolId: "" });
+            },
+            onToolEnd: (toolName, durationMs) => {
+              win.webContents.send("pipeline:tool-end", { toolName, toolId: "", durationMs });
+            },
+            onStepFinish: (info) => {
               win.webContents.send("pipeline:log", {
-                line: `[explorer] Snapshot captured — ${result.snapshot.length} chars, ${result.pageSnapshots.length} sub-pages`,
+                line: `[ai-sdk] Step ${info.stepNumber} — ${info.totalTokens} tokens, tools: ${info.toolCalls.join(", ") || "none"}`,
               });
+            },
+          });
+        } else {
+          // ── Claude Agent SDK runner (default) ──
+          const agentRunner = new ClaudeAgentRunner();
+          activeRunner = agentRunner;
 
-              // Format as context message for Claude
-              let msg = `Here is the LIVE browser exploration data from ${url}:\n\n`;
-              msg += `## Page Accessibility Snapshot\n\`\`\`\n${result.snapshot}\n\`\`\`\n\n`;
-              for (const page of result.pageSnapshots) {
-                msg += `## Sub-page: ${page.url}\n\`\`\`\n${page.snapshot}\n\`\`\`\n\n`;
-              }
-              msg += `Use these real selectors and elements to write the seed file and test plan. Do NOT use cached memory or agent-memory data.`;
-              return msg;
-            } catch (err) {
-              win.webContents.send("pipeline:log", {
-                line: `[explorer] Exploration error: ${String(err)}`,
+          fullText = await agentRunner.run({
+            systemPrompt,
+            userMessage,
+            cwd: projectPath,
+            mcpServers,
+            skipPermissions: payload.skipPermissions,
+            onToken: (token) => {
+              win.webContents.send("pipeline:token", { token });
+            },
+            onLog: (line) => {
+              win.webContents.send("pipeline:log", { line });
+            },
+            onToolStart: (toolName, toolId) => {
+              win.webContents.send("pipeline:tool-start", { toolName, toolId });
+            },
+            onToolEnd: (toolName, toolId, durationMs) => {
+              win.webContents.send("pipeline:tool-end", { toolName, toolId, durationMs });
+            },
+            onPermissionRequest: async (request) => {
+              win.webContents.send("pipeline:permission-request", request);
+              return new Promise<boolean>((resolve) => {
+                pendingPermissions.set(request.id, resolve);
               });
-              return null;
-            } finally {
-              await mcpClient.disconnect().catch(() => {});
-            }
-          },
-        });
+            },
+          });
+        }
 
         win.webContents.send("pipeline:done", { fullText });
       } catch (err: unknown) {
@@ -226,7 +228,7 @@ Do NOT delegate browser tasks to sub-agents. Agent memory is cleared at pipeline
   });
 
   ipcMain.handle("pipeline:send-message", (_event, { text, priority }: { text: string; priority?: "now" | "next" }) => {
-    if (activeRunner) {
+    if (activeRunner && activeRunner instanceof ClaudeAgentRunner) {
       const win = getWindow();
       win?.webContents.send("pipeline:log", {
         line: `[user] ${text}`,
@@ -236,7 +238,7 @@ Do NOT delegate browser tasks to sub-agents. Agent memory is cleared at pipeline
   });
 
   ipcMain.handle("pipeline:interrupt", async () => {
-    if (activeRunner) {
+    if (activeRunner && activeRunner instanceof ClaudeAgentRunner) {
       const win = getWindow();
       win?.webContents.send("pipeline:log", {
         line: `[pipeline] Interrupted by user — Claude will pause and await instructions`,

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  jwt-decode>husky: '-'
+
 importers:
 
   .:
@@ -11,6 +14,9 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.2.94
         version: 0.2.94(zod@4.3.6)
+      claude-runner:
+        specifier: ^0.2.0
+        version: 0.2.0(zod@4.3.6)
     devDependencies:
       '@changesets/cli':
         specifier: ^2.30.0
@@ -36,6 +42,9 @@ importers:
       '@specwright/plugin':
         specifier: workspace:*
         version: link:../../packages/plugin
+      claude-runner:
+        specifier: ^0.1.1
+        version: 0.1.1(zod@4.3.6)
       electron-store:
         specifier: ^10.0.0
         version: 10.1.0
@@ -105,10 +114,10 @@ importers:
         version: 5.0.12(@types/react@18.3.28)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
     devDependencies:
       '@faker-js/faker':
-        specifier: ^10.4.0
+        specifier: ^10.3.0
         version: 10.4.0
       '@playwright/test':
-        specifier: ^1.59.1
+        specifier: ^1.54.1
         version: 1.59.1
       '@types/react':
         specifier: ^18.3.28
@@ -123,7 +132,7 @@ importers:
         specifier: ^10.4.27
         version: 10.4.27(postcss@8.5.9)
       dotenv:
-        specifier: ^17.4.1
+        specifier: ^17.2.0
         version: 17.4.1
       playwright-bdd:
         specifier: ^8.5.0
@@ -152,12 +161,24 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.28.0(zod@3.25.76)
+      '@specwright/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       ai:
         specifier: ^6.0.149
         version: 6.0.149(zod@3.25.76)
       zod:
         specifier: ^3.24.0
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/hooks:
     devDependencies:
       '@types/node':
         specifier: ^22.19.17
@@ -2168,6 +2189,31 @@ packages:
 
   classnames@2.5.1:
     resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
+
+  claude-runner@0.1.1:
+    resolution: {integrity: sha512-Sp1DicLRQXkl9y6zAF5ufJ4Ds61bXT94PrmQrbHeS5NGIYza0wXGIuTBdXAvN3bvvXRVlFIs5YBLxRhHbuny5g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      e2b: '>=1.0.0'
+      zod: '>=3.0.0'
+    peerDependenciesMeta:
+      e2b:
+        optional: true
+      zod:
+        optional: true
+
+  claude-runner@0.2.0:
+    resolution: {integrity: sha512-nth31zsNGXGUX5IKsVRidJmEQI0hbvMqQp7Ehtjv3bU2J2+B3nIwwmJKYMsL/8/29rU8gajP9TnlkA8v7tvVNw==}
+    engines: {node: '>=18'}
+    hasBin: true
+    peerDependencies:
+      e2b: '>=1.0.0'
+      zod: '>=3.0.0'
+    peerDependenciesMeta:
+      e2b:
+        optional: true
+      zod:
+        optional: true
 
   cli-cursor@3.1.0:
     resolution: {integrity: sha512-I/zHAwsKf9FqGoXM4WWRACob9+SNukZTd94DWF57E4toouRulbCxcUh6RKUEOQlYTHJnzkPMySvPNaaSLNfLZw==}
@@ -6498,6 +6544,24 @@ snapshots:
   class-transformer@0.5.1: {}
 
   classnames@2.5.1: {}
+
+  claude-runner@0.1.1(zod@4.3.6):
+    dependencies:
+      '@anthropic-ai/claude-agent-sdk': 0.2.94(zod@4.3.6)
+    optionalDependencies:
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+
+  claude-runner@0.2.0(zod@4.3.6):
+    dependencies:
+      '@anthropic-ai/claude-agent-sdk': 0.2.94(zod@4.3.6)
+    optionalDependencies:
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
 
   cli-cursor@3.1.0:
     dependencies:

@@ -3,6 +3,18 @@ name: e2e-generate
 description: Generate Playwright BDD tests from a test plan — chains bdd-generator (feature files + step skeletons) → code-generator (Playwright implementations).
 argument-hint: <plan-file-or-feature>
 context: fork
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      module: "@specwright/hooks/validate-bash"
+      config:
+        blockDestructive: true
+  PostToolUse:
+    - matcher: Write
+      module: "@specwright/hooks/track-generated-files"
+      config:
+        outputDir: "e2e-tests/features/playwright-bdd"
+        extensions: [".feature", ".js"]
 ---
 
 # Test Generation

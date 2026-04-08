@@ -3,6 +3,17 @@ name: e2e-heal
 description: Run tests, diagnose failures, investigate source code, apply direct fixes, and auto-heal remaining issues with up to 3 healing iterations. Generates review plan for unresolved failures.
 argument-hint: <test-file-or-tag>
 context: fork
+hooks:
+  PostToolUse:
+    - matcher: Bash
+      module: "@specwright/hooks/capture-test-results"
+      config:
+        injectContext: true
+  PreToolUse:
+    - matcher: Bash
+      module: "@specwright/hooks/validate-bash"
+      config:
+        blockDestructive: true
 ---
 
 # Test Healing

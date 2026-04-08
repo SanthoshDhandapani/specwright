@@ -60,21 +60,29 @@ function AgentOutputPanel(): React.JSX.Element {
       // Session already ended (e.g., approval checkpoint) — fall through to resume/continuation
     }
     {
-      const { startRun, lastSessionId } = usePipelineStore.getState();
+      const { startRun, resumeRun, lastSessionId, hookPassphrase, status: pipelineStatus, phases } = usePipelineStore.getState();
       const { skipPermissions } = useConfigStore.getState();
+      // Resume only if there's meaningful progress to preserve — at least one phase started/completed.
+      // A hook-blocked run (done but 0 phases) should be treated as idle for a fresh start.
+      const hasProgress = phases.some(p => p.status === "done" || p.status === "running");
+      const isResuming = pipelineStatus !== "idle" && hasProgress;
 
-      // Add user message bubble + empty assistant placeholder
-      startRun(text);
+      // Prepend hook passphrase to resume messages so managed hooks don't block again
+      const messageForHook = hookPassphrase && text !== hookPassphrase
+        ? `${hookPassphrase}: ${text}`
+        : text;
 
-      if (lastSessionId) {
-        // Resume the previous session — SDK loads full conversation history
+      if (lastSessionId && isResuming) {
+        // Resume the previous session — preserve phases/logs, only add message bubbles
+        resumeRun(text);
         await window.specwright.pipeline.start({
-          userMessage: text,
+          userMessage: messageForHook,
           skipPermissions,
           resumeSessionId: lastSessionId,
         });
-      } else {
-        // No session to resume — start fresh continuation with context injection
+      } else if (isResuming) {
+        // No session to resume — fresh continuation with context injection, preserve phase UI
+        resumeRun(text);
         const { phases, messages } = usePipelineStore.getState();
         const ctx = await window.specwright.pipeline.readContextFiles();
         const completedPhases = phases
@@ -86,7 +94,7 @@ function AgentOutputPanel(): React.JSX.Element {
         const sessionOutput = lastAssistantMsg?.content.slice(-3000) ?? "";
 
         const continuationPrompt = [
-          `User response: ${text}`,
+          hookPassphrase ? `${hookPassphrase}: User response: ${text}` : `User response: ${text}`,
           ``,
           completedPhases ? `Completed phases: ${completedPhases}` : ``,
           nextPhase ? `Next phase to execute: ${nextPhase.id}. ${nextPhase.label}` : `Continue with remaining phases.`,
@@ -101,6 +109,13 @@ function AgentOutputPanel(): React.JSX.Element {
 
         await window.specwright.pipeline.start({
           userMessage: continuationPrompt,
+          skipPermissions,
+        });
+      } else {
+        // Fresh start — reset everything
+        startRun(text);
+        await window.specwright.pipeline.start({
+          userMessage: messageForHook,
           skipPermissions,
         });
       }
@@ -408,7 +423,7 @@ export default function CenterPanel(): React.JSX.Element {
   // Wire IPC events once on mount
   useEffect(() => {
     const offToken = window.specwright.pipeline.onToken(({ token }) => handleToken(token));
-    const offDone  = window.specwright.pipeline.onDone(({ fullText, sessionId }) => {
+    const offDone  = window.specwright.pipeline.onDone(({ fullText, sessionId, userMessage }) => {
       // Mark the last active phase as done
       if (lastPhaseRef.current > 0) {
         setPhaseStatus(lastPhaseRef.current, "done");
@@ -421,7 +436,7 @@ export default function CenterPanel(): React.JSX.Element {
         setPhaseStatus(id, "done");
       }
 
-      finishRun(fullText, sessionId);
+      finishRun(fullText, sessionId, userMessage);
     });
     const offError = window.specwright.pipeline.onError(({ error }) => setError(error));
     const offLog   = window.specwright.pipeline.onLog(({ line }) => {

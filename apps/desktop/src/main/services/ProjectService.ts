@@ -95,11 +95,15 @@ export class ProjectService {
         timeout: 120_000,
       });
 
-      // Install dependencies in background — non-blocking so the app doesn't freeze
+      // Install dependencies in background — non-blocking so the app doesn't freeze.
+      // Use --ignore-scripts and set npm_config_ignore_scripts to skip ALL lifecycle
+      // scripts (including "prepare") — some packages like jwt-decode ship broken
+      // "prepare: husky install" that fails in non-dev environments.
       exec("npm install --ignore-scripts", {
         cwd: projectPath,
         shell: true,
         timeout: 120_000,
+        env: { ...process.env, npm_config_ignore_scripts: "true" },
       }, (err) => {
         if (err) {
           console.warn("[bootstrap] npm install failed (non-fatal):", err.message);

@@ -49,12 +49,16 @@ interface PipelineState {
   activeTool: string | null;
   /** Session ID from the last completed run — used for resume */
   lastSessionId: string | null;
+  /** User's auth response that unblocked the first run (e.g., ticket ID). Prepended to resume messages so managed hooks don't block again. */
+  hookPassphrase: string | null;
 
   startRun: (userMessage: string) => void;
+  /** Resume after an approval checkpoint — preserves phases, logs, and activePhase. */
+  resumeRun: (userMessage: string) => void;
   injectUserMessage: (text: string) => void;
   appendToken: (token: string) => void;
   appendLog: (line: string) => void;
-  finishRun: (fullText: string, sessionId?: string) => void;
+  finishRun: (fullText: string, sessionId?: string, userMessage?: string) => void;
   setError: (msg: string) => void;
   clearFeed: () => void;
   setActivePhase: (id: number) => void;
@@ -100,6 +104,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   pendingPermission: null,
   activeTool: null,
   lastSessionId: null,
+  hookPassphrase: null,
 
   startRun: (userMessage) =>
     set((s) => ({
@@ -110,10 +115,22 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       pendingPermission: null,
       phases: PHASES.map((p) => ({ ...p })),
       messages: [
-        // Clear isStreaming on all previous messages
         ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
         { id: makeId(), role: "user",      content: userMessage, isStreaming: false },
         { id: makeId(), role: "assistant", content: "",          isStreaming: true  },
+      ],
+    })),
+
+  resumeRun: (userMessage) =>
+    set((s) => ({
+      status: "running",
+      errorMessage: null,
+      pendingPermission: null,
+      // Preserve phases, logLines, and activePhase — only add new message bubbles
+      messages: [
+        ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
+        { id: makeId(), role: "user" as const,      content: userMessage, isStreaming: false },
+        { id: makeId(), role: "assistant" as const, content: "",          isStreaming: true  },
       ],
     })),
 
@@ -143,14 +160,22 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   appendLog: (line) =>
     set((s) => ({ logLines: [...s.logLines, line] })),
 
-  finishRun: (_fullText, sessionId) =>
+  finishRun: (_fullText, sessionId, userMessage) =>
     set((s) => {
       const messages = [...s.messages];
       const lastIdx = messages.length - 1;
       if (lastIdx >= 0 && messages[lastIdx].role === "assistant") {
         messages[lastIdx] = { ...messages[lastIdx], isStreaming: false };
       }
-      return { messages, status: "done", pendingPermission: null, lastSessionId: sessionId ?? null };
+      // Save the first line of the userMessage that passed the managed hook.
+      // On resume, this gets prepended so the hook sees the passphrase (e.g., Jira ticket ID).
+      // We take only the first line to avoid bloating resume messages with the full prompt.
+      let passphrase = s.hookPassphrase;
+      if (sessionId && !passphrase && userMessage) {
+        const firstLine = userMessage.split("\n")[0].trim();
+        passphrase = firstLine.slice(0, 200); // cap at 200 chars
+      }
+      return { messages, status: "done", pendingPermission: null, lastSessionId: sessionId ?? null, hookPassphrase: passphrase };
     }),
 
   setError: (msg) =>

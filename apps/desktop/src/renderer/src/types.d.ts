@@ -64,7 +64,7 @@ interface SpecwrightAPI {
     respondPermission: (requestId: string, allowed: boolean) => Promise<void>;
     readContextFiles: () => Promise<{ plan: string; seed: string; conventions: string }>;
     onToken: (cb: (data: { token: string }) => void) => () => void;
-    onDone: (cb: (data: { fullText: string }) => void) => () => void;
+    onDone: (cb: (data: { fullText: string; sessionId?: string; userMessage?: string }) => void) => () => void;
     onError: (cb: (data: { error: string }) => void) => () => void;
     onLog: (cb: (data: { line: string }) => void) => () => void;
     onPermissionRequest: (cb: (data: PermissionRequestData) => void) => () => void;

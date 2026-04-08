@@ -2,6 +2,14 @@
 name: e2e-automate
 description: Run the full 10-phase test automation pipeline — chains /e2e-process, /e2e-plan, /e2e-validate, /e2e-generate, /e2e-heal skills sequentially.
 context: fork
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      module: "@specwright/hooks/validate-bash"
+      config:
+        blockDestructive: true
+  Stop:
+    - module: "@specwright/hooks/generation-summary"
 ---
 
 # Test Automation Pipeline

@@ -54,6 +54,11 @@ export interface AgentRunOptions {
    * into the conversation, or null to skip.
    */
   onExplore?: (url: string) => Promise<string | null>;
+  /**
+   * Declarative hook declarations — resolved into Agent SDK HookCallbackMatcher[]
+   * at runtime via @specwright/hooks resolveSkillHooks().
+   */
+  hooks?: Record<string, unknown[]>;
 }
 
 /** Build a human-readable description of what a tool call wants to do. */
@@ -136,6 +141,7 @@ export class ClaudeAgentRunner {
       onToolEnd,
       onPermissionRequest,
       onExplore,
+      hooks: hookDeclarations,
     } = options;
 
     this.abortCtrl = new AbortController();
@@ -160,6 +166,18 @@ export class ClaudeAgentRunner {
     this.messageQueue = new MessageQueue();
 
     try {
+      // Resolve declarative hook declarations into SDK callbacks
+      let resolvedHooks: Record<string, unknown[]> | undefined;
+      if (hookDeclarations && Object.keys(hookDeclarations).length > 0) {
+        try {
+          const hooksModule = await dynamicImport("@specwright/hooks") as { resolveSkillHooks: (decl: Record<string, unknown[]>, opts?: { cwd?: string }) => Promise<Record<string, unknown[]>> };
+          resolvedHooks = await hooksModule.resolveSkillHooks(hookDeclarations, { cwd: cwd ?? process.cwd() });
+          onLog?.(`[hooks] Resolved ${Object.keys(resolvedHooks).length} hook event(s)`);
+        } catch (err) {
+          onLog?.(`[hooks] Failed to resolve hooks: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
       const { query: sdkQuery } = await loadSDK();
       this.activeQuery = sdkQuery({
         prompt: userMessage,
@@ -172,6 +190,8 @@ export class ClaudeAgentRunner {
           includeHookEvents: true,
           // Resume a previous session — keeps full conversation history
           ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+          // Resolved hooks from skill frontmatter or programmatic config
+          ...(resolvedHooks ? { hooks: resolvedHooks } : {}),
           // Don't load filesystem settings — MCP servers are passed explicitly via mcpServers.
           // Loading ["project"] would also load .mcp.json which can crash if servers need auth.
           // Loading ["user"] pulls in 20+ claude.ai MCP servers causing slow startup.

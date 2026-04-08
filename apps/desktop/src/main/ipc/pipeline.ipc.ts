@@ -1,5 +1,30 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { ClaudeAgentRunner, AiSdkRunner, PlaywrightMcpClient } from "@specwright/agent-runner";
+// claude-runner is ESM-only — must use dynamic import in Electron's CJS main process
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const dynamicImport = new Function("specifier", "return import(specifier)") as (
+  specifier: string
+) => Promise<unknown>;
+
+interface ClaudeRunnerModule {
+  Runner: new (options: Record<string, unknown>) => {
+    stream(prompt: string, overrides?: Record<string, unknown>): AsyncIterable<Record<string, unknown>> & {
+      result: Promise<Record<string, unknown>>;
+      send(msg: string): void;
+      abort(): void;
+    };
+    abort(): void;
+    lastSessionId: string | null;
+  };
+}
+
+let _claudeRunnerModule: ClaudeRunnerModule | null = null;
+async function loadClaudeRunner(): Promise<ClaudeRunnerModule> {
+  if (!_claudeRunnerModule) {
+    _claudeRunnerModule = await dynamicImport("claude-runner") as ClaudeRunnerModule;
+  }
+  return _claudeRunnerModule;
+}
 import type { McpServerConfig } from "@specwright/agent-runner";
 import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService } from "../services/ProjectService";
@@ -7,6 +32,10 @@ import * as fs from "fs";
 import * as path from "path";
 
 let activeRunner: ClaudeAgentRunner | AiSdkRunner | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let activeClaudeRunner: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let activeStream: any = null;
 
 // Pending permission requests: id → resolve function
 const pendingPermissions = new Map<string, (allowed: boolean) => void>();
@@ -28,8 +57,8 @@ export function registerPipelineIpc(
         userMessage: string;
         mode?: "claude-code";
         skipPermissions?: boolean;
-        /** Runner engine: "claude-agent-sdk" (default) or "ai-sdk" (Vercel AI SDK) */
-        runner?: "claude-agent-sdk" | "ai-sdk";
+        /** Runner engine: "claude-agent-sdk" (default), "claude-runner", or "ai-sdk" */
+        runner?: "claude-agent-sdk" | "claude-runner" | "ai-sdk";
         /** Resume a previous session instead of starting fresh */
         resumeSessionId?: string;
       }
@@ -140,10 +169,11 @@ Generate the .feature and steps.js files directly without exploring the codebase
         }
       }
 
-      const runnerType = payload.runner ?? "claude-agent-sdk";
+      const runnerType = payload.runner ?? "claude-runner";
 
+      const runnerLabel = runnerType === "ai-sdk" ? "Vercel AI SDK" : runnerType === "claude-runner" ? "Claude Runner" : "Claude Agent SDK";
       win.webContents.send("pipeline:log", {
-        line: `[pipeline] Launching ${runnerType === "ai-sdk" ? "Vercel AI SDK" : "Claude Agent SDK"}…`,
+        line: `[pipeline] Launching ${runnerLabel}…`,
       });
 
       pendingPermissions.clear();
@@ -151,7 +181,82 @@ Generate the .feature and steps.js files directly without exploring the codebase
       try {
         let fullText: string;
 
-        if (runnerType === "ai-sdk") {
+        if (runnerType === "claude-runner") {
+          // ── claude-runner (npm package) ──
+          // Simple API: Runner.stream() → flat RunEvents
+          const { Runner } = await loadClaudeRunner();
+
+          const mcpConfig: Record<string, string | { command: string; args?: string[]; env?: Record<string, string> }> = {};
+          for (const [name, config] of Object.entries(mcpServers)) {
+            mcpConfig[name] = config as { command: string; args?: string[]; env?: Record<string, string> };
+          }
+
+          const runner = new Runner({
+            cwd: projectPath,
+            systemPrompt: systemPrompt ? { preset: "claude_code" as const, append: systemPrompt } : undefined,
+            mcp: mcpConfig,
+            permissions: payload.skipPermissions ? "auto" : "prompt",
+            onPermission: async (req) => {
+              win.webContents.send("pipeline:permission-request", {
+                id: req.id,
+                toolName: req.tool,
+                toolInput: req.input ?? {},
+                description: req.description,
+              });
+              return new Promise<boolean>((resolve) => {
+                pendingPermissions.set(req.id, resolve);
+              });
+            },
+          });
+          activeClaudeRunner = runner;
+
+          const stream = runner.stream(userMessage, payload.resumeSessionId ? { _resumeSessionId: payload.resumeSessionId } as never : undefined);
+          activeStream = stream;
+
+          fullText = "";
+          for await (const event of stream) {
+            switch (event.type) {
+              case "text":
+                fullText += event.text;
+                win.webContents.send("pipeline:token", { token: event.text });
+                break;
+              case "tool_start":
+                win.webContents.send("pipeline:tool-start", { toolName: event.tool, toolId: event.id });
+                win.webContents.send("pipeline:log", { line: `[tool] ${event.tool} — started` });
+                break;
+              case "tool_end":
+                win.webContents.send("pipeline:tool-end", { toolName: event.tool, toolId: event.id, durationMs: event.duration });
+                win.webContents.send("pipeline:log", { line: `[tool] ${event.tool} — done (${(event.duration / 1000).toFixed(1)}s)` });
+                break;
+              case "session_init":
+                win.webContents.send("pipeline:log", { line: `[pipeline] Session ${event.sessionId} model=${event.model}` });
+                break;
+              case "mcp_status":
+                if (event.status === "connected") {
+                  win.webContents.send("pipeline:log", { line: `[mcp] ✓ ${event.server}` });
+                } else if (event.status === "failed") {
+                  win.webContents.send("pipeline:log", { line: `[mcp] ✕ ${event.server} — FAILED` });
+                } else {
+                  win.webContents.send("pipeline:log", { line: `[mcp] ⚠ ${event.server} — needs auth` });
+                }
+                break;
+              case "error":
+                // Show error in chat bubble AND terminal log
+                win.webContents.send("pipeline:token", { token: `\n\n**Blocked by policy:** ${event.message}\n` });
+                win.webContents.send("pipeline:log", { line: `[pipeline] Error: ${event.message}` });
+                break;
+              case "done":
+                // Only save sessionId for resume if API was actually called (not hook-blocked)
+                if (event.result.usage.input > 0 || event.result.usage.output > 0) {
+                  lastSessionId = event.result.sessionId;
+                }
+                win.webContents.send("pipeline:log", {
+                  line: `[pipeline] Done — ${event.result.duration}ms, cost $${event.result.cost.toFixed(4)}, tokens: ${event.result.usage.input}in/${event.result.usage.output}out`,
+                });
+                break;
+            }
+          }
+        } else if (runnerType === "ai-sdk") {
           // ── Vercel AI SDK runner ──
           // Native MCP discovery, prompt caching, streaming
           const aiRunner = new AiSdkRunner();
@@ -268,12 +373,14 @@ Generate the .feature and steps.js files directly without exploring the codebase
         if (activeRunner instanceof ClaudeAgentRunner) {
           lastSessionId = activeRunner.getLastSessionId();
         }
-        win.webContents.send("pipeline:done", { fullText, sessionId: lastSessionId });
+        win.webContents.send("pipeline:done", { fullText, sessionId: lastSessionId, userMessage });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         win.webContents.send("pipeline:error", { error: msg });
       } finally {
         activeRunner = null;
+        activeClaudeRunner = null;
+        activeStream = null;
         pendingPermissions.clear();
       }
     }
@@ -283,8 +390,13 @@ Generate the .feature and steps.js files directly without exploring the codebase
     if (activeRunner) {
       activeRunner.abort();
       activeRunner = null;
-      pendingPermissions.clear();
     }
+    if (activeClaudeRunner) {
+      activeClaudeRunner.abort();
+      activeClaudeRunner = null;
+      activeStream = null;
+    }
+    pendingPermissions.clear();
   });
 
   ipcMain.handle("pipeline:send-message", (_event, { text, priority }: { text: string; priority?: "now" | "next" }): boolean => {

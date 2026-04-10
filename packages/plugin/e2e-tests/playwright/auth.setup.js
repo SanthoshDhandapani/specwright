@@ -1,76 +1,50 @@
 /**
- * Authentication Setup — two-step localStorage login
+ * Authentication Setup — Strategy Dispatcher
  *
- * Flow:
- * 1. Navigate to /signin
- * 2. Fill email → click email submit
- * 3. Wait for password field → fill password → click login submit
- * 4. Handle 2FA if twoFactorCodeInput appears
- * 5. Wait for redirect to /home
- * 6. Save storageState (captures localStorage auth tokens)
+ * Reads AUTH_STRATEGY from .env.testing (loaded via playwright.config.ts dotenv).
  *
- * Update authenticationData.js with your app's login form testIDs and credentials.
+ * Strategies:
+ * - email-password  — two-step email → password → optional 2FA
+ * - oauth           — localStorage injection or click-based OAuth button
+ * - none            — skip auth, save empty storageState
+ * - <custom>        — any .js file in auth-strategies/ added by an org overlay
+ *
+ * All auth config (credentials, OAuth keys, user identity) lives in .env.testing.
+ * See the OAuth strategy vars: OAUTH_STORAGE_KEY, OAUTH_SIGNIN_PATH, etc.
  */
 import { test as setup } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { authenticationData } from '../data/authenticationData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const authFile = path.join(__dirname, './auth-storage/.auth/user.json');
 
+const strategy = process.env.AUTH_STRATEGY || 'email-password';
+
 setup('authenticate', async ({ page }) => {
-  console.log('Starting authentication setup...');
+  console.log(`[auth] Strategy: ${strategy}`);
 
-  const { validCredentials, locators, timeouts, twoFactor } = authenticationData;
-
-  // Step 1: Navigate to sign-in page
-  await page.goto(`${authenticationData.baseUrl}/signin`);
-  await page.waitForLoadState('networkidle', { timeout: timeouts.loadState });
-  console.log('Navigated to /signin');
-
-  // Step 2: Fill email and submit
-  const emailInput = page.getByTestId(locators.emailInput.testId);
-  await emailInput.waitFor({ state: 'visible', timeout: timeouts.elementWait });
-  await emailInput.fill(validCredentials.email);
-  console.log(`Filled email: ${validCredentials.email}`);
-
-  const emailSubmit = page.getByTestId(locators.emailSubmitButton.testId);
-  await emailSubmit.click();
-  console.log('Clicked email submit');
-
-  // Step 3: Wait for password field, fill, and submit
-  const passwordInput = page.getByTestId(locators.passwordInput.testId);
-  await passwordInput.waitFor({ state: 'visible', timeout: timeouts.elementWait });
-  await passwordInput.fill(validCredentials.password);
-  console.log('Filled password');
-
-  const loginSubmit = page.getByTestId(locators.loginSubmitButton.testId);
-  await loginSubmit.click();
-  console.log('Clicked login submit');
-
-  // Step 4: Handle 2FA if it appears
-  try {
-    const twoFactorInput = page.getByTestId(twoFactor.locators.codeInput.testId);
-    await twoFactorInput.waitFor({ state: 'visible', timeout: 5000 });
-    console.log('2FA detected, entering code...');
-    await twoFactorInput.fill(twoFactor.code);
-    const proceedButton = page.getByTestId(twoFactor.locators.proceedButton.testId);
-    await proceedButton.click();
-    console.log('2FA code submitted');
-  } catch {
-    // No 2FA prompt — expected for most test accounts
-    console.log('No 2FA prompt detected, continuing...');
+  if (strategy === 'none') {
+    console.log('[auth] No authentication required — saving empty state');
+    await page.context().storageState({ path: authFile });
+    return;
   }
 
-  // Step 5: Wait for redirect to /home
-  await page.waitForURL('**/home**', { timeout: timeouts.login });
-  await page.waitForLoadState('networkidle', { timeout: timeouts.loadState });
-  console.log('Login successful — redirected to /home');
-
-  // Step 6: Save authentication state (captures localStorage)
-  await page.context().storageState({ path: authFile });
-  console.log(`Authentication state saved to: ${authFile}`);
+  try {
+    const { authenticate } = await import(`./auth-strategies/${strategy}.js`);
+    await authenticate(page, authFile);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Cannot find module') || msg.includes('MODULE_NOT_FOUND')) {
+      throw new Error(
+        `Auth strategy "${strategy}" not found. ` +
+        `Expected file: e2e-tests/playwright/auth-strategies/${strategy}.js\n` +
+        `Available strategies: email-password, oauth, none\n` +
+        `Set AUTH_STRATEGY in e2e-tests/.env.testing.`
+      );
+    }
+    throw err;
+  }
 });

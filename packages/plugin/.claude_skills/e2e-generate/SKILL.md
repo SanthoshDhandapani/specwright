@@ -38,11 +38,22 @@ Generate complete BDD test files from a test plan.
 
 ## Steps
 
+### Step 0: Pre-read all inputs (BEFORE invoking any agent)
+
+Read all files the agents will need, so they receive the content inline and skip file reads:
+
+1. Plan file — from $ARGUMENTS or most recent in `e2e-tests/plans/`
+2. `e2e-tests/playwright/generated/seed.spec.js` — validated selectors (skip if not present)
+3. `e2e-tests/utils/stepHelpers.js` — FIELD_TYPES constants and processDataTable API
+4. `e2e-tests/utils/testDataGenerator.js` — generateValueForField faker patterns
+
+Pass all four file contents inline when invoking agents. The agents MUST NOT re-read these files — use the provided content directly.
+
 ### Step 1: Generate BDD Files
 
 Invoke `@agent-bdd-generator` with:
 
-- Plan file path from $ARGUMENTS (or most recent plan in `/e2e-tests/plans/`)
+- Plan file content (from Step 0)
 - Module config (moduleName, category, subModuleName, fileName)
 
 The agent creates both `.feature` and `steps.js` skeleton with correct imports, step patterns, and data table wiring.
@@ -52,10 +63,12 @@ The agent creates both `.feature` and `steps.js` skeleton with correct imports, 
 Invoke `@agent-code-generator` with:
 
 - The steps.js skeleton from Step 1
-- Seed file at `e2e-tests/playwright/generated/seed.spec.js` (if exists)
-- Plan file for context
+- Seed file content (from Step 0 — validated selectors already in context)
+- stepHelpers.js content (from Step 0 — FIELD_TYPES and APIs already in context)
+- testDataGenerator.js content (from Step 0 — faker patterns already in context)
+- Plan file content (from Step 0)
 
-The agent reads validated selectors from the seed file and fills in complete Playwright implementations.
+The agent uses the provided content to fill in Playwright implementations — no file reads needed.
 
 ### Step 3: Verify (Optional)
 

@@ -11,10 +11,18 @@ const __dirname = path.dirname(__filename);
 
 const markerFile = path.join(__dirname, '.cleanup-done');
 const testDataDir = path.join(__dirname, 'test-data');
+const authStorageDir = path.join(__dirname, 'auth-storage/.auth');
 const reportsDir = path.join(__dirname, '../../reports');
 
 export default async function globalSetup() {
   console.log('[global.setup] Starting global setup...');
+
+  // Always ensure auth-storage directory exists — storageState({ path }) does not
+  // create parent directories, so auth setup fails on a fresh clone without this.
+  if (!fs.existsSync(authStorageDir)) {
+    fs.mkdirSync(authStorageDir, { recursive: true });
+    console.log('[global.setup] Created auth-storage/.auth directory.');
+  }
 
   if (!fs.existsSync(markerFile)) {
     // New run — clean previous data

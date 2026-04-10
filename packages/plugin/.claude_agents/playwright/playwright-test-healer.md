@@ -46,11 +46,17 @@ Do NOT record: one-off test data values, environment-specific info, or anything 
    - For inherently dynamic data, utilize regular expressions to produce resilient locators
 6. **Verification**: Restart the test after each fix to validate the changes
 7. **Iteration**: Repeat the investigation and fixing process until the test passes cleanly
-8. **Write to Memory File**: After all fixes are complete, update `.claude/agent-memory/playwright-test-healer/MEMORY.md` with:
+8. **Write to Memory File ⚠️ MANDATORY — do this BEFORE finishing**: Update `.claude/agent-memory/playwright-test-healer/MEMORY.md` immediately after all tests pass. Use the **Edit or Write** tool:
    - Project conventions discovered (e.g., "Elemental Card doesn't forward data-testid")
-   - Selector fixes applied (date, module, old selector, new selector, reason)
+   - Selector fixes applied (date, module, old selector → new selector, reason)
    - Anti-patterns found (patterns that consistently fail and their alternatives)
-     Use the Edit or Write tool. This is the LAST step before finishing.
+
+   **This step is non-negotiable.** Empty memory = zero "try first" hints on the next run, causing full re-investigation. Write it now.
+
+   Example selector fix entry:
+   ```
+   | 2026-04-10 | @Counter | getByTestId('count-display') | getByRole('status') | testid removed in v2 |
+   ```
 
 ## Key Principles
 

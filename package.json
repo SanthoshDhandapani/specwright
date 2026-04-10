@@ -29,13 +29,16 @@
   "packageManager": "pnpm@9.15.0",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.94",
-    "claude-runner": "^0.2.0"
+    "@playwright/mcp": "^0.0.70",
+    "claude-runner": "^0.4.1"
   },
   "pnpm": {
     "overrides": {
       "jwt-decode>husky": "-"
     },
     "patchedDependencies": {},
-    "neverBuiltDependencies": ["jwt-decode"]
+    "neverBuiltDependencies": [
+      "jwt-decode"
+    ]
   }
 }

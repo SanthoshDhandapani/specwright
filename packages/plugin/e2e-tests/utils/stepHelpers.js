@@ -7,7 +7,7 @@
  * - processDataTable  — fills forms from Gherkin 3-column data tables
  * - validateExpectations — asserts displayed values from data tables
  * - fillFieldByName   — fill a single field using selector priority hierarchy
- * - selectDropDownByTestId — select option from a react-select dropdown
+ * - selectDropdown    — select option from a native or ARIA-compliant dropdown
  */
 
 import { expect } from '@playwright/test';
@@ -22,20 +22,18 @@ const kebabCase = (str) => str.replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\s_
 // ─────────────────────────────────────────────────────────────
 export const FIELD_TYPES = {
   // Interaction types (used in processDataTable fieldConfig)
-  FILL: 'FILL', // plain text input
-  FILL_AND_ENTER: 'FILL_AND_ENTER', // fill then press Enter (multi-select tags)
-  DROPDOWN: 'DROPDOWN', // react-select dropdown
-  COMBO_BOX: 'COMBO_BOX', // creatable select (creates new option)
-  CLICK: 'CLICK', // button / toggle via click
+  FILL: 'FILL',                       // plain text input
+  FILL_AND_ENTER: 'FILL_AND_ENTER',   // fill then press Enter (tags, chips)
+  DROPDOWN: 'DROPDOWN',               // native <select> or ARIA combobox
+  CLICK: 'CLICK',                     // button / toggle via click
   CHECKBOX_TOGGLE: 'CHECKBOX_TOGGLE', // checkbox by label text
-  TOGGLE: 'TOGGLE', // boolean toggle switch
-  CUSTOM: 'CUSTOM', // write a fieldHandler for truly unique interactions
+  TOGGLE: 'TOGGLE',                   // boolean toggle switch
+  CUSTOM: 'CUSTOM',                   // write a fieldHandler for truly unique interactions
 
   // Validation types (used in validateExpectations validationConfig)
-  INPUT_VALUE: 'INPUT_VALUE', // assert text input .value (toHaveValue)
-  MULTI_SELECT_TAG: 'MULTI_SELECT_TAG', // react-select multi-value chip visible
-  DROPDOWN_SINGLE_VALUE: 'DROPDOWN_SINGLE_VALUE', // react-select single-value text
-  TEXT_VISIBLE: 'TEXT_VISIBLE', // assert text is visible by testID
+  INPUT_VALUE: 'INPUT_VALUE',         // assert text input .value (toHaveValue)
+  DROPDOWN_VALUE: 'DROPDOWN_VALUE',   // assert selected option text
+  TEXT_VISIBLE: 'TEXT_VISIBLE',       // assert text is visible by testID
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -71,7 +69,6 @@ export async function processDataTable(page, dataTable, config = {}) {
 
     // ── Step 1: Resolve value from placeholder ──
     if (value === '<gen_test_data>') {
-      // Generate: check if mapping points to existing testData, otherwise generate with faker
       if (mapping[fieldName] && page.testData?.[mapping[fieldName]] !== undefined) {
         value = page.testData[mapping[fieldName]];
       } else {
@@ -82,7 +79,6 @@ export async function processDataTable(page, dataTable, config = {}) {
         const cacheKey = mapping[fieldName] || snakeCase(fieldName);
         if (!page.testData) page.testData = {};
         page.testData[cacheKey] = value;
-        // Also write to featureDataCache for cross-scenario persistence
         const featureKey = getFeatureKey(page);
         if (featureKey) {
           if (!globalThis.__rt_featureDataCache) globalThis.__rt_featureDataCache = {};
@@ -92,13 +88,11 @@ export async function processDataTable(page, dataTable, config = {}) {
         console.log(`🎲 Generated "${fieldName}" → ${cacheKey}: ${value}`);
       }
     } else if (value === '<from_test_data>') {
-      // Read: look up from page.testData or featureDataCache
       const cacheKey = mapping[fieldName] || snakeCase(fieldName);
       if (page.testData?.[cacheKey] !== undefined) {
         value = page.testData[cacheKey];
         console.log(`📖 Read "${fieldName}" → ${cacheKey}: ${value}`);
       } else {
-        // Try featureDataCache
         const featureKey = getFeatureKey(page);
         const cached = featureKey && globalThis.__rt_featureDataCache?.[featureKey]?.[cacheKey];
         if (cached) {
@@ -109,7 +103,6 @@ export async function processDataTable(page, dataTable, config = {}) {
         }
       }
     }
-    // Static values: use as-is
 
     // ── Step 2: Interact with the field ──
     if (fieldHandlers[fieldName]) {
@@ -117,7 +110,6 @@ export async function processDataTable(page, dataTable, config = {}) {
     } else if (fieldConfig[fieldName]) {
       await executeFieldInteraction(page, fieldName, value, fieldConfig[fieldName], container);
     } else {
-      // Fallback: try to fill by testID derived from field name
       await fillFieldByName(container, fieldName, value);
     }
   }
@@ -130,13 +122,6 @@ export async function processDataTable(page, dataTable, config = {}) {
 /**
  * Validate displayed values from a 3-column Gherkin data table.
  * Reads <from_test_data> from page.testData or featureDataCache.
- *
- * @param {Page} page - Playwright page
- * @param {DataTable} dataTable - Gherkin data table
- * @param {Object} config
- * @param {Object} config.mapping - Field name → page.testData property name
- * @param {Object} config.validationConfig - Field name → { type: FIELD_TYPES.*, testID?, selector? }
- * @param {Locator|Page} config.container - Scope assertions to this element (default: page)
  */
 export async function validateExpectations(page, dataTable, config = {}) {
   const { mapping = {}, validationConfig = {}, container = page } = config;
@@ -147,7 +132,6 @@ export async function validateExpectations(page, dataTable, config = {}) {
     const fieldName = row['Field Name'] || row['Field'] || row['Element'];
     let expectedValue = row['Expected Value'] || row['Value'] || '';
 
-    // ── Resolve <from_test_data> placeholder ──
     if (expectedValue === '<from_test_data>') {
       const cacheKey = mapping[fieldName] || snakeCase(fieldName);
       if (page.testData?.[cacheKey] !== undefined) {
@@ -167,12 +151,10 @@ export async function validateExpectations(page, dataTable, config = {}) {
       }
     }
 
-    // ── Execute validation ──
     const vConfig = validationConfig[fieldName];
     if (vConfig) {
       await executeValidation(page, fieldName, expectedValue, vConfig, container);
     } else {
-      // Fallback: find element by text
       await expect(page.getByText(expectedValue, { exact: false }).first()).toBeVisible();
     }
   }
@@ -184,7 +166,7 @@ export async function validateExpectations(page, dataTable, config = {}) {
 
 /**
  * Fill a field using Playwright's selector priority hierarchy.
- * Tries: testID → name → placeholder → label → CSS fallback
+ * Tries: testID → name attr → placeholder → label → role
  */
 export async function fillFieldByName(container, fieldName, value) {
   const fieldKebab = kebabCase(fieldName);
@@ -216,37 +198,56 @@ export async function fillFieldByName(container, fieldName, value) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// selectDropDownByTestId — select option from react-select
+// selectDropdown — select option from native or ARIA dropdown
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Select an option from a React Select dropdown by testID.
- * Opens the dropdown, finds the option by text, clicks it.
+ * Select an option from a dropdown using standard Playwright methods.
+ * Works with native <select>, ARIA combobox (role="combobox"), or listbox patterns.
+ *
+ * Priority: testID → role="combobox" → <select> by name → label
  */
-export async function selectDropDownByTestId(page, fieldName, value, autoKebab = true) {
-  const testId = autoKebab ? kebabCase(fieldName) : fieldName;
+export async function selectDropdown(container, fieldName, value) {
+  const fieldKebab = kebabCase(fieldName);
 
-  const dropdownContainer = page.getByTestId(testId);
-  await dropdownContainer.waitFor({ state: 'visible', timeout: 5000 });
+  // 1. Try native <select> by testID
+  const selectByTestId = container.getByTestId(fieldKebab);
+  if ((await selectByTestId.count()) > 0) {
+    const tag = await selectByTestId.evaluate((el) => el.tagName.toLowerCase());
+    if (tag === 'select') {
+      await selectByTestId.selectOption({ label: value });
+      return;
+    }
+  }
 
-  const control = dropdownContainer
-    .locator('.react-select__control, .react-select__dropdown-indicator, [class*="select__control"]')
-    .first();
-  await control.waitFor({ state: 'visible', timeout: 5000 });
-  await control.click();
-  await page.waitForTimeout(300);
+  // 2. Try ARIA combobox pattern (role="combobox")
+  const combobox = container.getByRole('combobox', { name: new RegExp(fieldName, 'i') });
+  if ((await combobox.count()) > 0) {
+    await combobox.click();
+    const option = container.getByRole('option', { name: value });
+    await option.waitFor({ state: 'visible', timeout: 5000 });
+    await option.click();
+    return;
+  }
 
-  // Portal renders at document.body — must use page root
-  const option = page.locator('.react-select__menu-list').locator('.react-select__option').filter({ hasText: value });
+  // 3. Try native <select> by name attribute
+  const selectByName = container.locator(`select[name="${fieldName}"], select[name="${fieldKebab}"]`);
+  if ((await selectByName.count()) > 0) {
+    await selectByName.first().selectOption({ label: value });
+    return;
+  }
 
-  await option.waitFor({ state: 'visible', timeout: 5000 });
-  await option.click();
+  // 4. Try <select> by label
+  const selectByLabel = container.getByLabel(fieldName);
+  if ((await selectByLabel.count()) > 0) {
+    const tag = await selectByLabel.evaluate((el) => el.tagName.toLowerCase());
+    if (tag === 'select') {
+      await selectByLabel.selectOption({ label: value });
+      return;
+    }
+  }
 
-  await page
-    .locator('.react-select__menu-list')
-    .waitFor({ state: 'detached', timeout: 3000 })
-    .catch(() => {});
-  await page.waitForTimeout(300);
+  throw new Error(`Could not find dropdown "${fieldName}". Supports: <select>, role="combobox", or ARIA listbox.`);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -280,35 +281,21 @@ async function executeFieldInteraction(page, fieldName, value, config, container
 
     case FIELD_TYPES.DROPDOWN:
       if (config.testID) {
-        const dropEl = container.getByTestId(config.testID);
-        const ctrl = dropEl.locator('.react-select__control, .react-select__dropdown-indicator').first();
-        await ctrl.waitFor({ state: 'visible', timeout: 5000 });
-        await ctrl.click();
-        await page.waitForTimeout(300);
-        const menuList = page.locator('.react-select__menu-list');
-        await expect(menuList).toBeVisible({ timeout: 5000 });
-        const opt = menuList.locator('.react-select__option').filter({ hasText: value });
-        const matched = (await opt.count()) > 0 ? opt.first() : menuList.locator('.react-select__option').first();
-        await matched.click();
-        await page
-          .locator('.react-select__menu-list')
-          .waitFor({ state: 'detached', timeout: 3000 })
-          .catch(() => {});
-        await page.waitForTimeout(300);
+        // Try native <select> first, then ARIA combobox
+        const el = container.getByTestId(config.testID);
+        const tag = await el.evaluate((node) => node.tagName.toLowerCase()).catch(() => '');
+        if (tag === 'select') {
+          await el.selectOption({ label: value });
+        } else {
+          // ARIA combobox: click to open, then select option
+          await el.click();
+          const option = page.getByRole('option', { name: value });
+          await option.waitFor({ state: 'visible', timeout: 5000 });
+          await option.click();
+        }
       } else {
-        await selectDropDownByTestId(page, fieldName, value);
+        await selectDropdown(container, fieldName, value);
       }
-      break;
-
-    case FIELD_TYPES.COMBO_BOX:
-      if (config.testID) {
-        await container.getByTestId(config.testID).fill(value);
-      } else if (config.placeholder) {
-        await container.getByPlaceholder(config.placeholder).fill(value);
-      } else {
-        await fillFieldByName(container, fieldName, value);
-      }
-      await page.getByRole('link', { name: `Create: ${value}` }).click();
       break;
 
     case FIELD_TYPES.CLICK:
@@ -325,9 +312,9 @@ async function executeFieldInteraction(page, fieldName, value, config, container
 
     case FIELD_TYPES.CHECKBOX_TOGGLE:
       if (config.testID) {
-        await container.getByTestId(config.testID).filter({ hasText: fieldName }).click();
+        await container.getByTestId(config.testID).click();
       } else {
-        await container.getByTestId('checkbox').filter({ hasText: fieldName }).click();
+        await container.getByRole('checkbox', { name: new RegExp(fieldName, 'i') }).click();
       }
       break;
 
@@ -336,6 +323,8 @@ async function executeFieldInteraction(page, fieldName, value, config, container
         await container.getByTestId(config.testID).click();
       } else if (config.selector) {
         await container.locator(config.selector).click();
+      } else {
+        await container.getByRole('switch', { name: new RegExp(fieldName, 'i') }).click();
       }
       break;
 
@@ -367,18 +356,18 @@ async function executeValidation(page, fieldName, expectedValue, config, contain
       }
       break;
 
-    case FIELD_TYPES.MULTI_SELECT_TAG:
-      await expect(
-        container.locator('.react-select__multi-value__label').filter({ hasText: expectedValue }),
-      ).toBeVisible({ timeout: 5000 });
-      break;
-
-    case FIELD_TYPES.DROPDOWN_SINGLE_VALUE:
+    case FIELD_TYPES.DROPDOWN_VALUE:
       if (config.testID) {
-        await expect(container.locator(`[data-testid="${config.testID}"] .react-select__single-value`)).toContainText(
-          expectedValue,
-          { timeout: 5000 },
-        );
+        // Native <select>: check selected option text
+        const el = container.getByTestId(config.testID);
+        const tag = await el.evaluate((node) => node.tagName.toLowerCase()).catch(() => '');
+        if (tag === 'select') {
+          const selected = el.locator('option:checked');
+          await expect(selected).toHaveText(expectedValue, { timeout: 5000 });
+        } else {
+          // ARIA combobox: check displayed value
+          await expect(el).toContainText(expectedValue, { timeout: 5000 });
+        }
       }
       break;
 

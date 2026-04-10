@@ -1,6 +1,6 @@
 {
   "name": "@specwright/plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Drop-in E2E test automation framework plugin — Playwright BDD + Claude Code agents",
   "license": "MIT",
   "bin": {
@@ -22,7 +22,8 @@
     ".claude_agent-memory/",
     ".claude_memory_MEMORY.md",
     ".claude_README.md",
-    "e2e-tests/"
+    "e2e-tests/",
+    "specwright.plugin.json"
   ],
   "publishConfig": {
     "access": "public"

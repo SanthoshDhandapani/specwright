@@ -1,15 +1,94 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-// import PipelineStepper from "./PipelineStepper"; // parked — phase detection needs rework
 import WelcomeScreen from "./WelcomeScreen";
 import InstructionsBuilder from "./InstructionsBuilder";
 import HealerPanel from "./HealerPanel";
 import PermissionPrompt from "./PermissionPrompt";
-import { usePipelineStore, type ChatMessage, MAX_PHASE_ID, BDD_GENERATION_PHASE_ID } from "@renderer/store/pipeline.store";
+import { usePipelineStore, type ChatMessage, type Phase, MAX_PHASE_ID } from "@renderer/store/pipeline.store";
 import { useConfigStore } from "@renderer/store/config.store";
+
+// ── Phase grouping ────────────────────────────────────────────────────────────
+interface PhaseGroup {
+  phaseId: number | undefined;
+  messages: ChatMessage[];
+}
+
+/**
+ * Groups messages into phase buckets.
+ * - Assistant messages with a phaseId start a new group when the phaseId changes.
+ * - User messages and untagged assistant messages fall into the current group.
+ */
+function groupMessagesByPhase(messages: ChatMessage[]): PhaseGroup[] {
+  // Skip the very first message (the initial instructions blob sent by the user)
+  const body = messages.length > 0 && messages[0].role === "user" ? messages.slice(1) : messages;
+
+  const groups: PhaseGroup[] = [];
+  for (const msg of body) {
+    const lastGroup = groups[groups.length - 1];
+    if (msg.role === "assistant" && msg.phaseId !== undefined) {
+      if (!lastGroup || msg.phaseId !== lastGroup.phaseId) {
+        groups.push({ phaseId: msg.phaseId, messages: [msg] });
+      } else {
+        lastGroup.messages.push(msg);
+      }
+    } else {
+      if (!lastGroup) {
+        groups.push({ phaseId: undefined, messages: [msg] });
+      } else {
+        lastGroup.messages.push(msg);
+      }
+    }
+  }
+  return groups;
+}
+
+// ── Phase header card ─────────────────────────────────────────────────────────
+function PhaseHeader({ phase, isActive }: { phase: Phase; isActive: boolean }): React.JSX.Element {
+  const statusNode = (() => {
+    if (phase.status === "done") {
+      return <span className="text-emerald-400 text-[11px] font-medium flex items-center gap-1">✓ Done</span>;
+    }
+    if (phase.status === "running") {
+      return (
+        <span className="text-brand-400 text-[11px] font-medium flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 border-[1.5px] border-brand-400 border-t-transparent rounded-full animate-spin" />
+          Running
+        </span>
+      );
+    }
+    if (phase.status === "error") {
+      return <span className="text-red-400 text-[11px] font-medium">✕ Error</span>;
+    }
+    return null;
+  })();
+
+  return (
+    <div className={`flex items-center justify-between px-4 py-2.5 border-b ${
+      isActive ? "border-brand-700/60 bg-brand-950/30" : "border-slate-700/60 bg-slate-800/60"
+    }`}>
+      <div className="flex items-center gap-2.5">
+        <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+          phase.status === "done"
+            ? "bg-emerald-900/60 text-emerald-400 border border-emerald-700/60"
+            : phase.status === "running"
+            ? "bg-brand-900/60 text-brand-300 border border-brand-600/60"
+            : "bg-slate-700/60 text-slate-400 border border-slate-600/40"
+        }`}>
+          {phase.id}
+        </span>
+        <span className={`text-sm font-semibold font-mono ${
+          phase.status === "running" ? "text-brand-300" : phase.status === "done" ? "text-slate-200" : "text-slate-400"
+        }`}>
+          {phase.label}
+        </span>
+      </div>
+      {statusNode}
+    </div>
+  );
+}
 
 // ── Streaming output panel (shown while pipeline runs / after done) ──────────
 function AgentOutputPanel(): React.JSX.Element {
-  const { messages, logLines, status, errorMessage, clearFeed, injectUserMessage, startRun, phases } = usePipelineStore();
+  const { messages, logLines, status, errorMessage, clearFeed, injectUserMessage, startRun, resumeRun, phases } = usePipelineStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [inputText, setInputText] = useState("");
@@ -130,15 +209,16 @@ function AgentOutputPanel(): React.JSX.Element {
   }, [handleSend]);
 
   const handleRunTests = useCallback(async () => {
-    const userMessage = `Run the generated BDD tests using: pnpm bddgen && npx playwright test --project setup --project main-e2e\n\nShow the results summary. If any tests fail, show which scenarios failed and why.`;
-    startRun(userMessage);
+    // Use /e2e-run skill directly — no ### Phase N: headers in output, preserves existing phase states
+    const userMessage = `/e2e-run --project setup --project main-e2e`;
+    resumeRun(userMessage);
     const { skipPermissions } = useConfigStore.getState();
     await window.specwright.pipeline.start({
       userMessage,
       mode: "claude-code",
       skipPermissions,
     });
-  }, [startRun]);
+  }, [resumeRun]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -182,15 +262,12 @@ function AgentOutputPanel(): React.JSX.Element {
           )}
           {!isRunning && (
             <>
-              {/* Show Run Tests only if BDD generation phase completed */}
-              {phases.some((p) => p.id >= BDD_GENERATION_PHASE_ID && p.status === "done") && (
-                <button
-                  onClick={handleRunTests}
-                  className="text-emerald-400 hover:text-emerald-300 text-xs border border-emerald-800 hover:border-emerald-600 rounded px-2 py-0.5 transition-colors"
-                >
-                  ▶ Run Tests
-                </button>
-              )}
+              <button
+                onClick={handleRunTests}
+                className="text-emerald-400 hover:text-emerald-300 text-xs border border-emerald-800 hover:border-emerald-600 rounded px-2 py-0.5 transition-colors"
+              >
+                ▶ Run Tests
+              </button>
               <button
                 onClick={clearFeed}
                 className="text-slate-400 hover:text-white text-xs border border-slate-700 hover:border-slate-500 rounded px-2 py-0.5 transition-colors"
@@ -203,7 +280,7 @@ function AgentOutputPanel(): React.JSX.Element {
       </div>
 
       {/* Message thread */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollable px-4 py-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollable px-4 py-4 space-y-3">
         {isRunning && messages.length === 0 && (
           <div className="flex items-center gap-3 text-slate-500 text-sm">
             <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -211,54 +288,82 @@ function AgentOutputPanel(): React.JSX.Element {
           </div>
         )}
 
-        {messages.map((msg) => {
-          if (msg.role === "user") {
-            // Skip the very first user message (it's the instructions JSON — too noisy to show)
-            if (messages.indexOf(msg) === 0) return null;
-            return (
-              <div key={msg.id} className="flex justify-end">
-                <div className="bg-brand-900/40 border border-brand-700/50 rounded-xl px-4 py-2.5 max-w-[85%]">
-                  <p className="text-brand-200 text-sm whitespace-pre-wrap select-text cursor-text">{msg.content}</p>
-                </div>
-              </div>
-            );
-          }
+        {groupMessagesByPhase(messages).map((group, groupIdx) => {
+          const phase = group.phaseId ? phases.find((p) => p.id === group.phaseId) ?? null : null;
+          const isActivePhase = phase?.status === "running";
 
-          // Assistant message
-          return (
-            <div key={msg.id} className="group relative">
-              <div className="bg-slate-800 rounded-xl px-5 py-4 border border-slate-700">
+          // All messages inside this group, rendered as bubbles
+          const messageBubbles = group.messages.map((msg) => {
+            if (msg.role === "user") {
+              return (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="bg-brand-900/40 border border-brand-700/50 rounded-xl px-4 py-2.5 max-w-[85%]">
+                    <p className="text-brand-200 text-sm whitespace-pre-wrap select-text cursor-text">{msg.content}</p>
+                  </div>
+                </div>
+              );
+            }
+
+            // Assistant message
+            return (
+              <div key={msg.id} className="group/msg relative">
                 {msg.content ? (
                   <pre className="whitespace-pre-wrap break-words font-sans text-slate-200 text-sm leading-relaxed m-0 select-text cursor-text">
                     {msg.content}
+                    {msg.isStreaming && !activeTool && (
+                      <span className="inline-block w-0.5 h-4 bg-brand-400 ml-0.5 align-middle animate-pulse" />
+                    )}
                   </pre>
-                ) : (
+                ) : msg.isStreaming ? (
                   <span className="flex gap-1 items-center h-5">
                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
                   </span>
-                )}
-                {msg.isStreaming && msg.content && !activeTool && (
-                  <span className="inline-block w-0.5 h-4 bg-brand-400 ml-0.5 align-middle animate-pulse" />
-                )}
+                ) : null}
                 {msg.isStreaming && activeTool && (
-                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-700/50">
+                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-700/30">
                     <span className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
                     <span className="text-yellow-300 text-xs font-mono">{activeTool}</span>
                     <span className="text-slate-500 text-xs">running…</span>
                   </div>
                 )}
+                {msg.content && (
+                  <button
+                    onClick={() => handleCopy(msg.id, msg.content)}
+                    className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 text-slate-500 hover:text-white text-xs border border-slate-700 hover:border-slate-500 rounded px-1.5 py-0.5 bg-slate-900 transition-all"
+                  >
+                    {copied === msg.id ? "✓" : "Copy"}
+                  </button>
+                )}
               </div>
-              {/* Copy button — appears on hover */}
-              {msg.content && (
-                <button
-                  onClick={() => handleCopy(msg.id, msg.content)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white text-xs border border-slate-700 hover:border-slate-500 rounded px-1.5 py-0.5 bg-slate-900 transition-all"
-                >
-                  {copied === msg.id ? "✓" : "Copy"}
-                </button>
-              )}
+            );
+          });
+
+          // Phase card — wraps the messages in a bordered card with a header
+          if (phase) {
+            return (
+              <div
+                key={`phase-group-${group.phaseId}-${groupIdx}`}
+                className={`rounded-xl border overflow-hidden ${
+                  isActivePhase ? "border-brand-700/50" : "border-slate-700/60"
+                }`}
+              >
+                <PhaseHeader phase={phase} isActive={isActivePhase} />
+                {/* Only render body if there's content */}
+                {group.messages.some((m) => m.content || m.isStreaming) && (
+                  <div className="px-5 py-4 space-y-3 bg-slate-800/40">
+                    {messageBubbles}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          // No phase — render messages bare (pre-phase content or user injects without phase context)
+          return (
+            <div key={`unphased-${groupIdx}`} className="space-y-3">
+              {messageBubbles}
             </div>
           );
         })}
@@ -344,39 +449,36 @@ function detectPhaseFromTool(toolName: string, toolDetail: string): number | nul
 }
 
 /**
- * Text-based phase detection — matches Claude's ACTIVE phase headers only.
+ * Text-based phase detection — scans recent streamed content for `### Phase N` headers.
  *
- * Active headers look like:
- *   "### Phase 3: /e2e-process — Complete"
- *   "## Phase 6: USER APPROVAL CHECKPOINT"
- *   "Now invoking **Phase 3: `/e2e-process`**"
+ * The SKILL.md requires agents to output:  ### Phase N: <Label>
+ * Using the `###` prefix avoids false positives from bullet lists or the pipeline overview table.
  *
- * Listing lines look like (must NOT match):
- *   "- 🔄 Phase 3: Input Processing (`/e2e-process`)"
- *   "- ⬜ Phase 4: Exploration & Planning"
- *
- * Key difference: listing lines start with "- " (bullet), active headers don't.
+ * Scans for ANY phase N > currentPhase and returns the smallest match.
+ * This handles two gap scenarios:
+ *   - User Approval pause: Phase 6 is never detected (separate session), so after
+ *     resume Phase 7 must be found directly from Phase 5.
+ *   - Skipped phases: Phase 8 skipped → Phase 9 found directly from Phase 7.
+ * The advanceToPhase helper gap-fills skipped phases as "done" automatically.
  */
 function detectPhaseFromText(text: string, currentPhase: number): number | null {
-  const next = currentPhase + 1;
-  if (next > MAX_PHASE_ID) return null;
+  if (currentPhase >= MAX_PHASE_ID) return null;
 
-  // Only check the LAST LINE of streamed text — not a tail window
-  const lines = text.split("\n").filter(l => l.trim());
-  const lastLine = (lines[lines.length - 1] ?? "").trim();
-
-  // Skip if last line is a listing bullet (starts with "- ")
-  if (lastLine.startsWith("- ")) return null;
-
-  // Match "Phase N" in active headers only (###, ##, **, "Now invoking", or standalone)
-  const phaseRegex = new RegExp(`Phase\\s+${next}\\b`, "i");
-  if (phaseRegex.test(lastLine)) return next;
-
-  return null;
+  // Find all "### Phase N" headers where N > currentPhase — take the minimum
+  const regex = /###\s*Phase\s+(\d+)/gi;
+  let match: RegExpExecArray | null;
+  let candidate: number | null = null;
+  while ((match = regex.exec(text)) !== null) {
+    const n = parseInt(match[1], 10);
+    if (n > currentPhase && n <= MAX_PHASE_ID) {
+      if (candidate === null || n < candidate) candidate = n;
+    }
+  }
+  return candidate;
 }
 
 export default function CenterPanel(): React.JSX.Element {
-  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, status } = usePipelineStore();
+  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, splitForPhase, status } = usePipelineStore();
   const { projectState, loaded, hydrate, activeTab, setActiveTab } = useConfigStore();
   const lastPhaseRef = React.useRef<number>(0);
 
@@ -387,7 +489,8 @@ export default function CenterPanel(): React.JSX.Element {
 
   const { showPermission } = usePipelineStore();
 
-  // Helper: advance stepper to a phase (forward-only, fills gaps as "done")
+  // Helper: advance to a phase (forward-only, fills gaps as "done")
+  // Also seals the current streaming message and starts a new one tagged with the new phaseId
   const advanceToPhase = useCallback((phaseId: number) => {
     if (!phaseId || phaseId === lastPhaseRef.current) return;
     // Only advance forward, never backward
@@ -405,8 +508,10 @@ export default function CenterPanel(): React.JSX.Element {
     }
 
     setActivePhase(phaseId);
+    // Split the streaming output into a new message block for this phase
+    splitForPhase(phaseId);
     lastPhaseRef.current = phaseId;
-  }, [setActivePhase, setPhaseStatus]);
+  }, [setActivePhase, setPhaseStatus, splitForPhase]);
 
   // Detect phase from streamed tokens (text fallback for phases without tool calls)
   const handleToken = useCallback((token: string) => {
@@ -415,7 +520,7 @@ export default function CenterPanel(): React.JSX.Element {
     const { messages } = usePipelineStore.getState();
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.role === "assistant" && lastMsg.content) {
-      const detected = detectPhaseFromText(lastMsg.content.slice(-300), lastPhaseRef.current);
+      const detected = detectPhaseFromText(lastMsg.content.slice(-600), lastPhaseRef.current);
       if (detected) advanceToPhase(detected);
     }
   }, [appendToken, advanceToPhase]);
@@ -424,16 +529,12 @@ export default function CenterPanel(): React.JSX.Element {
   useEffect(() => {
     const offToken = window.specwright.pipeline.onToken(({ token }) => handleToken(token));
     const offDone  = window.specwright.pipeline.onDone(({ fullText, sessionId, userMessage }) => {
-      // Mark the last active phase as done
+      // Mark only the last DETECTED phase as done.
+      // Do NOT auto-fill future phases — phases that never executed stay "pending".
+      // This prevents Run Tests from appearing when the pipeline ended at the
+      // User Approval checkpoint without ever reaching BDD Generation.
       if (lastPhaseRef.current > 0) {
         setPhaseStatus(lastPhaseRef.current, "done");
-      }
-
-      // Mark all remaining phases beyond the last detected as done.
-      // The pipeline completed successfully, so any phases after the last
-      // detected one (e.g., Cleanup, Final Review) are done too.
-      for (let id = lastPhaseRef.current + 1; id <= MAX_PHASE_ID; id++) {
-        setPhaseStatus(id, "done");
       }
 
       finishRun(fullText, sessionId, userMessage);

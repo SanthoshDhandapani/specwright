@@ -2,8 +2,14 @@ import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig, cucumberReporter } from 'playwright-bdd';
 import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from e2e-tests/.env.testing (canonical source of truth)
+// Falls back to root .env for any vars not set above (e.g. CI overrides)
+dotenv.config({ path: 'e2e-tests/.env.testing', override: true });
+dotenv.config({ override: false });
+
+// Auth strategy: determines whether to run auth setup and use storageState
+const authStrategy = process.env.AUTH_STRATEGY || 'email-password';
+const hasAuth = authStrategy !== 'none';
 
 // Chrome arguments: use CHROME_ARGS env var (comma-separated) or sensible defaults
 const chromeArgs = process.env.CHROME_ARGS
@@ -77,27 +83,35 @@ export default defineConfig({
 
   /* Configure projects */
   projects: [
-    // Setup project - creates authentication state for other projects
-    {
-      name: 'setup',
-      testDir: './e2e-tests/playwright',
-      testMatch: '**/auth.setup.js',
-      use: {
-        ...devices['Desktop Chrome'],
-        launchOptions: defaultLaunchOptions,
-      },
-    },
+    // Setup project - creates authentication state (skipped when AUTH_STRATEGY=none)
+    ...(hasAuth
+      ? [
+          {
+            name: 'setup',
+            testDir: './e2e-tests/playwright',
+            testMatch: '**/auth.setup.js',
+            use: {
+              ...devices['Desktop Chrome'],
+              launchOptions: defaultLaunchOptions,
+            },
+          },
+        ]
+      : []),
 
     // Authentication tests - run with clean state (no dependencies, no storageState)
-    {
-      name: 'auth-tests',
-      testMatch: '**/@Authentication/*.spec.js',
-      use: {
-        ...devices['Desktop Chrome'],
-        launchOptions: defaultLaunchOptions,
-        // Clean state for testing login/logout functionality
-      },
-    },
+    ...(hasAuth
+      ? [
+          {
+            name: 'auth-tests',
+            testMatch: '**/@Authentication/*.spec.js',
+            use: {
+              ...devices['Desktop Chrome'],
+              launchOptions: defaultLaunchOptions,
+              // Clean state for testing login/logout functionality
+            },
+          },
+        ]
+      : []),
 
     // Serial execution — features tagged @serial-execution run with 1 worker.
     // Browser page is reused across scenarios within the same feature file.
@@ -111,9 +125,11 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
-        storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json',
+        ...(hasAuth
+          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          : {}),
       },
-      dependencies: ['setup'],
+      ...(hasAuth ? { dependencies: ['setup'] } : {}),
     },
 
     // Main BDD tests — everything not serial or auth. Runs parallel by default.
@@ -125,9 +141,11 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
-        storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json',
+        ...(hasAuth
+          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          : {}),
       },
-      dependencies: ['setup'],
+      ...(hasAuth ? { dependencies: ['setup'] } : {}),
     },
   ],
 

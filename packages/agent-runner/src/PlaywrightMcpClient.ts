@@ -107,17 +107,31 @@ export class PlaywrightMcpClient {
       }) => McpTransportInstance;
     };
 
-    const args = ["@playwright/mcp@latest"];
+    // Resolve local @playwright/mcp binary (avoids npx overhead of 300ms-3s)
+    let mcpCommand = "npx";
+    let mcpArgs = ["@playwright/mcp@latest"];
+    try {
+      const { createRequire: cr } = await dynamicImport("module") as { createRequire: (url: string) => NodeRequire };
+      const localRequire = cr(__filename);
+      const pkgPath = localRequire.resolve("@playwright/mcp/package.json");
+      const pathMod = await dynamicImport("path") as { dirname: (p: string) => string; join: (...args: string[]) => string };
+      const localBin = pathMod.join(pathMod.dirname(pkgPath), "cli.js");
+      mcpCommand = "node";
+      mcpArgs = [localBin];
+    } catch {
+      // Fallback to npx if local package not installed
+    }
+
     if (options.outputDir) {
-      args.push("--output-dir", options.outputDir);
+      mcpArgs.push("--output-dir", options.outputDir);
     }
     if (options.mcpArgs) {
-      args.push(...options.mcpArgs);
+      mcpArgs.push(...options.mcpArgs);
     }
 
     this.transport = new transportMod.StdioClientTransport({
-      command: "npx",
-      args,
+      command: mcpCommand,
+      args: mcpArgs,
     });
 
     this.client = new clientMod.Client({

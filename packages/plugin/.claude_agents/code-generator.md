@@ -97,7 +97,7 @@ When('I see a message containing {string}', async ({ page }, message) => {
 
 ### 3. Step Definition Generation
 
-**🔴 CRITICAL: Before generating any step, check `shared/` for existing shared steps. Never duplicate.**
+**🔴 PATH-BASED SCOPING**: playwright-bdd v8+ scopes steps in `@`-prefixed directories. Steps reusable across modules MUST be in `shared/`. Use the shared steps list from `bdd-generator`'s output — do NOT re-scan `shared/`.
 
 **🔴 PATH-BASED TAG SCOPING**: playwright-bdd v8+ scopes step files in `@`-prefixed directories by path tags (AND expression). Steps in `@Modules/@FeatureA/steps.js` are ONLY visible to features under that same path. Steps that must be reusable across modules/workflows MUST be in `shared/` (no `@` prefix = globally available).
 
@@ -156,15 +156,15 @@ await expect(page.getByText('Success')).toBeVisible();
 
 **🔴 CRITICAL: When a step handles a Gherkin 3-column data table (`Field Name | Value | Type`), ALWAYS use `processDataTable` and `validateExpectations` from `e2e-tests/utils/stepHelpers.js`. NEVER write manual for-loops to iterate rows.**
 
-**Read `e2e-tests/utils/stepHelpers.js`** before generating any data table step. It provides:
+**Read `e2e-tests/utils/stepHelpers.js`** before generating any data table step (skip if content was already provided inline by the calling skill). It provides:
 
 - `processDataTable(page, dataTable, config)` — fills forms from data tables, handles `<gen_test_data>` (faker generation + caching) and `<from_test_data>` (cache reading) automatically
 - `validateExpectations(page, dataTable, config)` — asserts displayed values, reads `<from_test_data>` from cache
-- `FIELD_TYPES` — declarative type constants (FILL, DROPDOWN, COMBO_BOX, CHECKBOX_TOGGLE, etc.)
+- `FIELD_TYPES` — declarative type constants (FILL, DROPDOWN, CLICK, CHECKBOX_TOGGLE, etc.)
 - `fillFieldByName(container, fieldName, value)` — fills a single field using selector priority hierarchy
-- `selectDropDownByTestId(page, fieldName, value)` — selects option from react-select dropdown
+- `selectDropdown(container, fieldName, value)` — selects option from native `<select>` or ARIA combobox
 
-**Also read `e2e-tests/utils/testDataGenerator.js`** — provides `generateValueForField(fieldName)` which uses faker to produce realistic values based on field name.
+**Also read `e2e-tests/utils/testDataGenerator.js`** — provides `generateValueForField(fieldName)` which uses faker to produce realistic values based on field name. Skip if content was already provided inline by the calling skill.
 
 ### 5. Data Table Step Pattern (processDataTable)
 
@@ -266,8 +266,7 @@ When('I fill the modal form with:', async ({ page }, dataTable) => {
 | ----------------- | ---------------------------------------- | -------------------------------------------------------- |
 | `FILL`            | Plain text input                         | `{ testID? / selector? / placeholder? }`                 |
 | `FILL_AND_ENTER`  | Multi-select tag input (fill then Enter) | `{ name: string \| RegExp, role?: string }`              |
-| `DROPDOWN`        | Select dropdown                          | `{ testID }` — control scoped to container, menu on page |
-| `COMBO_BOX`       | Creatable select (creates new option)    | `{ testID? / selector? }`                                |
+| `DROPDOWN`        | Native `<select>` or ARIA combobox       | `{ testID? }` — uses `selectOption` or role-based click  |
 | `CLICK`           | Button / toggle via click                | `{ testID? / selector? / role? / name? }`                |
 | `CHECKBOX_TOGGLE` | Checkbox by label text                   | `{ testID? / selector? }`                                |
 | `TOGGLE`          | Boolean toggle switch                    | `{ testID? / selector? }`                                |
@@ -278,16 +277,14 @@ When('I fill the modal form with:', async ({ page }, dataTable) => {
 | Type                    | When to use                                  | Config shape              |
 | ----------------------- | -------------------------------------------- | ------------------------- |
 | `INPUT_VALUE`           | Assert text input's `.value` (`toHaveValue`) | `{ testID? / selector? }` |
+| `DROPDOWN_VALUE`        | Assert selected dropdown option text         | `{ testID? / selector? }` |
 | `TEXT_VISIBLE`          | Assert element text visible by testID        | `{ testID }`              |
-| `MULTI_SELECT_TAG`      | Multi-value chip visible by text             | _(none needed)_           |
-| `DROPDOWN_SINGLE_VALUE` | Single-value contains text                   | `{ testID? / selector? }` |
 
 ```javascript
 // Separate validation config
 const VALIDATION_CONFIG = {
   'Field Name': { type: FIELD_TYPES.INPUT_VALUE, testID: 'field-name' },
-  'Tag Field': { type: FIELD_TYPES.MULTI_SELECT_TAG },
-  Category: { type: FIELD_TYPES.DROPDOWN_SINGLE_VALUE, testID: 'category-select' },
+  Category: { type: FIELD_TYPES.DROPDOWN_VALUE, testID: 'category-select' },
 };
 
 Then('I should see the details:', async ({ page }, dataTable) => {

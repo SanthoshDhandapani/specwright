@@ -26,6 +26,8 @@ export interface ChatMessage {
   role: "user" | "assistant" | "explore";
   content: string;
   isStreaming: boolean;
+  /** Phase this message belongs to — set when a new phase starts via splitForPhase */
+  phaseId?: number;
   exploreResult?: ExploreResult;
 }
 
@@ -63,6 +65,8 @@ interface PipelineState {
   clearFeed: () => void;
   setActivePhase: (id: number) => void;
   setPhaseStatus: (id: number, status: PhaseStatus, durationMs?: number) => void;
+  /** Seal the current streaming message and start a new one tagged with the given phaseId */
+  splitForPhase: (phaseId: number) => void;
   showPermission: (request: PendingPermission) => void;
   clearPermission: () => void;
   setActiveTool: (toolName: string | null) => void;
@@ -74,12 +78,12 @@ interface PipelineState {
 const PHASES: Phase[] = [
   { id: 1,  label: "Initialization",           agentName: null,                        status: "pending", startedAt: null, durationMs: null },
   { id: 2,  label: "Detection & Routing",      agentName: null,                        status: "pending", startedAt: null, durationMs: null },
-  { id: 3,  label: "/e2e-process",             agentName: "input-processor",           status: "pending", startedAt: null, durationMs: null },
-  { id: 4,  label: "/e2e-plan",                agentName: "playwright-test-planner",   status: "pending", startedAt: null, durationMs: null },
-  { id: 5,  label: "/e2e-validate",            agentName: "execution-manager",         status: "pending", startedAt: null, durationMs: null },
+  { id: 3,  label: "Input Processing",          agentName: "input-processor",           status: "pending", startedAt: null, durationMs: null },
+  { id: 4,  label: "Exploration & Planning",   agentName: "playwright-test-planner",   status: "pending", startedAt: null, durationMs: null },
+  { id: 5,  label: "Exploration Validation",   agentName: "execution-manager",         status: "pending", startedAt: null, durationMs: null },
   { id: 6,  label: "User Approval",            agentName: null,                        status: "pending", startedAt: null, durationMs: null },
-  { id: 7,  label: "/e2e-generate",            agentName: "bdd-generator",             status: "pending", startedAt: null, durationMs: null },
-  { id: 8,  label: "/e2e-heal",                agentName: "execution-manager",         status: "pending", startedAt: null, durationMs: null },
+  { id: 7,  label: "BDD Generation",           agentName: "bdd-generator",             status: "pending", startedAt: null, durationMs: null },
+  { id: 8,  label: "Test Execution & Healing", agentName: "execution-manager",         status: "pending", startedAt: null, durationMs: null },
   { id: 9,  label: "Cleanup",                  agentName: null,                        status: "pending", startedAt: null, durationMs: null },
   { id: 10, label: "Final Review",             agentName: null,                        status: "pending", startedAt: null, durationMs: null },
 ];
@@ -88,7 +92,7 @@ const PHASES: Phase[] = [
 export const PHASE_COUNT = PHASES.length;
 export const MAX_PHASE_ID = PHASES[PHASES.length - 1].id;
 /** The phase where BDD generation starts — "Run Tests" is available once this phase is done. */
-export const BDD_GENERATION_PHASE_ID = PHASES.find((p) => p.label === "/e2e-generate")!.id;
+export const BDD_GENERATION_PHASE_ID = PHASES.find((p) => p.label === "BDD Generation")!.id;
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -130,7 +134,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       messages: [
         ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
         { id: makeId(), role: "user" as const,      content: userMessage, isStreaming: false },
-        { id: makeId(), role: "assistant" as const, content: "",          isStreaming: true  },
+        { id: makeId(), role: "assistant" as const, content: "",          isStreaming: true, phaseId: s.activePhase || undefined },
       ],
     })),
 
@@ -140,7 +144,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
         // Clear isStreaming on all previous messages
         ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
         { id: makeId(), role: "user",      content: text, isStreaming: false },
-        { id: makeId(), role: "assistant", content: "",   isStreaming: true  },
+        { id: makeId(), role: "assistant", content: "",   isStreaming: true, phaseId: s.activePhase || undefined },
       ],
     })),
 
@@ -219,6 +223,37 @@ export const usePipelineStore = create<PipelineState>((set) => ({
         p.id === id ? { ...p, status, durationMs: durationMs ?? p.durationMs } : p
       ),
     })),
+
+  splitForPhase: (phaseId) =>
+    set((s) => {
+      const messages = [...s.messages];
+      const lastIdx = messages.length - 1;
+      let leadContent = "";
+
+      if (lastIdx >= 0 && messages[lastIdx].isStreaming) {
+        const raw = messages[lastIdx].content;
+        // Find the last "### Phase N" header in the current message — that's the split point.
+        // Everything before the header stays in the sealed message; everything after the
+        // header line becomes the opening content of the new phase message.
+        const lastHashIdx = raw.lastIndexOf("###");
+        if (lastHashIdx >= 0 && /###\s*Phase\s+\d+/i.test(raw.slice(lastHashIdx))) {
+          const before = raw.slice(0, lastHashIdx).trimEnd();
+          const fromHeader = raw.slice(lastHashIdx);
+          // Skip the header line itself — only carry over the content that follows it
+          const lineEnd = fromHeader.indexOf("\n");
+          leadContent = lineEnd >= 0 ? fromHeader.slice(lineEnd + 1).trimStart() : "";
+          messages[lastIdx] = { ...messages[lastIdx], content: before, isStreaming: false };
+        } else {
+          // No phase header found — just seal as-is
+          messages[lastIdx] = { ...messages[lastIdx], isStreaming: false };
+        }
+      }
+
+      // Open a new message for this phase, pre-populated with any content that
+      // came after the header line in the previous message
+      messages.push({ id: makeId(), role: "assistant", content: leadContent, isStreaming: true, phaseId });
+      return { messages };
+    }),
 
   showPermission: (request) =>
     set({ pendingPermission: request }),

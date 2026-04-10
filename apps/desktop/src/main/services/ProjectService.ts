@@ -32,6 +32,21 @@ export interface InstructionCard {
 
 export type ProjectState = "none" | "bootstrapping" | "ready" | "error";
 
+export type AuthStrategy = "email-password" | "oauth" | "keycloak" | "none" | string;
+
+export interface PluginInfo {
+  /** Base plugin name (e.g., "@specwright/plugin") */
+  name: string;
+  /** Plugin version */
+  version: string;
+  /** Detected auth strategy */
+  authStrategy: AuthStrategy;
+  /** Whether an org overlay is applied */
+  hasOverlay: boolean;
+  /** Overlay plugin name (e.g., "@fourkites/e2e-plugin") */
+  overlayName?: string;
+}
+
 interface BootstrapResult {
   success: boolean;
   error?: string;
@@ -46,7 +61,7 @@ export class ProjectService {
 
   async bootstrap(
     projectPath: string,
-    options: { skipAuth?: boolean } = {}
+    options: { skipAuth?: boolean; authStrategy?: AuthStrategy } = {}
   ): Promise<BootstrapResult> {
     try {
       // Ensure directory exists
@@ -70,10 +85,20 @@ export class ProjectService {
         );
       }
 
-      // Run @specwright/plugin init — installs the full E2E framework:
-      // .claude/ (8 agents, 8 skills, 5 rules), e2e-tests/ (fixtures, helpers,
-      // shared steps, data config), playwright.config.ts, .mcp.json, README-TESTING.md
-      const authFlag = "--skip-auth";
+      // Read .specwright.json if it exists — single source of truth for project config
+      const specwrightConfigPath = path.join(projectPath, ".specwright.json");
+      let projectConfig: { plugin?: string; authStrategy?: string; overlay?: string } = {};
+      if (fs.existsSync(specwrightConfigPath)) {
+        try {
+          projectConfig = JSON.parse(fs.readFileSync(specwrightConfigPath, "utf-8"));
+        } catch { /* malformed — use defaults */ }
+      }
+
+      // .specwright.json takes precedence over options passed by caller
+      const authStrategy = projectConfig.authStrategy ?? options.authStrategy ?? "email-password";
+      const skipAuth = options.skipAuth || authStrategy === "none";
+      const authFlag = skipAuth ? "--skip-auth" : "";
+      const strategyFlag = `--auth-strategy=${authStrategy}`;
 
       // Resolve the plugin's install.sh from the workspace (or fall back to npx)
       // Desktop app uses --non-interactive to skip all prompts
@@ -82,10 +107,10 @@ export class ProjectService {
         const pluginDir = path.dirname(
           require.resolve("@specwright/plugin/cli.js")
         );
-        pluginCmd = `node "${path.join(pluginDir, "cli.js")}" init "${projectPath}" ${authFlag} --non-interactive`;
+        pluginCmd = `node "${path.join(pluginDir, "cli.js")}" init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
       } catch {
         // Plugin not in workspace — use npx (downloads from npm)
-        pluginCmd = `npx @specwright/plugin init "${projectPath}" ${authFlag} --non-interactive`;
+        pluginCmd = `npx @specwright/plugin init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
       }
 
       execSync(pluginCmd, {
@@ -291,6 +316,75 @@ export class ProjectService {
       fs.existsSync(path.join(projectPath, "playwright.config.ts")) &&
       fs.existsSync(path.join(projectPath, "e2e-tests/playwright/fixtures.js"))
     );
+  }
+
+  /**
+   * Detect which plugin and auth strategy are active for a project.
+   *
+   * Detection order:
+   * 1. specwright.plugin.json — overlay manifest with explicit authStrategy
+   * 2. .env.testing AUTH_STRATEGY — explicit env var
+   * 3. .claude/agents/ exists — base plugin installed, default auth
+   * 4. None found — no plugin
+   */
+  detectPlugin(projectPath: string): PluginInfo {
+    // 1. Check .specwright.json — single source of truth
+    const configPath = path.join(projectPath, ".specwright.json");
+    if (fs.existsSync(configPath)) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+        return {
+          name: (config.plugin as string) ?? "@specwright/plugin",
+          version: (config.version as string) ?? "unknown",
+          authStrategy: (config.authStrategy as AuthStrategy) ?? "email-password",
+          hasOverlay: !!config.overlay,
+          overlayName: (config.overlay as string) ?? undefined,
+        };
+      } catch { /* malformed — fall through */ }
+    }
+
+    // 2. Check for overlay manifest (specwright.plugin.json from org overlay)
+    const manifestPath = path.join(projectPath, "specwright.plugin.json");
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Record<string, unknown>;
+        return {
+          name: (manifest.extends as string) ?? "@specwright/plugin",
+          version: (manifest.version as string) ?? "unknown",
+          authStrategy: (manifest.authStrategy as AuthStrategy) ?? "email-password",
+          hasOverlay: true,
+          overlayName: (manifest.name as string) ?? undefined,
+        };
+      } catch { /* malformed — fall through */ }
+    }
+
+    // 3. Check .env.testing for AUTH_STRATEGY
+    const envPath = path.join(projectPath, "e2e-tests/.env.testing");
+    let authStrategy: AuthStrategy = "email-password";
+    if (fs.existsSync(envPath)) {
+      const envVars = this.parseEnvFile(envPath);
+      if (envVars.AUTH_STRATEGY) {
+        authStrategy = envVars.AUTH_STRATEGY as AuthStrategy;
+      }
+    }
+
+    // 4. Check for base plugin (agents directory)
+    if (fs.existsSync(path.join(projectPath, ".claude/agents"))) {
+      return {
+        name: "@specwright/plugin",
+        version: "unknown",
+        authStrategy,
+        hasOverlay: false,
+      };
+    }
+
+    // 5. No plugin detected
+    return {
+      name: "none",
+      version: "",
+      authStrategy: "none",
+      hasOverlay: false,
+    };
   }
 
   // ── Templates ─────────────────────────────────────────────────────────────

@@ -20,3 +20,6 @@ reports/playwright/*
 reports/json/*
 reports/screenshots/*
 .playwright-mcp/
+
+# Agent memory backups (cleanup.sh)
+.agent-memory-backup/

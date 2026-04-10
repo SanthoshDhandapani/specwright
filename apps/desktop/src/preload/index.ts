@@ -14,7 +14,13 @@ contextBridge.exposeInMainWorld("specwright", {
     pickFiles: () => ipcRenderer.invoke("project:pick-files") as Promise<string[]>,
     uploadTestFile: (sourcePath: string) =>
       ipcRenderer.invoke("project:upload-test-file", sourcePath) as Promise<string>,
-    bootstrap: (folderPath: string) => ipcRenderer.invoke("project:bootstrap", folderPath),
+    bootstrap: (folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string }) =>
+      ipcRenderer.invoke("project:bootstrap", folderPath, options),
+    detectPlugin: (folderPath: string) =>
+      ipcRenderer.invoke("project:detect-plugin", folderPath) as Promise<{
+        name: string; version: string; authStrategy: string;
+        hasOverlay: boolean; overlayName?: string;
+      }>,
     getPath: () => ipcRenderer.invoke("project:get-path"),
     setPath: (p: string) => ipcRenderer.invoke("project:set-path", p),
     isBootstrapped: (p: string) => ipcRenderer.invoke("project:is-bootstrapped", p),

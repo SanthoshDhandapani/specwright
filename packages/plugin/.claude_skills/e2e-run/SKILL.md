@@ -35,8 +35,7 @@ Optional Playwright CLI arguments (--project, --grep, --headed, --debug, etc.).
 npx bddgen && npx playwright test $ARGUMENTS
 ```
 
-If tests fail, automatically run:
-
-```bash
-npx playwright show-report
+After the run, always output the report location:
+```
+HTML report: reports/playwright/  (open with: pnpm report:playwright)
 ```

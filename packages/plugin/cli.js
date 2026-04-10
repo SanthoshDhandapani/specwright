@@ -57,10 +57,31 @@ async function runInit() {
     }
   }
 
-  // ── Auth module ──
-  if (!flags.includes('--skip-auth') && !flags.includes('--with-auth')) {
+  // ── Auth strategy ──
+  const authStrategyFlag = flags.find(f => f.startsWith('--auth-strategy='));
+  if (authStrategyFlag) {
+    installEnv.SPECWRIGHT_AUTH_STRATEGY = authStrategyFlag.split('=')[1];
+  } else if (!nonInteractive) {
+    console.log('  Auth strategies:');
+    console.log('    1. email-password — two-step login (email → password → optional 2FA)');
+    console.log('    2. oauth     — click-based OAuth or mock sign-in button');
+    console.log('    3. none           — no authentication required\n');
+    const answer = await ask('  Auth strategy (1/2/3)', '1');
+    const strategyMap = { '1': 'email-password', '2': 'oauth', '3': 'none' };
+    const strategy = strategyMap[answer] || answer;
+    installEnv.SPECWRIGHT_AUTH_STRATEGY = strategy;
+    console.log(`  → Auth strategy: ${strategy}\n`);
+    if (strategy === 'none') {
+      installFlags.push('--skip-auth');
+    }
+  }
+
+  // ── Auth module (skip if strategy is 'none') ──
+  if (installEnv.SPECWRIGHT_AUTH_STRATEGY === 'none') {
+    installFlags.push('--skip-auth');
+    console.log('  → Skipping authentication module (strategy: none)\n');
+  } else if (!flags.includes('--skip-auth') && !flags.includes('--with-auth')) {
     if (nonInteractive) {
-      // Default to with-auth in non-interactive mode
       console.log('  → Including authentication module (default)\n');
     } else {
       const answer = await ask('  Include authentication test module? (Y/n)', 'Y');

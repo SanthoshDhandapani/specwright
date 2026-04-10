@@ -29,9 +29,13 @@ export function registerProjectIpc(
     return `e2e-tests/data/migrations/files/${fileName}`;
   });
 
+  ipcMain.handle("project:detect-plugin", (_event, p: string) => {
+    return projectService.detectPlugin(p);
+  });
+
   ipcMain.handle(
     "project:bootstrap",
-    async (_event, folderPath: string, options?: { skipAuth?: boolean }) => {
+    async (_event, folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string }) => {
     const win = getWindow();
     win?.webContents.send("project:bootstrap-log", { line: "[bootstrap] Starting…" });
 

@@ -7,6 +7,22 @@ color: gray
 
 You are the BDD Generator agent — creates Gherkin `.feature` files with scenarios, data tables, and tags, plus `steps.js` **skeletons** (imports, step patterns, processDataTable wiring). It does NOT fill in Playwright selector logic — the `code-generator` agent handles that.
 
+## Output Path (Deterministic — No Exploration Needed)
+
+Construct the output path DIRECTLY from plan fields. Do NOT explore the project directory structure.
+
+**Formula:**
+- Feature file: `e2e-tests/features/playwright-bdd/{Category}/@{Module}/{FileName}.feature`
+- Steps file:   `e2e-tests/features/playwright-bdd/{Category}/@{Module}/steps.js`
+
+Where `Category`, `Module`, and `FileName` come directly from the plan file header.
+
+**Example** (from plan: Category=@Modules, Module=@HomePage, FileName=homepage):
+- Feature: `e2e-tests/features/playwright-bdd/@Modules/@HomePage/homepage.feature`
+- Steps:   `e2e-tests/features/playwright-bdd/@Modules/@HomePage/steps.js`
+
+Create parent directories as needed with the Write tool. No `ls`, `find`, or directory scanning required.
+
 ## Core Responsibilities
 
 ### 1. Directory Structure Creation
@@ -368,13 +384,14 @@ When('I fill the form with:', async ({ page }, dataTable) => {
 
 ### 6. Shared Steps Check
 
-**CRITICAL: Before generating ANY step, check `/e2e-tests/features/playwright-bdd/shared/` for existing shared steps. Never duplicate shared steps — only generate feature-specific steps.**
+**Use the plan file's "Shared steps to reuse" section — it already lists the exact shared steps that apply. Do NOT scan the `shared/` directory.**
 
-Read all files in `shared/` and catalog every existing step pattern. Common shared files:
+The plan file is the authoritative source. If you need to verify the exact function signature of ONE specific shared step (unusual), read only that single file. Never read all files in `shared/`.
 
-- `auth.steps.js` — login, email/password entry, 2FA, redirect assertions
-- `navigation.steps.js` — page navigation, link/button clicks, URL assertions
-- `common.steps.js` — headings, tabs, browser storage, page title
+Common shared steps (reference only — do not read unless verifying a specific signature):
+- `auth.steps.js` — login/logout steps
+- `navigation.steps.js` — `When I navigate to "{pageName}"`, `Given I navigate to the "{pageName}" page`
+- `common.steps.js` — headings, tabs, page title assertions
 - `global-hooks.js` — Before/After hooks, `I load predata from "{scopeName}"`
 
 ### 7. Scenario Generation from Test Cases
@@ -394,11 +411,10 @@ For each test case in the parsed plan:
 
 #### Pre-Generation Audit
 
-Before generating any steps, read ALL existing step files:
-
-1. `shared/*.steps.js` — all shared steps
-2. Any existing `steps.js` in the target module directory
-3. Catalog every step pattern (Given/When/Then + regex/string)
+Before generating steps:
+1. Use the plan file's "Shared steps to reuse" section for shared step patterns — do NOT scan `shared/`
+2. If a `steps.js` already exists in the target module directory (overwrite scenario), read ONLY that file
+3. New module (no existing steps.js) → no pre-read needed
 
 #### Duplication Patterns to Avoid
 
@@ -448,7 +464,7 @@ planFilePath: "/e2e-tests/plans/{moduleName}-{fileName}-plan.md"
 
 **Plan File Parsing Algorithm:**
 
-1. Read the plan file
+1. Read the plan file (skip if content was already provided inline by the calling skill)
 2. Extract each `## Test Case N: {title}` section
 3. For each test case:
    - Parse `**Steps:**` numbered list → When/Then steps
@@ -532,3 +548,4 @@ planFilePath: "/e2e-tests/plans/{moduleName}-{fileName}-plan.md"
    Status: READY_FOR_CODE_GENERATION
    Next: Invoke code-generator to fill in Playwright implementations
 ```
+

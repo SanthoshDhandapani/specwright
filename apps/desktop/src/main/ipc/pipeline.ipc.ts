@@ -90,14 +90,6 @@ export function registerPipelineIpc(
         systemPrompt += `\n\nIMPORTANT: All tool permissions are pre-approved. Do NOT ask the user to grant permission or approve any tool call. Do NOT pause for approval. All tools execute automatically. Proceed directly.`;
       }
 
-      // Pipeline context — no git operations, ignore ticket/commit policies
-      systemPrompt += `\n\nPIPELINE CONTEXT:
-You are running an E2E test automation pipeline — NOT a development task.
-This pipeline does NOT create git commits, branches, or pull requests.
-Ignore any policies about Jira ticket IDs, commit message formats, or branch naming conventions.
-If a managed hook or CLAUDE.md instructs you to ask for a ticket ID, skip it — this is a test generation session, not a code change.
-Proceed directly with the pipeline phases without asking for ticket IDs.`;
-
       // Append env credentials and auth instructions to user message
       let userMessage = payload.userMessage;
       if (projectPath) {
@@ -118,6 +110,14 @@ Proceed directly with the pipeline phases without asking for ticket IDs.`;
           });
         }
 
+        // Prepend PIPELINE_TICKET_ID to the user message to satisfy org-level Jira ticket
+        // hooks (e.g. FourKites policy) that fire at the infrastructure level before the
+        // LLM processes anything — system prompt injection cannot reach these hooks.
+        // Set PIPELINE_TICKET_ID=YOUR-TICKET in .env.testing (gitignored, never hardcoded).
+        const ticketId = env["PIPELINE_TICKET_ID"];
+        if (ticketId && !userMessage.match(/[A-Z]+-\d+/)) {
+          userMessage = `${ticketId}: ${userMessage}`;
+        }
       }
 
       win.webContents.send("pipeline:log", {

@@ -496,10 +496,37 @@ export class ProjectService {
       ];
       for (const p of skillPaths) {
         if (fs.existsSync(p)) {
+          const skillDir = path.dirname(p);
+          const projectSkillsDir = path.dirname(skillDir);
           const raw = fs.readFileSync(p, "utf-8");
           const body = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
-          // Prepend context so Claude knows it's running inside Specwright desktop app
-          return `You are running inside Specwright, an E2E test automation desktop app. The user has configured test instructions via the UI. Execute the pipeline below.\n\n${body}`;
+
+          // Inline all other skills from the project's skills directory.
+          // In the Desktop app context, context:fork sub-skill invocations don't work
+          // (Agent SDK subprocess can't fork). Inline every skill so Claude follows
+          // them directly — no Skill tool needed.
+          const inlinedSubSkills: string[] = [];
+          if (fs.existsSync(projectSkillsDir)) {
+            const entries = fs.readdirSync(projectSkillsDir, { withFileTypes: true });
+            for (const entry of entries) {
+              if (!entry.isDirectory() || entry.name === "e2e-automate") continue;
+              const subPath = path.join(projectSkillsDir, entry.name, "SKILL.md");
+              if (fs.existsSync(subPath)) {
+                const subRaw = fs.readFileSync(subPath, "utf-8");
+                const subBody = subRaw.replace(/^---[\s\S]*?---\n?/, "").trim();
+                inlinedSubSkills.push(`### /${entry.name}\n\n${subBody}`);
+              }
+            }
+          }
+
+          const subSkillSection = inlinedSubSkills.length > 0
+            ? `\n\n---\n\n## Sub-Skill Reference (Inline)\n\n` +
+              `When pipeline phases instruct you to invoke a sub-skill (/e2e-process, /e2e-plan, etc.), ` +
+              `execute the matching instructions below directly — do NOT use the Skill tool for sub-skills in this environment.\n\n` +
+              inlinedSubSkills.join("\n\n---\n\n")
+            : "";
+
+          return `You are running inside Specwright, an E2E test automation desktop app. The user has configured test instructions via the UI. Execute the pipeline below.\n\n${body}${subSkillSection}`;
         }
       }
 

@@ -1,5 +1,8 @@
 /**
- * Authentication test data — TEMPLATE
+ * Authentication test data — for email-password strategy.
+ *
+ * This file is only used by auth-strategies/email-password.js.
+ * OAuth/mock strategy reads config from .specwright.json instead.
  *
  * Update the locators below to match YOUR app's login form.
  * Credentials are read from environment variables ONLY.

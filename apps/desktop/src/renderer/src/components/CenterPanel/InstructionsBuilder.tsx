@@ -6,12 +6,22 @@ import InstructionCard from "./InstructionCard";
 
 export default function InstructionsBuilder(): React.JSX.Element {
   const { projectPath, envVars } = useConfigStore();
-  const { cards, addCard, serialize, loadCards } = useInstructionStore();
+  const { cards, addCard, clearAll, serialize, loadCards } = useInstructionStore();
   const { status, startRun, setError } = usePipelineStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // isRunning is true while submitting OR while the pipeline store says running
   const isRunning = isSubmitting || status === "running";
+
+  // Generate requires at least one card with a module name and at least one non-empty step or a Jira URL
+  const hasValidCard = cards.some(
+    (c) => c.moduleName.trim() && (c.steps.some((s) => s.trim()) || c.jiraURL?.trim() || c.filePath?.trim())
+  );
+
+  // If auth is oauth and required, email must be filled
+  const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
+  const authNeedsEmail = authStrategy === "oauth" && !envVars.TEST_USER_EMAIL?.trim();
+  const canGenerate = hasValidCard && !authNeedsEmail;
 
   // Load existing instructions from disk on mount
   useEffect(() => {
@@ -56,8 +66,9 @@ export default function InstructionsBuilder(): React.JSX.Element {
     return null; // no errors
   };
 
-  const handleSave = async (): Promise<void> => {
-    if (!projectPath) return;
+  /** Save instructions to disk. Returns true if successful, false if validation failed. */
+  const handleSave = async (): Promise<boolean> => {
+    if (!projectPath) return false;
     setSaveError(null);
 
     const instructions = serialize();
@@ -69,10 +80,11 @@ export default function InstructionsBuilder(): React.JSX.Element {
     );
     if (error) {
       setSaveError(error);
-      return;
+      return false;
     }
 
     await window.specwright.project.writeInstructions(projectPath, instructions);
+    return true;
   };
 
   const handleGenerate = async (): Promise<void> => {
@@ -80,9 +92,8 @@ export default function InstructionsBuilder(): React.JSX.Element {
     setIsSubmitting(true);
     setSaveError(null);
     try {
-      await handleSave();
-      // If validation failed, handleSave sets saveError and returns early — don't proceed
-      if (saveError) { setIsSubmitting(false); return; }
+      const saved = await handleSave();
+      if (!saved) { setIsSubmitting(false); return; }
       const userMessage = `Run the /e2e-automate skill to execute the full E2E test automation pipeline. The instructions.js file has been saved and is ready. Read it from e2e-tests/instructions.js and execute all phases.`;
       startRun(userMessage);
       const { skipPermissions } = useConfigStore.getState();
@@ -145,17 +156,19 @@ export default function InstructionsBuilder(): React.JSX.Element {
         </button>
 
         <div className="flex items-center gap-2">
+          {authNeedsEmail && (
+            <span className="text-amber-400 text-xs">Email required for OAuth</span>
+          )}
           <button
-            onClick={handleSave}
-            disabled={isRunning || !projectPath}
-            className="flex items-center gap-1.5 text-slate-300 hover:text-white text-sm border border-slate-600 hover:border-slate-500 disabled:opacity-40 rounded-lg px-3 py-1.5 transition-colors"
+            onClick={clearAll}
+            disabled={isRunning || cards.length === 0}
+            className="flex items-center gap-1.5 text-slate-400 hover:text-red-400 text-sm border border-slate-600 hover:border-red-800 disabled:opacity-40 rounded-lg px-3 py-1.5 transition-colors"
           >
-            <span className="text-base">💾</span>
-            Save
+            Discard
           </button>
           <button
             onClick={handleGenerate}
-            disabled={isRunning || !projectPath || cards.length === 0}
+            disabled={isRunning || !projectPath || !canGenerate}
             className="flex items-center gap-2 bg-brand-500 hover:bg-brand-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 py-1.5 transition-colors"
           >
             {isRunning ? (

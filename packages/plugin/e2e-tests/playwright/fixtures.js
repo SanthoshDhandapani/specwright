@@ -6,8 +6,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from e2e-tests/.env.testing (canonical source of truth)
+dotenv.config({ path: 'e2e-tests/.env.testing', override: true });
+dotenv.config({ override: false });
 
 // Get current directory for resolving test data path
 const __filename = fileURLToPath(import.meta.url);

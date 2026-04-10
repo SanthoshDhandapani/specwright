@@ -32,6 +32,7 @@ interface InstructionState {
   updateStep: (id: string, index: number, value: string) => void;
   addSubModule: (id: string, tag: string) => void;
   removeSubModule: (id: string, index: number) => void;
+  clearAll: () => void;
   loadCards: (cards: SerializedInstruction[]) => void;
   serialize: () => SerializedInstruction[];
 }
@@ -126,6 +127,8 @@ export const useInstructionStore = create<InstructionState>((set, get) => ({
       ),
     }));
   },
+
+  clearAll: () => set({ cards: [] }),
 
   loadCards: (cards) => {
     set({

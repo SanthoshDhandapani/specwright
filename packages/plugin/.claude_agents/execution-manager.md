@@ -159,8 +159,8 @@ For each fixable failure:
 
 - For form inputs: identify the project's pattern for test IDs (read shared form components)
 - For dropdowns: check if the project uses native selects or a library
-  - **CRITICAL: NEVER use `.selectOption()` on custom select components (react-select, headless-ui, etc.)**
-  - Use `getByRole("combobox")` or click-based interaction instead
+  - For native `<select>`: use `.selectOption({ label: value })`
+  - For custom dropdowns (ARIA combobox, listbox): use `getByRole("combobox")` click → `getByRole("option")` click
 - For buttons with dynamic text: search translation/i18n files for the base string, then check if the component appends dynamic values (counts, statuses) — use regex matchers
 - For elements with only CSS classes: use the class as locator, note it in the report
 
@@ -287,6 +287,27 @@ When failures remain after investigation, generate a review plan file:
 ## Next Steps
 
 1. {prioritized action items}
+```
+
+## Write to Memory ⚠️ MANDATORY — do this BEFORE finishing
+
+**Immediately after generating the execution report or review plan**, update `.claude/agent-memory/execution-manager/MEMORY.md` using the **Edit or Write** tool.
+
+**This step is non-negotiable.** Empty memory = full re-investigation of source paths and selector patterns on every run, wasting 10+ source grep calls.
+
+Record:
+- **Module → Source Path Mappings**: any `e2e module → src/` paths you verified this run
+- **Selector Patterns**: ARIA quirks, force-click requirements, `evaluate()` workarounds discovered
+- **Data Flow**: cache variable names, fallback chains, Before hook behaviours
+- **Known Risks**: timing issues, environment gotchas, components that don't forward `data-testid`
+
+Example:
+```
+## Module → Source Path Mappings
+| @Modules/@Counter | src/components/Counter/ | 2026-04-10 |
+
+## Selector Patterns
+- Counter display: getByRole('status') — testid removed in v2, ARIA role stable
 ```
 
 ## Memory Guidelines

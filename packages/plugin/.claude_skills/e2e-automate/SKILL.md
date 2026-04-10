@@ -19,15 +19,16 @@ Execute the complete test automation workflow by chaining skills sequentially.
 ## Pipeline Overview
 
 ```
-Phase 1-2: Read config → Detect route (jira/file/text)
-Phase 3:   /e2e-process (convert input to parsed test plan MD)
-Phase 4:   /e2e-plan (explore app + generate test plan)
-Phase 5:   /e2e-validate (validate seed file — optional)
-Phase 6:   ⛔ USER APPROVAL CHECKPOINT
-Phase 7:   /e2e-generate (create .feature + steps.js)
-Phase 8:   /e2e-heal (run tests + auto-heal — optional)
-Phase 9:   Cleanup
-Phase 10:  Final review (quality score + formatted summary)
+Phase 1:   Initialization — read config, validate setup
+Phase 2:   Detection & Routing — detect input type (jira/file/text)
+Phase 3:   Input Processing — convert input to parsed test plan MD (/e2e-process)
+Phase 4:   Exploration & Planning — explore app, discover selectors, write test plan (/e2e-plan)
+Phase 5:   Exploration Validation — run seed file, validate selectors (optional, /e2e-validate)
+Phase 6:   ⛔ User Approval — present plan, wait for explicit approval
+Phase 7:   BDD Generation — create .feature + steps.js files (/e2e-generate)
+Phase 8:   Test Execution & Healing — run tests, auto-heal failures (optional, /e2e-heal)
+Phase 9:   Cleanup — aggregate results, remove intermediate files
+Phase 10:  Final Review — quality score + formatted summary
 ```
 
 ## Execution Steps
@@ -45,7 +46,7 @@ For each config entry, detect the input type:
 - `instructions[]` exists → Text mode
 - Otherwise → log error and skip
 
-### Phase 3: Input Processing
+### Phase 3: Input Processing (`/e2e-process`)
 
 Invoke `/e2e-process` with the appropriate input for each config entry:
 
@@ -55,15 +56,15 @@ Invoke `/e2e-process` with the appropriate input for each config entry:
 
 **Output:** Parsed MD file at `/e2e-tests/plans/{moduleName}-parsed.md`
 
-### Phase 4: Exploration & Planning
+### Phase 4: Exploration & Planning (`/e2e-plan`)
 
 Invoke `/e2e-plan` with the `pageURL` from each config entry.
 
 - If `explore: true`: the skill explores the app via MCP, discovers selectors, writes seed file
 - Saves test plan to `/e2e-tests/plans/{moduleName}-{fileName}-plan.md`
-- **After exploration**: update `.claude/agent-memory/playwright-test-planner/MEMORY.md` with ALL discovered selectors, navigation paths, and patterns. Read the file first, then Edit to add new entries.
+- **After exploration**: the planner agent updates its memory with discovered selectors automatically.
 
-### Phase 5: Exploration Validation (Optional)
+### Phase 5: Exploration Validation (`/e2e-validate`, Optional)
 
 **Skip if `runExploredCases` is false.**
 
@@ -84,12 +85,15 @@ Then ask:
 2. View Full Plan
 3. Modify & Retry
 
-### Phase 7: BDD Generation
+### Phase 7: BDD Generation (`/e2e-generate`)
 
 Invoke `/e2e-generate` with the approved plan file path for each config entry.
 Creates complete `.feature` + `steps.js` files.
 
-### Phase 8: Test Execution & Healing (Optional)
+**Performance:** Proceed DIRECTLY — do NOT read agent definition files, do NOT spawn Explore sub-agents.
+The plan file and seed file already contain all context needed. `/e2e-generate` handles the full chain internally.
+
+### Phase 8: Test Execution & Healing (`/e2e-heal`, Optional)
 
 **Skip if `runGeneratedCases` is false.**
 
@@ -185,6 +189,56 @@ This ensures a perfect generation-only run scores 100/100, not 76.5.
 
 **STATUS: {overallStatus}**
 ```
+
+## Phase Transition Output (REQUIRED)
+
+At the start of **every** phase, output a phase header as its own standalone line.
+This header is used by the Specwright Desktop app to visually separate phases into distinct cards.
+
+**Format** — the header MUST be preceded by a blank line and followed by a blank line:
+
+```
+
+### Phase N: <Phase Label>
+
+```
+
+Full sequence for every phase transition:
+```
+
+### Phase 1: Initialization
+
+<phase 1 content here>
+
+### Phase 2: Detection & Routing
+
+<phase 2 content here>
+
+### Phase 3: Input Processing
+
+<phase 3 content here>
+```
+
+All 10 phase headers:
+```
+### Phase 1: Initialization
+### Phase 2: Detection & Routing
+### Phase 3: Input Processing
+### Phase 4: Exploration & Planning
+### Phase 5: Exploration Validation
+### Phase 6: User Approval
+### Phase 7: BDD Generation
+### Phase 8: Test Execution & Healing
+### Phase 9: Cleanup
+### Phase 10: Final Review
+```
+
+Rules:
+- **NEVER** append `### Phase N:` directly after other text on the same line (e.g. `...available.### Phase 1:` is wrong)
+- Always put a blank line before and after the `### Phase N:` header
+- Do NOT wrap it in a bullet list item (no leading `- `)
+- The `N` must match the exact phase number
+- When a phase completes, move directly to the next phase header — don't re-announce completed phases
 
 ## Progress Display
 

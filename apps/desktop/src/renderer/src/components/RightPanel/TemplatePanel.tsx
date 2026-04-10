@@ -1,7 +1,15 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useConfigStore } from "@renderer/store/config.store";
 import { useInstructionStore, type InstructionCard as ICard } from "@renderer/store/instruction.store";
-import { usePipelineStore } from "@renderer/store/pipeline.store";
+
+const RefreshIcon = (): React.JSX.Element => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+    <path d="M21 3v5h-5"/>
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+    <path d="M8 16H3v5"/>
+  </svg>
+);
 
 interface TemplateEntry {
   templateName: string;
@@ -111,13 +119,14 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
 export default function TemplatePanel(): React.JSX.Element {
   const { projectPath, projectState, envVars } = useConfigStore();
   const { addCard, updateCard, serialize } = useInstructionStore();
-  const { startRun } = usePipelineStore();
 
   const [exampleTemplates, setExampleTemplates] = useState<TemplateEntry[]>([]);
   const [customTemplates, setCustomTemplates] = useState<TemplateEntry[]>([]);
   const [savingName, setSavingName] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
-  const [insertedAction, setInsertedAction] = useState<"idle" | "choosing">("idle");
+  const [insertedId, setInsertedId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const insertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isReady = projectState === "ready" && Boolean(projectPath);
   const builtInTemplates = getBuiltInTemplates(envVars.BASE_URL || "");
@@ -136,7 +145,7 @@ export default function TemplatePanel(): React.JSX.Element {
     window.specwright.project.readCustomTemplates(projectPath).then((data) => {
       setCustomTemplates(data as unknown as TemplateEntry[]);
     });
-  }, [isReady, projectPath]);
+  }, [isReady, projectPath, refreshKey]);
 
   const handleInsert = useCallback(
     (tmpl: TemplateEntry) => {
@@ -156,28 +165,13 @@ export default function TemplatePanel(): React.JSX.Element {
         runExploredCases: tmpl.runExploredCases,
         runGeneratedCases: tmpl.runGeneratedCases,
       });
-      setInsertedAction("choosing");
+      // Brief "Inserted" indicator on the button — auto-clears after 2s
+      if (insertTimerRef.current) clearTimeout(insertTimerRef.current);
+      setInsertedId(tmpl.templateName);
+      insertTimerRef.current = setTimeout(() => setInsertedId(null), 2000);
     },
     [addCard, updateCard]
   );
-
-  const handleSaveAndExecute = useCallback(async () => {
-    setInsertedAction("idle");
-    if (!projectPath) return;
-    const instructions = serialize();
-    await window.specwright.project.writeInstructions(projectPath, instructions);
-    const userMessage = `Run the /e2e-automate skill to execute the full E2E test automation pipeline. The instructions.js file has been saved and is ready. Read it from e2e-tests/instructions.js and execute all phases.`;
-    startRun(userMessage);
-    const { skipPermissions } = useConfigStore.getState();
-    await window.specwright.pipeline.start({ userMessage, skipPermissions });
-  }, [projectPath, serialize, startRun]);
-
-  const handleSaveAndClose = useCallback(async () => {
-    setInsertedAction("idle");
-    if (!projectPath) return;
-    const instructions = serialize();
-    await window.specwright.project.writeInstructions(projectPath, instructions);
-  }, [projectPath, serialize]);
 
   const handleSaveAsTemplate = useCallback(async () => {
     if (!savingName.trim() || !projectPath) return;
@@ -261,9 +255,13 @@ export default function TemplatePanel(): React.JSX.Element {
         <button
           onClick={() => handleInsert(tmpl)}
           disabled={!isReady}
-          className="w-full text-center text-brand-400 hover:text-brand-300 disabled:text-slate-600 text-xs border border-slate-700 hover:border-brand-700 disabled:border-slate-800 rounded px-2 py-1 transition-colors"
+          className={`w-full text-center text-xs border rounded px-2 py-1 transition-colors ${
+            insertedId === tmpl.templateName
+              ? "text-green-400 border-green-700 bg-green-900/20"
+              : "text-brand-400 hover:text-brand-300 disabled:text-slate-600 border-slate-700 hover:border-brand-700 disabled:border-slate-800"
+          }`}
         >
-          Insert →
+          {insertedId === tmpl.templateName ? "Inserted ✓" : "Insert →"}
         </button>
       </div>
     );
@@ -271,10 +269,19 @@ export default function TemplatePanel(): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-3 py-2 border-b border-slate-700 flex-shrink-0">
+      <div className="px-3 py-2 border-b border-slate-700 flex-shrink-0 flex items-center justify-between">
         <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">
           Templates
         </p>
+        {isReady && (
+          <button
+            onClick={() => setRefreshKey(k => k + 1)}
+            className="text-slate-500 hover:text-brand-400 transition-colors"
+            title="Reload templates from disk"
+          >
+            <RefreshIcon />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollable px-3 py-2 space-y-3">
@@ -284,40 +291,7 @@ export default function TemplatePanel(): React.JSX.Element {
           </p>
         )}
 
-        {/* Action toast after insert */}
-        {insertedAction === "choosing" && (
-          <div className="bg-brand-900/30 border border-brand-700/50 rounded-lg p-3 space-y-2">
-            <p className="text-brand-300 text-xs font-medium">Template inserted!</p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSaveAndExecute}
-                className="flex-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded px-2 py-1.5 transition-colors"
-              >
-                ▶ Save & Execute
-              </button>
-              <button
-                onClick={handleSaveAndClose}
-                className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded px-2 py-1.5 transition-colors"
-              >
-                💾 Save & Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Built-in quick-start templates */}
-        {isReady && (
-          <div className="space-y-2">
-            <p className="text-slate-500 text-xs flex items-center gap-1.5">
-              <span>🚀</span> Quick Start
-            </p>
-            {builtInTemplates.map((tmpl, i) =>
-              renderTemplateCard(tmpl, `builtin-${i}`)
-            )}
-          </div>
-        )}
-
-        {/* Project-specific templates from instructions.example.js */}
+        {/* Project-specific templates from instructions.example.js — shown first */}
         {isReady && exampleTemplates.length > 0 && (
           <div className="space-y-2">
             <p className="text-slate-500 text-xs flex items-center gap-1.5">
@@ -346,7 +320,6 @@ export default function TemplatePanel(): React.JSX.Element {
               renderTemplateCard(tmpl, `custom-${i}`, () => handleDeleteCustom(i))
             )}
 
-            {/* Save current as template */}
             {showSaveInput ? (
               <div className="space-y-1.5">
                 <input
@@ -384,6 +357,18 @@ export default function TemplatePanel(): React.JSX.Element {
               >
                 + Save current as template
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Built-in quick-start templates — fallback when no project templates exist */}
+        {isReady && (
+          <div className="space-y-2">
+            <p className="text-slate-500 text-xs flex items-center gap-1.5">
+              <span>🚀</span> Quick Start
+            </p>
+            {builtInTemplates.map((tmpl, i) =>
+              renderTemplateCard(tmpl, `builtin-${i}`)
             )}
           </div>
         )}

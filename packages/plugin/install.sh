@@ -25,6 +25,7 @@ TARGET_DIR="${TARGET_DIR:-$(pwd)}"
 # Read config from environment (set by cli.js interactive prompts)
 BASE_URL="${SPECWRIGHT_BASE_URL:-http://localhost:5173}"
 PM="${SPECWRIGHT_PM:-pnpm}"
+AUTH_STRATEGY="${SPECWRIGHT_AUTH_STRATEGY:-email-password}"
 
 # Helper: copy file only if target doesn't exist (safe for user-customized files)
 safe_copy() {
@@ -83,6 +84,10 @@ cp "$PLUGIN_DIR/e2e-tests/playwright/fixtures.js" "$TARGET_DIR/e2e-tests/playwri
 cp "$PLUGIN_DIR/e2e-tests/playwright/auth.setup.js" "$TARGET_DIR/e2e-tests/playwright/"
 cp "$PLUGIN_DIR/e2e-tests/playwright/global.setup.js" "$TARGET_DIR/e2e-tests/playwright/"
 cp "$PLUGIN_DIR/e2e-tests/playwright/global.teardown.js" "$TARGET_DIR/e2e-tests/playwright/"
+
+# Auth strategy modules
+mkdir -p "$TARGET_DIR/e2e-tests/playwright/auth-strategies"
+cp "$PLUGIN_DIR/e2e-tests/playwright/auth-strategies/"*.js "$TARGET_DIR/e2e-tests/playwright/auth-strategies/"
 cp "$PLUGIN_DIR/e2e-tests/utils/stepHelpers.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/utils/testDataGenerator.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/shared/"*.js "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared/"
@@ -99,6 +104,13 @@ if [ "$BASE_URL" != "http://localhost:5173" ]; then
   sed -i.bak "s|^BASE_URL=.*|BASE_URL=$BASE_URL|" "$TARGET_DIR/e2e-tests/.env.testing"
   rm -f "$TARGET_DIR/e2e-tests/.env.testing.bak"
   echo "  → BASE_URL set to $BASE_URL"
+fi
+
+# Update AUTH_STRATEGY in .env.testing with user-selected strategy
+if [ "$AUTH_STRATEGY" != "email-password" ]; then
+  sed -i.bak "s|^AUTH_STRATEGY=.*|AUTH_STRATEGY=$AUTH_STRATEGY|" "$TARGET_DIR/e2e-tests/.env.testing"
+  rm -f "$TARGET_DIR/e2e-tests/.env.testing.bak"
+  echo "  → AUTH_STRATEGY set to $AUTH_STRATEGY"
 fi
 
 # Gitkeep files + directory stubs

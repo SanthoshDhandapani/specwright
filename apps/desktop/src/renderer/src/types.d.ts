@@ -11,6 +11,14 @@ interface BootstrapResult {
   error?: string;
 }
 
+interface PluginInfo {
+  name: string;
+  version: string;
+  authStrategy: string;
+  hasOverlay: boolean;
+  overlayName?: string;
+}
+
 interface PermissionRequestData {
   id: string;
   toolName: string;
@@ -37,7 +45,8 @@ interface SpecwrightAPI {
     pickFolder: () => Promise<string | null>;
     pickFiles: () => Promise<string[]>;
     uploadTestFile: (sourcePath: string) => Promise<string>;
-    bootstrap: (folderPath: string) => Promise<BootstrapResult>;
+    bootstrap: (folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string }) => Promise<BootstrapResult>;
+    detectPlugin: (folderPath: string) => Promise<PluginInfo>;
     getPath: () => Promise<string>;
     setPath: (p: string) => Promise<void>;
     isBootstrapped: (p: string) => Promise<boolean>;

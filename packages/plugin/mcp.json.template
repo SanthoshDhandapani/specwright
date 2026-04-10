@@ -6,7 +6,7 @@
     },
     "playwright-test": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "args": ["@playwright/mcp@latest", "--output-dir", ".playwright-mcp"]
     },
     "atlassian": {
       "type": "streamable-http",

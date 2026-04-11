@@ -1,17 +1,11 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useInstructionStore, type InstructionCard as ICard } from "@renderer/store/instruction.store";
-import { useConfigStore } from "@renderer/store/config.store";
 import { usePipelineStore } from "@renderer/store/pipeline.store";
 
 interface Props {
   card: ICard;
   index: number;
 }
-
-const MODE_OPTIONS = [
-  { value: "explorer", label: "Explorer" },
-  { value: "csv", label: "File" },
-] as const;
 
 const SUPPORTED_FILE_EXTENSIONS = ".xlsx,.xls,.csv,.doc,.docx,.pdf,.txt,.md,.json";
 
@@ -27,7 +21,6 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
   const setMcpStatus = usePipelineStore((s) => s.setMcpStatus);
   const [connecting, setConnecting] = useState(false);
 
-  // Sync initial status from main process on mount
   useEffect(() => {
     window.specwright.atlassian.status().then(({ status }) => {
       setMcpStatus("atlassian", status);
@@ -59,15 +52,12 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
     }
   };
 
-  const isExplorer = card.mode === "explorer";
-  const isCsv = card.mode === "csv";
   const hasJira = Boolean(card.jiraURL?.trim());
   const hasFile = Boolean(card.filePath?.trim());
 
   const handleUploadFile = useCallback(async () => {
     const selected = await window.specwright.project.pickFiles();
     if (selected.length > 0) {
-      // Copy file to e2e-tests/data/migrations/files/ and get relative path
       const relativePath = await window.specwright.project.uploadTestFile(selected[0]);
       update({ filePath: relativePath, jiraURL: "" });
     }
@@ -89,35 +79,7 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
         </button>
       </div>
 
-      {/* Row: Mode + Category */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Mode</label>
-          <select
-            value={card.mode}
-            onChange={(e) => update({ mode: e.target.value as ICard["mode"] })}
-            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
-          >
-            {MODE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Category</label>
-          <select
-            value={card.category}
-            onChange={(e) => update({ category: e.target.value as ICard["category"] })}
-            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
-          >
-            {CATEGORY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Row: Module + File name */}
+      {/* Row: Module name + Category */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-slate-400 text-xs mb-1">Module name</label>
@@ -133,12 +95,38 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
           </div>
         </div>
         <div>
+          <label className="block text-slate-400 text-xs mb-1">Category</label>
+          <select
+            value={card.category}
+            onChange={(e) => update({ category: e.target.value as ICard["category"] })}
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500"
+          >
+            {CATEGORY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Row: File name + Page URL */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
           <label className="block text-slate-400 text-xs mb-1">File name</label>
           <input
             type="text"
             value={card.fileName}
             onChange={(e) => update({ fileName: e.target.value })}
             placeholder="my-feature"
+            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+          />
+        </div>
+        <div>
+          <label className="block text-slate-400 text-xs mb-1">Page URL</label>
+          <input
+            type="text"
+            value={card.pageURL}
+            onChange={(e) => update({ pageURL: e.target.value })}
+            placeholder="/dashboard"
             className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
           />
         </div>
@@ -186,100 +174,48 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
         )}
       </div>
 
-      {/* Page URL — Explorer only */}
-      {isExplorer && (
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Page URL</label>
-          <input
-            type="text"
-            value={card.pageURL}
-            onChange={(e) => update({ pageURL: e.target.value })}
-            placeholder="https://app.example.com/dashboard"
-            className="w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
-          />
-        </div>
-      )}
-
-      {/* Test Cases Source File — File mode */}
-      {isCsv && (
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">
-            Test Cases Source File{" "}
-            <span className="text-slate-600">
-              ({SUPPORTED_FILE_EXTENSIONS.split(",").map(e => e.replace(".", "")).join(", ")})
+      {/* Test Cases Source File */}
+      <div>
+        <label className="block text-slate-400 text-xs mb-1">
+          Source file{" "}
+          <span className="text-slate-600">
+            ({SUPPORTED_FILE_EXTENSIONS.split(",").map(e => e.replace(".", "")).join(", ")})
+          </span>
+          <span className="text-slate-600 ml-1">— optional</span>
+        </label>
+        {card.filePath ? (
+          <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
+            <span className="text-slate-500 text-xs">📄</span>
+            <span className="flex-1 text-slate-300 text-xs font-mono truncate" title={card.filePath}>
+              {card.filePath.split("/").pop()}
             </span>
-          </label>
-          {card.filePath ? (
-            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
-              <span className="text-slate-500 text-xs">📄</span>
-              <span className="flex-1 text-slate-300 text-xs font-mono truncate" title={card.filePath}>
-                {card.filePath.split("/").pop()}
-              </span>
-              <button
-                onClick={() => update({ filePath: "" })}
-                disabled={hasJira}
-                className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
             <button
-              onClick={handleUploadFile}
+              onClick={() => update({ filePath: "" })}
               disabled={hasJira}
-              className="flex items-center gap-1.5 text-slate-300 hover:text-white text-sm border border-dashed border-slate-600 hover:border-slate-500 disabled:opacity-40 rounded-lg px-3 py-2 w-full justify-center transition-colors"
+              className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0"
             >
-              <span className="text-base leading-none">📁</span>
-              Upload file
-            </button>
-          )}
-          {hasJira && (
-            <p className="text-amber-500 text-[10px] mt-1">Disabled — Jira URL is set. Clear Jira URL to use a file.</p>
-          )}
-        </div>
-      )}
-
-      {/* Steps — Explorer only */}
-      {isExplorer && (
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-slate-400 text-xs">Steps</label>
-            <button
-              onClick={() => addStep(card.id)}
-              className="text-brand-400 hover:text-brand-300 text-xs transition-colors"
-            >
-              + add step
+              ✕
             </button>
           </div>
-          <div className="space-y-1.5">
-            {card.steps.map((step, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <span className="text-slate-600 text-xs w-4 text-right flex-shrink-0">{i + 1}.</span>
-                <input
-                  type="text"
-                  value={step}
-                  onChange={(e) => updateStep(card.id, i, e.target.value)}
-                  placeholder={`Step ${i + 1} description…`}
-                  className="flex-1 bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
-                />
-                {card.steps.length > 1 && (
-                  <button
-                    onClick={() => removeStep(card.id, i)}
-                    className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        ) : (
+          <button
+            onClick={handleUploadFile}
+            disabled={hasJira}
+            className="flex items-center gap-1.5 text-slate-300 hover:text-white text-sm border border-dashed border-slate-600 hover:border-slate-500 disabled:opacity-40 rounded-lg px-3 py-2 w-full justify-center transition-colors"
+          >
+            <span className="text-base leading-none">📁</span>
+            Upload file
+          </button>
+        )}
+        {hasJira && (
+          <p className="text-amber-500 text-[10px] mt-1">Disabled — Jira URL is set. Clear Jira URL to use a file.</p>
+        )}
+      </div>
 
       {/* Jira URL */}
       <div>
         <label className="block text-slate-400 text-xs mb-1">
-          Jira URL <span className="text-slate-600">(optional)</span>
+          Jira URL <span className="text-slate-600">— optional</span>
         </label>
         <input
           type="text"
@@ -304,7 +240,6 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
                   onClick={handleAtlassianConnect}
                   disabled={connecting}
                   className="text-slate-500 hover:text-blue-400 disabled:text-slate-700 text-[10px] transition-colors"
-                  title="Switch Atlassian account"
                 >
                   {connecting ? "Connecting…" : "Reconnect"}
                 </button>
@@ -320,7 +255,6 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
                   onClick={handleAtlassianConnect}
                   disabled={connecting}
                   className="text-blue-400 hover:text-blue-300 disabled:text-slate-600 text-[10px] border border-blue-800 hover:border-blue-600 disabled:border-slate-700 rounded px-1.5 py-0.5 transition-colors"
-                  title="Retry Atlassian connection"
                 >
                   {connecting ? "Connecting…" : "Retry"}
                 </button>
@@ -336,7 +270,6 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
                   onClick={handleAtlassianConnect}
                   disabled={connecting}
                   className="text-blue-400 hover:text-blue-300 disabled:text-slate-600 text-[10px] border border-blue-800 hover:border-blue-600 disabled:border-slate-700 rounded px-1.5 py-0.5 transition-colors"
-                  title="Authenticate with Atlassian MCP via browser OAuth"
                 >
                   {connecting ? "Connecting…" : "Connect"}
                 </button>
@@ -346,20 +279,55 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
         )}
       </div>
 
+      {/* Steps / Instructions */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-slate-400 text-xs">
+            Instructions <span className="text-slate-600">— optional, supplements file or Jira input</span>
+          </label>
+          <button
+            onClick={() => addStep(card.id)}
+            className="text-brand-400 hover:text-brand-300 text-xs transition-colors"
+          >
+            + add step
+          </button>
+        </div>
+        <div className="space-y-1.5">
+          {card.steps.map((step, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <span className="text-slate-600 text-xs w-4 text-right flex-shrink-0">{i + 1}.</span>
+              <input
+                type="text"
+                value={step}
+                onChange={(e) => updateStep(card.id, i, e.target.value)}
+                placeholder={`Step ${i + 1} description…`}
+                className="flex-1 bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600"
+              />
+              {card.steps.length > 1 && (
+                <button
+                  onClick={() => removeStep(card.id, i)}
+                  className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Checkboxes */}
       <div className="flex flex-wrap gap-4 pt-1">
-        {isExplorer && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={card.explore}
-              onChange={(e) => update({ explore: e.target.checked })}
-              className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
-            />
-            <span className="text-slate-300 text-xs">Explore</span>
-          </label>
-        )}
-        {isExplorer && card.explore && (
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={card.explore}
+            onChange={(e) => update({ explore: e.target.checked })}
+            className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
+          />
+          <span className="text-slate-300 text-xs">Explore</span>
+        </label>
+        {card.explore && (
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"

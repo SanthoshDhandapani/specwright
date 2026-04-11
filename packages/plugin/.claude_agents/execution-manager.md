@@ -353,7 +353,7 @@ Example:
   category: "@Modules",
 
   // Execution config
-  project: "chromium",
+  project: "chromium",         // seed mode; use "main-e2e" or "serial-execution" for bdd mode
   headed: false,
 
   // Diagnostics

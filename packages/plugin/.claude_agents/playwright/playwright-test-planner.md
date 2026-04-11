@@ -21,25 +21,36 @@ You are an expert web test planner with extensive experience in quality assuranc
 Read `OAUTH_STORAGE_KEY` from `e2e-tests/.env.testing`. **This is a mandatory field** — if it is not set, stop and tell the user: `"OAUTH_STORAGE_KEY is required in e2e-tests/.env.testing for oauth auth strategy. Set it to the localStorage key your app uses to store the auth user object."` Do not attempt to auto-detect it.
 
 **If `OAUTH_STORAGE_KEY` is set** (bypasses OAuth popup):
-```
-Step 1: Read e2e-tests/.env.testing → extract these exact values:
-        - TEST_USER_EMAIL    (required)
-        - TEST_USER_NAME     (optional — if blank, derive from email: split('@')[0], replace dots/underscores with spaces, title-case)
-        - TEST_USER_PICTURE  (use the EXACT value from .env.testing — only use "" if the key is absent or empty)
-        - OAUTH_STORAGE_KEY  (required)
-        - BASE_URL           (required)
 
-Step 2: Construct the user JSON string directly from the values read in Step 1.
-        Do NOT run a node command to generate this.
-        IMPORTANT: Use the exact TEST_USER_PICTURE value — never substitute "" when the value is set.
-        This same picture value MUST also appear in the seed file auth helper you write later.
+Step 1: Read `e2e-tests/.env.testing`. Write down these exact raw values — do not interpret, encode, or transform them:
+  - `storageKey` = the raw string value of `OAUTH_STORAGE_KEY`
+  - `userEmail`  = the raw string value of `TEST_USER_EMAIL`
+  - `userName`   = the raw string value of `TEST_USER_NAME` (if blank/absent, derive: take email before `@`, replace `.` and `_` with space, title-case)
+  - `userPicture`= the raw string value of `TEST_USER_PICTURE` (if the key is absent OR the value is empty, use `""` — otherwise use the exact raw value including any `?` or `&` characters)
+  - `baseUrl`    = the raw string value of `BASE_URL`
 
-Step 3: browser_navigate → {BASE_URL}
-Step 4: browser_evaluate → inject auth into localStorage using the key and JSON from Steps 1-2:
-        localStorage.setItem('{OAUTH_STORAGE_KEY}', JSON.stringify({name:'{name}',email:'{email}',picture:'{picture}'}));
-Step 5: browser_navigate → {BASE_URL} (reload to pick up auth)
-Step 6: browser_snapshot → verify signed in (user avatar visible, sign-in button gone)
-```
+Step 2: **Sanity check** — before proceeding, confirm in your reasoning:
+  - "storageKey is: [value]"
+  - "userPicture is: [value]" — if TEST_USER_PICTURE was set in .env.testing, this MUST NOT be empty
+
+Step 3: Navigate: call `browser_navigate` with `baseUrl`
+
+Step 4: Inject auth — call `browser_evaluate` with a script built from your Step 1 values.
+  Build the script by substituting the ACTUAL values you wrote down in Step 1.
+  The script structure is:
+    var u = {};
+    u.name    = "<userName goes here>";
+    u.email   = "<userEmail goes here>";
+    u.picture = "<userPicture goes here — the full raw URL, not empty string>";
+    localStorage.setItem("<storageKey goes here>", JSON.stringify(u));
+
+Step 4b: **Verify** — call `browser_evaluate` with: `JSON.parse(localStorage.getItem("<storageKey>") || "{}")`
+  Read the returned object. If `picture` is `""` but TEST_USER_PICTURE was non-empty in .env.testing:
+  → STOP. Do not continue. Report: "Auth injection failed — picture was stored as empty. Re-check Step 1 extraction."
+
+Step 5: Navigate again: call `browser_navigate` with `baseUrl` (reloads the app to pick up auth)
+
+Step 6: Take a snapshot: call `browser_snapshot` — confirm user avatar is visible and sign-in button is gone
 
 **If only `OAUTH_BUTTON_TEST_ID` is set** (click-based, no popup):
 ```
@@ -347,24 +358,46 @@ import { test, expect } from '@playwright/test';
  * (Document all discovered selectors here)
  */
 
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
+
+// Auth values — read from env vars loaded by playwright.config.ts dotenv
+// NEVER hardcode picture: '' — always use the env var value
+const OAUTH_STORAGE_KEY = process.env.OAUTH_STORAGE_KEY; // Required — set OAUTH_STORAGE_KEY in e2e-tests/.env.testing
+const TEST_USER_NAME = process.env.TEST_USER_NAME || '';
+const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || '';
+const TEST_USER_PICTURE = process.env.TEST_USER_PICTURE || '';
+
 test.setTimeout(90000);
 
-async function navigateToTargetPage(page) {
-  await page.goto('/target-url');
+// ─── Auth Helper ─────────────────────────────────────────────────────────────
+async function authenticate(page) {
+  await page.goto(BASE_URL);
+  await page.evaluate(({ key, user }) => {
+    localStorage.setItem(key, JSON.stringify(user));
+  }, { key: OAUTH_STORAGE_KEY, user: { name: TEST_USER_NAME, email: TEST_USER_EMAIL, picture: TEST_USER_PICTURE } });
+  await page.goto(`${BASE_URL}/target-url`);
 }
 
 test.describe('{Module Name} - {Flow Description}', () => {
+  test.beforeEach(async ({ page }) => {
+    await authenticate(page);
+  });
+
   test('TC1: Happy path scenario', async ({ page }) => {
-    await navigateToTargetPage(page);
     // steps from recorded log with assertions
   });
 
   test('TC2: Cancel/validation scenario', async ({ page }) => {
-    await navigateToTargetPage(page);
     // steps from recorded log with assertions
   });
 });
 ```
+
+**CRITICAL: Auth helper rules:**
+- ALWAYS use `process.env.OAUTH_STORAGE_KEY` as the localStorage key — never hardcode
+- ALWAYS use `process.env.TEST_USER_PICTURE` for the picture — never use `picture: ''`
+- Pass env var values via the `page.evaluate()` closure argument (not inside the callback) — they live in Node.js context, not browser context
+- The `OAUTH_STORAGE_KEY` line in the seed file has NO fallback (`|| 'some-key'`). If `OAUTH_STORAGE_KEY` is not in `.env.testing`, the test must fail loudly — a wrong fallback silently sets the wrong localStorage key
 
 ## Quality Standards
 

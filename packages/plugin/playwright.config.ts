@@ -113,13 +113,15 @@ export default defineConfig({
         ]
       : []),
 
-    // Serial execution — features tagged @serial-execution run with 1 worker.
+    // Serial execution — features tagged @serial-execution (non-workflow) run with 1 worker.
     // Browser page is reused across scenarios within the same feature file.
+    // grepInvert excludes workflow tags so they run in their dedicated lanes below.
     {
       name: 'serial-execution',
       testMatch: '**/*.spec.js',
       testIgnore: '**/@Authentication/*.spec.js',
       grep: /@serial-execution/,
+      grepInvert: /@precondition|@workflow-consumer/,
       fullyParallel: false,
       workers: 1,
       use: {
@@ -132,12 +134,82 @@ export default defineConfig({
       ...(hasAuth ? { dependencies: ['setup'] } : {}),
     },
 
-    // Main BDD tests — everything not serial or auth. Runs parallel by default.
+    // Precondition — workflow setup features tagged @precondition.
+    // Runs serial (1 worker) to ensure all preconditions complete before consumers start.
+    // Filesystem ordering via @0-Precondition/ directory prefix guarantees correct sequence.
+    {
+      name: 'precondition',
+      testMatch: '**/*.spec.js',
+      testIgnore: '**/@Authentication/*.spec.js',
+      grep: /@precondition/,
+      fullyParallel: false,
+      workers: 1,
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: defaultLaunchOptions,
+        ...(hasAuth
+          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          : {}),
+      },
+      ...(hasAuth ? { dependencies: ['setup'] } : {}),
+    },
+
+    // Workflow consumers — features tagged @workflow-consumer.
+    // Runs parallel AFTER all preconditions complete, consuming shared test data
+    // written by precondition to e2e-tests/playwright/test-data/{scope}.json.
+    {
+      name: 'workflow-consumers',
+      testMatch: '**/*.spec.js',
+      testIgnore: '**/@Authentication/*.spec.js',
+      grep: /@workflow-consumer/,
+      fullyParallel: true,
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: defaultLaunchOptions,
+        ...(hasAuth
+          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          : {}),
+      },
+      ...(hasAuth ? { dependencies: ['precondition'] } : {}),
+    },
+
+    // Run single workflow — serial (1 worker), filesystem ordering via @0-/@1- prefixes.
+    // ONLY used via explicit targeted scripts (e.g. pnpm test:bdd:bookings).
+    // NOT included in pnpm test:bdd — the full run uses precondition → workflow-consumers instead.
+    {
+      name: 'run-workflow',
+      testMatch: '**/@Workflows/**/*.spec.js',
+      fullyParallel: false,
+      workers: 1,
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: defaultLaunchOptions,
+        ...(hasAuth
+          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          : {}),
+      },
+      ...(hasAuth ? { dependencies: ['setup'] } : {}),
+    },
+
+    // Chromium project — Playwright Test MCP compatibility alias.
+    // Runs generated seed.spec.js from e2e-tests/playwright/generated/ directly — no bddgen needed.
+    // Seed files inject their own auth via localStorage; no storageState dependency required.
+    {
+      name: 'chromium',
+      testDir: './e2e-tests/playwright/generated',
+      testMatch: '**/*.spec.js',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: defaultLaunchOptions,
+      },
+    },
+
+    // Main BDD tests — everything not serial, precondition, consumer, or auth. Runs parallel.
     {
       name: 'main-e2e',
       testMatch: '**/*.spec.js',
       testIgnore: '**/@Authentication/*.spec.js',
-      grepInvert: /@serial-execution/,
+      grepInvert: /@serial-execution|@precondition|@workflow-consumer/,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,

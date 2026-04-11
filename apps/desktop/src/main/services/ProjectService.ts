@@ -480,6 +480,28 @@ export class ProjectService {
   }
 
   /**
+   * Load a specific skill's prompt for direct invocations (e.g. /e2e-heal, /e2e-generate).
+   * Used when the user explicitly invokes a skill by name — bypasses the full pipeline
+   * orchestrator so the skill runs cleanly without pipeline phase framing.
+   *
+   * Returns null if the skill is not found (caller falls back to orchestrator prompt).
+   */
+  loadSkillPrompt(projectPath: string, skillName: string): string | null {
+    const skillPaths = [
+      path.join(projectPath, `.claude/skills/${skillName}/SKILL.md`),
+      path.join(projectPath, `.claude_skills/${skillName}/SKILL.md`),
+    ];
+    for (const p of skillPaths) {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, "utf-8");
+        const body = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
+        return `You are running inside Specwright, an E2E test automation desktop app.\n\n${body}`;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Load the orchestrator system prompt for the pipeline.
    * Priority:
    *   1. Target project's .claude/skills/e2e-automate/SKILL.md (the full pipeline instructions)

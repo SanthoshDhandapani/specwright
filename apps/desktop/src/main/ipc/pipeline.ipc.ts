@@ -82,7 +82,24 @@ export function registerPipelineIpc(
         }
       }
       if (!systemPrompt) {
-        systemPrompt = projectService.loadOrchestratorPrompt(projectPath);
+        // Detect direct skill invocations (e.g. "/e2e-heal @tag", "/e2e-generate plan.md").
+        // When the user explicitly calls a skill by name, load that skill's prompt directly
+        // instead of the full pipeline orchestrator — prevents pipeline phase numbering
+        // (Phase 1/2/8) from bleeding into standalone skill output.
+        const skillMatch = payload.userMessage.trim().match(/^\/([a-zA-Z0-9_-]+)/);
+        const skillName = skillMatch?.[1];
+        const isSubSkill = skillName && skillName !== "e2e-automate" && projectPath;
+        const skillPrompt = isSubSkill
+          ? projectService.loadSkillPrompt(projectPath, skillName)
+          : null;
+
+        systemPrompt = skillPrompt ?? projectService.loadOrchestratorPrompt(projectPath);
+
+        if (skillPrompt) {
+          win.webContents.send("pipeline:log", {
+            line: `[pipeline] Using skill prompt: /${skillName}`,
+          });
+        }
       }
 
       // When skip permissions is enabled, tell the AI it doesn't need to ask
@@ -99,6 +116,9 @@ export function registerPipelineIpc(
           "BASE_URL", "TEST_ENV", "AUTH_STRATEGY",
           "TEST_USER_EMAIL", "TEST_USER_PASSWORD",
           "TEST_USERNAME", "TEST_PASSWORD",
+          // Auth identity — needed by planner agent for localStorage injection
+          "TEST_USER_NAME", "TEST_USER_PICTURE",
+          "OAUTH_STORAGE_KEY", "OAUTH_SIGNIN_PATH", "OAUTH_BUTTON_TEST_ID",
         ]);
         for (const [k, v] of Object.entries(env)) {
           if (PIPELINE_VARS.has(k) && v) lines.push(`${k}: ${v}`);

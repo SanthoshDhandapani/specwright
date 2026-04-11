@@ -29,13 +29,12 @@ export class ConfigService {
   }
 
   async pickFiles(parentWindow?: BrowserWindow | null): Promise<string[]> {
+    // Note: On macOS, file extension filters interfere with directory selection
+    // when openFile + openDirectory are combined. Using no filters ensures directories
+    // are returned correctly in filePaths.
     const options = {
       title: "Select files or directories to heal",
       properties: ["openFile", "openDirectory", "multiSelections"] as const,
-      filters: [
-        { name: "Test files", extensions: ["feature", "js", "ts"] },
-        { name: "All files", extensions: ["*"] },
-      ],
     };
     const result = parentWindow
       ? await dialog.showOpenDialog(parentWindow, options)

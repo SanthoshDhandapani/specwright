@@ -83,6 +83,12 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   loadExistingProject: async (folderPath: string) => {
     await window.specwright.project.setPath(folderPath);
+    const isReady = await window.specwright.project.isBootstrapped(folderPath);
+    if (!isReady) {
+      // e2e-tests not set up — drop back to bootstrap view
+      set({ projectPath: folderPath, projectState: "none" });
+      return;
+    }
     const envVars = await window.specwright.project.readEnv(folderPath);
     set({ projectPath: folderPath, projectState: "ready", envVars });
   },

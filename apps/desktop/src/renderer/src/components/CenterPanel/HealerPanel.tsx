@@ -80,23 +80,28 @@ export default function HealerPanel(): React.JSX.Element {
           {/* Path chips */}
           {paths.length > 0 && (
             <div className="space-y-1.5 mb-3">
-              {paths.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"
-                >
-                  <span className="text-slate-500 text-xs">📁</span>
-                  <span className="flex-1 text-slate-300 text-xs font-mono truncate" title={p}>
-                    {displayPath(p)}
-                  </span>
-                  <button
-                    onClick={() => removePath(i)}
-                    className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0"
+              {paths.map((p, i) => {
+                const basename = p.split("/").pop() ?? "";
+                const isDir = !basename.includes(".");
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"
                   >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                    <span className="text-slate-400 text-xs">{isDir ? "📁" : "📄"}</span>
+                    <span className="flex-1 text-slate-300 text-xs font-mono truncate" title={p}>
+                      {displayPath(p)}
+                    </span>
+                    <button
+                      onClick={() => removePath(i)}
+                      disabled={isRunning}
+                      className="text-slate-600 hover:text-red-400 text-xs transition-colors flex-shrink-0 disabled:opacity-40"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 

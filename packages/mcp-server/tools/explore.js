@@ -38,6 +38,30 @@ export async function handler({ pageURL, moduleName, instructions, authRequired 
   let authSection;
   if (!needsAuth) {
     authSection = 'NOT_REQUIRED — Page is public, no authentication needed.';
+  } else if (config.authStrategy === 'oauth' && config.oauthStorageKey) {
+    // OAuth localStorage injection — values read by Node.js, not the LLM.
+    // JSON.stringify ensures picture URLs with & or ? are emitted as valid JS string literals.
+    const derivedName = config.testUserName ||
+      config.testUserEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+    const script = [
+      `var u = {};`,
+      `u.name    = ${JSON.stringify(derivedName)};`,
+      `u.email   = ${JSON.stringify(config.testUserEmail)};`,
+      `u.picture = ${JSON.stringify(config.testUserPicture)};`,
+      `localStorage.setItem(${JSON.stringify(config.oauthStorageKey)}, JSON.stringify(u));`,
+    ].join('\n');
+
+    authSection = [
+      `OAUTH_LOCALSTORAGE — Inject auth directly into localStorage (no popup needed).`,
+      ``,
+      `Call \`browser_evaluate\` with this exact script (do not modify it):`,
+      `\`\`\`javascript`,
+      script,
+      `\`\`\``,
+      ``,
+      `Then call \`browser_navigate\` again to reload the app and pick up the auth state.`,
+    ].join('\n');
   } else {
     const authDataBlock = buildAuthSection(config);
     if (fs.existsSync(config.authStatePath)) {

@@ -29,11 +29,17 @@ AUTH_STRATEGY=oauth | email-password | none
 Check `e2e-tests/.env.testing` for `OAUTH_STORAGE_KEY`:
 
 If `OAUTH_STORAGE_KEY` is set (bypasses OAuth popup — preferred):
-1. Read `e2e-tests/.env.testing` → get `TEST_USER_EMAIL`, `TEST_USER_NAME` (optional), `OAUTH_STORAGE_KEY`, `BASE_URL`
+1. Read `e2e-tests/.env.testing` → get `TEST_USER_EMAIL`, `TEST_USER_NAME` (optional), `TEST_USER_PICTURE`, `OAUTH_STORAGE_KEY`, `BASE_URL`
 2. Derive `name` from `TEST_USER_NAME` or from `TEST_USER_EMAIL` (split at @, titlecase)
 3. Use `browser_navigate` to go to `{BASE_URL}`
-4. Use `browser_evaluate` to inject: `localStorage.setItem("{OAUTH_STORAGE_KEY}", JSON.stringify({ name, email: TEST_USER_EMAIL, picture: "" }))`
-   (picture field will be auto-generated as SVG initials by the runtime — passing "" is fine)
+4. Use `browser_evaluate` to inject auth — use the EXACT `TEST_USER_PICTURE` value from `.env.testing`, never `""`:
+   ```javascript
+   var u = {};
+   u.name = "<name>";
+   u.email = "<TEST_USER_EMAIL>";
+   u.picture = "<TEST_USER_PICTURE — exact raw value>";
+   localStorage.setItem("<OAUTH_STORAGE_KEY>", JSON.stringify(u));
+   ```
 5. Use `browser_navigate` to reload `{BASE_URL}` (picks up auth state)
 6. Use `browser_snapshot` to verify signed in (user avatar visible, sign-in button gone)
 
@@ -66,7 +72,10 @@ Browser exploration should be SURGICAL, not exhaustive:
 - **Maximum 20 browser calls per module**
 - Write seed file as soon as you have sufficient selectors — don't over-explore
 - If this is a repeat exploration (memory has data), do verification-only (5 calls max)
-- For local projects: optionally grep `src/` for `data-testid` to pre-discover selectors (skip for external URLs or large projects)
+**Source code grep is a pre-step only — it NEVER replaces browser exploration:**
+- You MAY grep `src/` for `data-testid` to get a head-start on selector names
+- You MUST still open the browser and validate every selector against the live page
+- Selectors from source code that are not confirmed in the browser are NOT valid
 
 ## What This Does (after authentication)
 

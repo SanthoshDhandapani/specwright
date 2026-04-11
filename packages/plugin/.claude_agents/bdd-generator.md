@@ -103,6 +103,14 @@ Three execution modes:
    → @serial-execution REQUIRED
 6. If scenarios only READ predata from a precondition (via I load predata from) and don't write back
    → No serial needed (parallel OK)
+7. If a workflow phase BOTH loads predata from a predecessor phase AND saves new data
+   for a successor phase (detectable when Background has "I load predata from" AND
+   the scenario body has a step saving scoped data, e.g. "I save ... data for subsequent steps")
+   → This is an INTERMEDIATE PHASE (producer + consumer)
+   → Tag: @precondition @cross-feature-data @serial-execution + module tag
+   → Do NOT tag @workflow-consumer — intermediate phases must complete before later phases
+   → The "I load predata from" step polls up to 60 s (built into shared/workflow.steps.js)
+      — no manual waits needed
 ```
 
 **Data Table Placeholders:**
@@ -115,7 +123,8 @@ Three execution modes:
 **Workflow Consumer Features:**
 
 - `@0-Precondition`: always `@serial-execution` (creates data)
-- Consumer features (`@1-`, `@2-`, etc.): only `@serial-execution` if their own scenarios share state. If they only read predata independently, they run parallel (default).
+- **Intermediate phases** (`@1-`, `@2-` that load predata AND save new data for a successor): tag `@precondition @cross-feature-data @serial-execution`. Do NOT tag `@workflow-consumer`. The `I load predata from` step polls for up to 60 s (built into `shared/workflow.steps.js`) to handle timing with the predecessor phase.
+- **Terminal consumer features** (`@1-`, `@2-`, etc. that only read, never write): only `@serial-execution` if their own scenarios share state. If they only read predata independently, they run parallel (default).
 
 #### @cross-feature-data Tag for Cross-Feature Workflows
 
@@ -170,10 +179,11 @@ Three execution modes:
 
 **Tag Requirements:**
 
-| Feature Type                      | Feature-Level Tags                                                 | Scenario-Level Tags                            |
-| --------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------- |
-| Precondition (`@0-Precondition/`) | `@precondition @cross-feature-data @serial-execution` + module tag | `@prerequisite` on each data-creation scenario |
-| Consumer (`@1-`, `@2-`, etc.)     | `@workflow-consumer` + module tag + step-specific tag              | None required                                  |
+| Feature Type                                         | Feature-Level Tags                                                 | Scenario-Level Tags                            |
+| ---------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------- |
+| Precondition (`@0-Precondition/`)                    | `@precondition @cross-feature-data @serial-execution` + module tag | `@prerequisite` on each data-creation scenario |
+| Intermediate phase (`@N-` that loads AND saves data) | `@precondition @cross-feature-data @serial-execution` + module tag | `@prerequisite` on data-creation scenarios     |
+| Terminal consumer (`@1-`, `@2-` that only read data) | `@workflow-consumer` + module tag + step-specific tag              | None required                                  |
 
 **Consumer Feature Background Pattern:**
 
@@ -441,6 +451,33 @@ After generating steps.js, verify:
 - No two steps in the new file have overlapping patterns
 - All parameterized steps use consistent naming
 
+#### Workflow Cross-Phase Shared Step Extraction (MANDATORY for `@Workflows`)
+
+When generating code for a `@Workflows` entry that has multiple sub-modules (`@0-`, `@1-`, `@2-`, etc.), you MUST complete this analysis BEFORE writing any file.
+
+**Step 1: Map all step patterns across every phase**
+
+List every step (Given/When/Then text) for every sub-module. Group any step that appears in 2+ phases.
+
+**Step 2: Route each shared step to the correct shared file**
+
+| Step appears in | Target | Rule |
+|---|---|---|
+| 2+ phases of the **same** workflow | `shared/{workflow-name}.steps.js` | Intra-workflow reuse. Derive name: `@OrderWorkflow` → `shared/order.steps.js` |
+| Phases of **different** workflows | `shared/workflow.steps.js` | Cross-workflow reuse |
+| Fits an existing shared category | Existing shared file | e.g., navigation → `shared/navigation.steps.js` |
+| Only ONE phase of ONE workflow | Co-located `steps.js` | No extraction needed |
+
+**Step 3: Write shared files FIRST — then phase steps.js files**
+
+1. Create `shared/{name}.steps.js` with the extracted steps (import from `../../../playwright/fixtures.js`)
+2. Write each phase `steps.js` WITHOUT the extracted steps — they are globally available from shared/
+3. Document reused shared steps in each phase file's JSDoc comment block under "Shared steps used here"
+
+**Why this is critical:** playwright-bdd v8+ path-based scoping means a step defined inside `@Workflows/@WorkflowA/@0-Phase/steps.js` is INVISIBLE to `@1-NextPhase`. If both phases need the same step and it is co-located in only one phase, the other phase will fail with "step not defined". The only fix is shared/.
+
+**Rule for existing step files (overwrite scenario):** If a `steps.js` you are overwriting already contains a step being moved to shared, OMIT that step from the co-located file entirely. Do NOT keep it in both places — that causes a duplicate step definition error at runtime.
+
 ### 9. Usage Pattern
 
 #### Input Option A: Direct Parameters
@@ -501,7 +538,8 @@ planFilePath: "/e2e-tests/plans/{moduleName}-{fileName}-plan.md"
 - ✅ Imports from `playwright/fixtures.js` (not playwright-bdd or @cucumber/cucumber)
 - ✅ Background uses `When I navigate to` (page refresh), scenarios use `Given I navigate to the ... page` (SPA)
 - ✅ Workflow features have proper precondition/consumer structure
-- ✅ @cross-feature-data only on precondition features
+- ✅ Intermediate workflow phases (load predata AND save new data) tagged `@precondition @cross-feature-data @serial-execution` — NOT `@workflow-consumer`
+- ✅ @cross-feature-data only on precondition features and intermediate phases
 - ✅ Cache keys not hardcoded in steps
 
 ### 12. Error Handling

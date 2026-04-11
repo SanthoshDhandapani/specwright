@@ -12,28 +12,14 @@
  *   btn-remove-favorite — Remove from Favorites BUTTON (after adding — state toggle IS the confirmation)
  *
  * Saves: saveScopedTestData('favoritesworkflow', { showTitle })
+ *
+ * Shared steps used here (from shared/ — globally scoped, no re-definition needed):
+ *   Given the home page loads with the show grid visible → shared/workflow.steps.js
+ *   When I click the first show card in the grid        → shared/workflow.steps.js
+ *   Then I am on the show detail page                   → shared/workflow.steps.js
  */
-import { Given, When, Then, expect } from '../../../../../playwright/fixtures.js';
+import { When, Then, expect } from '../../../../../playwright/fixtures.js';
 import { saveScopedTestData } from '../../../../../playwright/fixtures.js';
-
-Given('the home page loads with the show grid visible', async ({ page, testConfig }) => {
-  await page.goto(testConfig.routes.Home);
-  await page.waitForLoadState('networkidle', { timeout: testConfig.timeouts.loadState });
-  await expect(page.getByTestId('page-home')).toBeVisible({ timeout: testConfig.timeouts.element });
-  await expect(page.getByTestId('show-grid')).toBeVisible({ timeout: testConfig.timeouts.element });
-});
-
-When('I click the first show card in the grid', async ({ page }) => {
-  const firstCard = page.getByTestId('show-grid').locator('a[data-testid^="show-card-"]').first();
-  await expect(firstCard).toBeVisible({ timeout: 10000 });
-  await firstCard.click();
-  await page.waitForLoadState('networkidle', { timeout: 15000 });
-});
-
-Then('I am on the show detail page', async ({ page }) => {
-  await expect(page).toHaveURL(/\/show\/\d+/, { timeout: 15000 });
-  await expect(page.getByTestId('page-show-detail')).toBeVisible({ timeout: 10000 });
-});
 
 Then('I capture the show title from the detail page', async ({ page, testData }) => {
   const titleEl = page.getByTestId('show-title');

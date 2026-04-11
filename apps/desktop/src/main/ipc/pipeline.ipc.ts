@@ -110,6 +110,8 @@ export function registerPipelineIpc(
 
       // Append env credentials and auth instructions to user message
       let userMessage = payload.userMessage;
+      // HEADLESS=false in .env.testing → show browser during exploration (default: headless)
+      const headless = projectPath ? projectService.readEnv(projectPath)["HEADLESS"] !== "false" : true;
       if (projectPath) {
         const env = projectService.readEnv(projectPath);
         const lines: string[] = [];
@@ -164,22 +166,14 @@ export function registerPipelineIpc(
       }
 
       // Flexible type: stdio servers use McpServerConfig; HTTP/streamable-http servers use { type, url }
+      const playwrightMcpArgs = [
+        ...(screenshotDir ? ["--output-dir", screenshotDir] : []),
+        ...(headless ? ["--headless"] : []),
+      ];
       const mcpServers: Record<string, Record<string, unknown>> = {
         "playwright-test": playwrightMcpBin
-          ? {
-              command: "node",
-              args: [
-                playwrightMcpBin,
-                ...(screenshotDir ? ["--output-dir", screenshotDir] : []),
-              ],
-            }
-          : {
-              command: "npx",
-              args: [
-                "@playwright/mcp@latest",
-                ...(screenshotDir ? ["--output-dir", screenshotDir] : []),
-              ],
-            },
+          ? { command: "node", args: [playwrightMcpBin, ...playwrightMcpArgs] }
+          : { command: "npx", args: ["@playwright/mcp@latest", ...playwrightMcpArgs] },
         // Atlassian MCP — always available for Jira ticket processing (streamable-http, auth on first use)
         // CLI users can also add this via project .mcp.json; Desktop manages it here directly.
         // Bearer token is injected if the user has completed OAuth via atlassian:connect.

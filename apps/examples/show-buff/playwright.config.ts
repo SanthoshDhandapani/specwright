@@ -135,15 +135,15 @@ export default defineConfig({
     },
 
     // Precondition — workflow setup features tagged @precondition.
-    // Runs serial (1 worker) to ensure all preconditions complete before consumers start.
-    // Filesystem ordering via @0-Precondition/ directory prefix guarantees correct sequence.
+    // Uses fullyParallel: true so each precondition spec runs in its own worker,
+    // preventing playwright-bdd cross-file fixture contamination (bddTestData not found).
+    // Individual preconditions are self-contained and can run concurrently.
     {
       name: 'precondition',
       testMatch: '**/*.spec.js',
       testIgnore: '**/@Authentication/*.spec.js',
       grep: /@precondition/,
-      fullyParallel: false,
-      workers: 1,
+      fullyParallel: true,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
@@ -176,10 +176,12 @@ export default defineConfig({
     // Run single workflow — serial (1 worker), filesystem ordering via @0-/@1- prefixes.
     // ONLY used via explicit targeted scripts (e.g. pnpm test:bdd:bookings).
     // NOT included in pnpm test:bdd — the full run uses precondition → workflow-consumers instead.
+    // fullyParallel: true prevents cross-file $bddFileData fixture contamination (bddTestData not found).
+    // Workers: 1 keeps execution sequential, preserving @0-/@1- filesystem ordering.
     {
       name: 'run-workflow',
       testMatch: '**/@Workflows/**/*.spec.js',
-      fullyParallel: false,
+      fullyParallel: true,
       workers: 1,
       use: {
         ...devices['Desktop Chrome'],

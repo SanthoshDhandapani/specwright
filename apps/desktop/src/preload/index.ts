@@ -93,5 +93,18 @@ contextBridge.exposeInMainWorld("specwright", {
       ipcRenderer.on("pipeline:explore-result", (_e, data) => cb(data));
       return () => ipcRenderer.removeAllListeners("pipeline:explore-result");
     },
+    onMcpStatus: (cb: (data: { server: string; status: string }) => void) => {
+      ipcRenderer.on("pipeline:mcp-status", (_e, data) => cb(data));
+      return () => ipcRenderer.removeAllListeners("pipeline:mcp-status");
+    },
+  },
+
+  atlassian: {
+    status: () =>
+      ipcRenderer.invoke("atlassian:status") as Promise<{ status: "idle" | "connected" | "needs-auth" }>,
+    connect: () =>
+      ipcRenderer.invoke("atlassian:connect") as Promise<{ success: boolean; error?: string }>,
+    disconnect: () =>
+      ipcRenderer.invoke("atlassian:disconnect") as Promise<{ success: boolean }>,
   },
 });

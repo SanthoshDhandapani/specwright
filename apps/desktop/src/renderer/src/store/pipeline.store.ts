@@ -53,6 +53,9 @@ interface PipelineState {
   lastSessionId: string | null;
   /** User's auth response that unblocked the first run (e.g., ticket ID). Prepended to resume messages so managed hooks don't block again. */
   hookPassphrase: string | null;
+  /** Atlassian MCP connection status — updated from pipeline:mcp-status events */
+  atlassianStatus: "idle" | "connected" | "needs-auth" | "failed";
+  setMcpStatus: (server: string, status: string) => void;
 
   startRun: (userMessage: string) => void;
   /** Resume after an approval checkpoint — preserves phases, logs, and activePhase. */
@@ -109,6 +112,17 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   activeTool: null,
   lastSessionId: null,
   hookPassphrase: null,
+  atlassianStatus: "idle",
+
+  setMcpStatus: (server, status) =>
+    set((s) => {
+      if (server !== "atlassian") return s;
+      const mapped =
+        status === "connected" ? "connected" :
+        status === "failed" ? "failed" :
+        status === "needs-auth" ? "needs-auth" : "idle";
+      return { atlassianStatus: mapped };
+    }),
 
   startRun: (userMessage) =>
     set((s) => ({

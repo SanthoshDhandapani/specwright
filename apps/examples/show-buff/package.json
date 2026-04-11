@@ -20,6 +20,8 @@
     "test:playwright:headed": "playwright test --headed",
     "test:playwright:debug": "playwright test --debug",
     "report:playwright": "playwright show-report",
+    "report:bdd": "node e2e-tests/scripts/generate-bdd-report.js",
+    "report:bdd:open": "open reports/cucumber-bdd/html-report/index.html",
     "test:clean": "rm -rf reports .features-gen test-results e2e-tests/playwright/test-data/*.json"
   },
   "dependencies": {
@@ -31,17 +33,18 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.3.0",
+    "@playwright/test": "^1.54.1",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.27",
+    "dotenv": "^17.2.0",
+    "multiple-cucumber-html-reporter": "^3.10.0",
+    "playwright-bdd": "^8.5.0",
     "postcss": "^8.5.9",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
-    "vite": "^6.4.2",
-    "@faker-js/faker": "^10.4.0",
-    "@playwright/test": "^1.59.1",
-    "dotenv": "^17.4.1",
-    "playwright-bdd": "^8.5.0"
+    "vite": "^6.4.2"
   }
 }

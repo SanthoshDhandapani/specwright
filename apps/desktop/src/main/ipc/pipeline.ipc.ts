@@ -30,6 +30,7 @@ import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService } from "../services/ProjectService";
 import * as fs from "fs";
 import * as path from "path";
+import { getAtlassianAccessToken } from "./atlassian.ipc";
 
 let activeRunner: ClaudeAgentRunner | AiSdkRunner | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,7 +163,8 @@ export function registerPipelineIpc(
         playwrightMcpBin = "";
       }
 
-      const mcpServers: Record<string, McpServerConfig> = {
+      // Flexible type: stdio servers use McpServerConfig; HTTP/streamable-http servers use { type, url }
+      const mcpServers: Record<string, Record<string, unknown>> = {
         "playwright-test": playwrightMcpBin
           ? {
               command: "node",
@@ -178,6 +180,17 @@ export function registerPipelineIpc(
                 ...(screenshotDir ? ["--output-dir", screenshotDir] : []),
               ],
             },
+        // Atlassian MCP — always available for Jira ticket processing (streamable-http, auth on first use)
+        // CLI users can also add this via project .mcp.json; Desktop manages it here directly.
+        // Bearer token is injected if the user has completed OAuth via atlassian:connect.
+        "atlassian": await (async () => {
+          const token = await getAtlassianAccessToken();
+          return {
+            type: "streamable-http",
+            url: "https://mcp.atlassian.com/v1/mcp",
+            ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+          };
+        })(),
       };
       if (projectPath) {
         const mcpJsonPath = path.join(projectPath, ".mcp.json");
@@ -187,8 +200,9 @@ export function registerPipelineIpc(
             const projectServers = mcpConfig.mcpServers ?? {};
             for (const [name, config] of Object.entries(projectServers)) {
               const cfg = config as Record<string, unknown>;
-              // Skip non-stdio servers (streamable-http, sse) — Agent SDK only supports command-based
-              if (cfg.type && cfg.type !== "stdio") continue;
+              // Allow stdio + http + streamable-http (used by Atlassian, GitHub, etc.)
+              // Skip only sse — unreliable in Electron context
+              if (cfg.type && cfg.type !== "stdio" && cfg.type !== "http" && cfg.type !== "streamable-http") continue;
               // Skip if already defined (e.g., playwright-test added above)
               if (mcpServers[name]) continue;
               mcpServers[name] = cfg as McpServerConfig;
@@ -219,9 +233,18 @@ export function registerPipelineIpc(
           // Simple API: Runner.stream() → flat RunEvents
           const { Runner } = await loadClaudeRunner();
 
-          const mcpConfig: Record<string, string | { command: string; args?: string[]; env?: Record<string, string> }> = {};
+          const mcpConfig: Record<string, string | { command: string; args?: string[]; env?: Record<string, string> } | { type: "http"; url: string; headers?: Record<string, string> }> = {};
           for (const [name, config] of Object.entries(mcpServers)) {
-            mcpConfig[name] = config as { command: string; args?: string[]; env?: Record<string, string> };
+            if (config.url) {
+              // HTTP-based MCP (streamable-http or http) — claude-runner uses type: "http"
+              mcpConfig[name] = {
+                type: "http",
+                url: config.url as string,
+                ...(config.headers ? { headers: config.headers as Record<string, string> } : {}),
+              };
+            } else {
+              mcpConfig[name] = config as { command: string; args?: string[]; env?: Record<string, string> };
+            }
           }
 
           const runner = new Runner({
@@ -289,6 +312,8 @@ export function registerPipelineIpc(
                 } else {
                   win.webContents.send("pipeline:log", { line: `[mcp] ⚠ ${event.server} — needs auth` });
                 }
+                // Structured event for UI status indicators (e.g., Atlassian connect button)
+                win.webContents.send("pipeline:mcp-status", { server: event.server as string, status: event.status as string });
                 break;
               case "error":
                 // Show error in chat bubble AND terminal log
@@ -372,12 +397,17 @@ export function registerPipelineIpc(
           const agentRunner = new ClaudeAgentRunner();
           activeRunner = agentRunner;
 
+          // Agent SDK only supports stdio servers — filter out HTTP/streamable-http MCPs
+          const stdioMcpServers = Object.fromEntries(
+            Object.entries(mcpServers).filter(([, cfg]) => !cfg.url)
+          ) as Record<string, McpServerConfig>;
+
           fullText = await agentRunner.run({
             systemPrompt,
             userMessage,
             cwd: projectPath,
             resumeSessionId: payload.resumeSessionId,
-            mcpServers,
+            mcpServers: stdioMcpServers,
             skipPermissions: payload.skipPermissions,
             onToken: (token) => {
               win.webContents.send("pipeline:token", { token });

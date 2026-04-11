@@ -383,26 +383,26 @@ export default function ConfigPanel(): React.JSX.Element {
           {isReady ? (
             <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
               <div className="flex items-center justify-between">
-                <p className="text-green-400 text-xs font-medium flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-green-400 rounded-full" />
-                  Ready
-                </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
+                  <p className="text-green-400 text-xs font-medium flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-green-400 rounded-full" />
+                    Ready
+                  </p>
                   <button
                     onClick={() => loadExistingProject(projectPath)}
-                    className="text-slate-500 hover:text-brand-400 transition-colors"
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
                     title="Sync project — reload .env.testing from disk"
                   >
                     <SyncButtonIcon />
                   </button>
-                  <button
-                    onClick={pickAndBootstrap}
-                    className="text-slate-500 hover:text-brand-400 text-xs transition-colors"
-                    title="Change project"
-                  >
-                    Change
-                  </button>
                 </div>
+                <button
+                  onClick={pickAndBootstrap}
+                  className="text-slate-500 hover:text-brand-400 text-xs transition-colors"
+                  title="Change project"
+                >
+                  Change
+                </button>
               </div>
               <p className="text-slate-300 text-xs mt-1 truncate font-mono" title={projectPath}>
                 {basename(projectPath)}

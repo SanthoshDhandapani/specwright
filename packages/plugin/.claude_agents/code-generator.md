@@ -11,37 +11,28 @@ You are the Code Generator agent — takes step definition **skeletons** from bd
 
 ## Core Responsibilities
 
-### 0. Extract Validated Selectors from Seed File
+### 0. Extract Validated Selectors
 
-**CRITICAL**: Before generating any step code, read the seed file to extract validated selectors from exploration.
+**CRITICAL**: Before generating any step code, extract validated selectors from the content provided inline by the calling skill.
 
-**Process:**
+The calling skill provides selector content as one of:
 
-1. Read `e2e-tests/playwright/generated/seed.spec.js`
-2. Parse explored test cases for selector patterns
-3. Extract all working selectors:
-   - `page.getByRole('button', { name: 'Submit' })`
-   - `page.getByLabel('Email')`
-   - `page.getByTestId('save-button')`
-   - `page.getByText('Success message')`
-4. Map selectors to corresponding UI elements
-5. Use these validated selectors in generated step definitions
+**a) Planner MEMORY.md `### Key Selectors` table** (compact — preferred):
 
-**Example Extraction:**
-
-```javascript
-// From seed.spec.js (generated in Phase 4):
-test('Create new entry', async ({ page }) => {
-  await page.getByText('Entries').click(); // Extract: Entries menu = getByText('Entries')
-  await page.getByRole('button', { name: 'New' }).click(); // Extract: New button = getByRole(...)
-  await page.getByLabel('Name').fill('TEST_123'); // Extract: Name field = getByLabel('Name')
-});
-
-// Use in step definition:
-When('I click the New button', async ({ page }) => {
-  await page.getByRole('button', { name: 'New' }).click(); // Validated selector from seed
-});
+```markdown
+### Key Selectors: HomePage (https://example.com/home)
+| Element | Selector | Notes |
+| Home container | `getByTestId('page-home')` | Main page wrapper |
+| Show card | `getByTestId('show-card-{id}')` | A tag, links to /show/{id} |
 ```
+
+Extract element → Playwright locator from each row. Substitute `{id}` / `{index}` patterns as needed.
+
+**b) `seed.spec.js` content** (raw JS fallback):
+
+Parse `test(...)` blocks and extract `page.getBy*()` / `page.locator()` calls, mapping them to the UI element each line touches.
+
+**Do NOT read either file yourself** — use what was provided inline by the skill.
 
 ### 1. Code Generation Best Practices
 
@@ -156,15 +147,21 @@ await expect(page.getByText('Success')).toBeVisible();
 
 **🔴 CRITICAL: When a step handles a Gherkin 3-column data table (`Field Name | Value | Type`), ALWAYS use `processDataTable` and `validateExpectations` from `e2e-tests/utils/stepHelpers.js`. NEVER write manual for-loops to iterate rows.**
 
-**Read `e2e-tests/utils/stepHelpers.js`** before generating any data table step (skip if content was already provided inline by the calling skill). It provides:
+The calling skill provides framework context inline as one of:
+
+- **`generate-context.md` content** (compact — preferred): contains all FIELD_TYPES, `processDataTable`/`validateExpectations` API signatures, faker patterns, and import path depth table. Use it directly.
+- **`stepHelpers.js` + `testDataGenerator.js` content** (fallback): provided when `generate-context.md` doesn't exist. Extract FIELD_TYPES and faker patterns from the source.
+
+**Do NOT read `stepHelpers.js`, `testDataGenerator.js`, or `generate-context.md` yourself** — use what was provided inline by the skill.
+
+The framework context provides:
 
 - `processDataTable(page, dataTable, config)` — fills forms from data tables, handles `<gen_test_data>` (faker generation + caching) and `<from_test_data>` (cache reading) automatically
 - `validateExpectations(page, dataTable, config)` — asserts displayed values, reads `<from_test_data>` from cache
 - `FIELD_TYPES` — declarative type constants (FILL, DROPDOWN, CLICK, CHECKBOX_TOGGLE, etc.)
 - `fillFieldByName(container, fieldName, value)` — fills a single field using selector priority hierarchy
 - `selectDropdown(container, fieldName, value)` — selects option from native `<select>` or ARIA combobox
-
-**Also read `e2e-tests/utils/testDataGenerator.js`** — provides `generateValueForField(fieldName)` which uses faker to produce realistic values based on field name. Skip if content was already provided inline by the calling skill.
+- `generateValueForField(fieldName)` — faker-based value generation (email, phone, name, etc.)
 
 ### 5. Data Table Step Pattern (processDataTable)
 
@@ -197,10 +194,30 @@ When('I fill the form with:', async ({ page }, dataTable) => {
 });
 ```
 
+#### Conditional Import Rule
+
+Only import what the generated steps file actually uses. Unused imports cause lint warnings and mislead readers about the file's purpose.
+
+The import path depth for `utils/stepHelpers.js` follows the **same rule** as `playwright/fixtures.js` — both resolve from the same directory level. Use the depth already computed for the `fixtures.js` import (see Section 3 above).
+
+```javascript
+// Form-fill steps only — processDataTable used, validateExpectations NOT used
+import { FIELD_TYPES, processDataTable } from '{depth}/utils/stepHelpers.js';
+
+// Assertion steps only — validateExpectations used, processDataTable NOT used
+import { FIELD_TYPES, validateExpectations } from '{depth}/utils/stepHelpers.js';
+
+// Both fill AND assertion data table steps — all three used
+import { FIELD_TYPES, processDataTable, validateExpectations } from '{depth}/utils/stepHelpers.js';
+
+// No data table steps at all — omit the stepHelpers import entirely
+```
+
 #### processDataTable Pattern (Multiple Fields)
 
 ```javascript
-import { FIELD_TYPES, processDataTable, validateExpectations } from '../../../utils/stepHelpers.js';
+// This example has both fill and assertion steps — all three are imported
+import { FIELD_TYPES, processDataTable, validateExpectations } from '{depth}/utils/stepHelpers.js';
 
 // FIELD_CONFIG is LOCAL to this steps file — never export or put in stepHelpers.js.
 // If the same mapping is needed in 2+ step files, put it in a domain utils file.
@@ -310,6 +327,7 @@ This is the reference pattern for any step that handles a data table with `<gen_
 
 ```javascript
 import { When, Then, expect } from '../../../../playwright/fixtures.js';
+// All three imported here because this example has both fill steps (processDataTable) and assertion steps (validateExpectations)
 import { FIELD_TYPES, processDataTable, validateExpectations } from '../../../../utils/stepHelpers.js';
 
 // FIELD_CONFIG — LOCAL to this steps file

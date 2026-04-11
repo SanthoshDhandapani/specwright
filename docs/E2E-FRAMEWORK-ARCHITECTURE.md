@@ -210,6 +210,76 @@ This saves 3-4 sequential file reads per invocation without breaking correctness
 
 ---
 
+## Playwright Project Execution Lanes
+
+`playwright.config.ts` defines 8 named projects. Each is an isolated execution lane with its own tag filter, worker count, auth state, and dependency chain.
+
+| Project | Tag filter | Workers | storageState | Depends on |
+|---------|-----------|---------|-------------|------------|
+| `setup` | `**/auth.setup.js` | 1 | — | — |
+| `auth-tests` | `**/@Authentication/*.spec.js` | default | none (clean) | — |
+| `serial-execution` | `@serial-execution` ∧ ¬`@precondition` ∧ ¬`@workflow-consumer` | 1 | user.json | setup |
+| `precondition` | `@precondition` | 1 | user.json | setup |
+| `workflow-consumers` | `@workflow-consumer` | default (parallel) | user.json | precondition |
+| `run-workflow` | `**/@Workflows/**` | 1 | user.json | setup |
+| `chromium` | `e2e-tests/playwright/generated/**` | default | none | — |
+| `main-e2e` | ¬`@serial-execution` ∧ ¬`@precondition` ∧ ¬`@workflow-consumer` | default (parallel) | user.json | setup |
+
+### Execution order during `pnpm test:bdd`
+
+```
+setup  ──────────────────────────────────────────────────────┐
+                                                              ▼
+auth-tests          (parallel, clean state, no deps)
+serial-execution    (1 worker, @serial-execution modules)   ←─┘ after setup
+precondition        (1 worker, @precondition workflows)     ←─┘ after setup
+                                                              ▼
+workflow-consumers  (parallel, after precondition)
+main-e2e            (parallel, after setup)
+```
+
+`chromium` and `run-workflow` are **never triggered by `pnpm test:bdd`** — invoked explicitly only (`npx playwright test --project chromium`, `pnpm test:bdd:bookings`, etc.).
+
+### Tag routing rules
+
+- `@serial-execution` → `serial-execution` project (not `main-e2e`)
+- `@precondition` → `precondition` project (not `serial-execution`, not `main-e2e`)
+- `@workflow-consumer` → `workflow-consumers` project (not `serial-execution`, not `main-e2e`)
+- Everything else → `main-e2e`
+
+**Critical**: `serial-execution` MUST have `grepInvert: /@precondition|@workflow-consumer/` and `main-e2e` MUST have `grepInvert: /@serial-execution|@precondition|@workflow-consumer/`. Without these exclusions, workflow tests bleed into the wrong lane and fail because precondition data doesn't exist yet.
+
+### `chromium` project — seed spec validation
+
+The `chromium` project has a dedicated `testDir: './e2e-tests/playwright/generated'` pointing exclusively at the seed file written by the planner agent. It has:
+- No `storageState` — seed files inject auth themselves via `localStorage.setItem`
+- No `dependencies` — runs independently, not part of the BDD setup chain
+- Used by `execution-manager` agent in Phase 5 to validate discovered selectors before BDD generation
+
+### Seed file auth invariants
+
+These three rules apply to EVERY seed file:
+
+1. **`OAUTH_STORAGE_KEY` has no fallback** — `const OAUTH_STORAGE_KEY = process.env.OAUTH_STORAGE_KEY;`. No `|| 'some-key'`. If it is missing from `.env.testing`, the test fails loudly with `undefined` rather than silently writing the wrong key to localStorage.
+
+2. **`picture` is never hardcoded** — `const TEST_USER_PICTURE = process.env.TEST_USER_PICTURE || '';`. The evaluate call passes it as a closure argument, never as an inline string literal.
+
+3. **Env vars are passed through the closure argument** — `page.evaluate()` runs in browser context where `process.env` is unavailable. All Node.js values must be passed via the second argument:
+   ```javascript
+   await page.evaluate(
+     ({ key, name, email, picture }) => { localStorage.setItem(key, JSON.stringify({ name, email, picture })); },
+     { key: OAUTH_STORAGE_KEY, name: TEST_USER_NAME, email: TEST_USER_EMAIL, picture: TEST_USER_PICTURE }
+   );
+   ```
+
+### MCP browser localStorage ghost keys
+
+The `playwright-mcp` server uses a **persistent browser profile** (`.playwright-mcp/`). LocalStorage written during one exploration session persists to the next. If the planner agent previously used a wrong/fallback `OAUTH_STORAGE_KEY`, that key remains in the MCP browser's localStorage permanently until explicitly cleared. It does not affect test correctness (tests use fresh browser contexts), but it appears in DevTools during exploration sessions.
+
+**Prevention**: No fallback in `OAUTH_STORAGE_KEY` (see invariant 1 above) and always read `OAUTH_STORAGE_KEY` from `.env.testing` before any `browser_evaluate` call.
+
+---
+
 ## Auth Configuration (Two-Layer Architecture)
 
 ### Runtime (canonical) — `.env.testing`

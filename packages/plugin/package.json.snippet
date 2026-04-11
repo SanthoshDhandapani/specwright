@@ -5,10 +5,12 @@
 
   "scripts": {
     "bddgen": "npx bddgen",
-    "test:bdd": "pnpm bddgen && playwright test --project setup --project serial-execution --project main-e2e",
+    "test:bdd": "pnpm bddgen && playwright test --project setup --project serial-execution --project precondition --project workflow-consumers --project main-e2e",
     "test:bdd:all": "pnpm bddgen && playwright test",
     "test:bdd:auth": "pnpm bddgen && playwright test --project setup --project auth-tests",
     "test:bdd:serial": "pnpm bddgen && playwright test --project setup --project serial-execution",
+    "test:bdd:workflows": "pnpm bddgen && playwright test --project setup --project precondition --project workflow-consumers",
+    "test:bdd:workflow": "pnpm bddgen && playwright test --project setup --project run-workflow",
     "test:bdd:debug": "pnpm bddgen && PWDEBUG=console playwright test --debug",
     "test:playwright": "playwright test",
     "test:playwright:headed": "playwright test --headed",
@@ -21,7 +23,9 @@
 
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@playwright/mcp": "^0.1.0",
     "@playwright/test": "^1.54.1",
+    "@specwright/mcp-server": "^0.1.0",
     "dotenv": "^17.2.0",
     "multiple-cucumber-html-reporter": "^3.10.0",
     "playwright-bdd": "^8.5.0"

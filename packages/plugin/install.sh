@@ -24,8 +24,18 @@ TARGET_DIR="${TARGET_DIR:-$(pwd)}"
 
 # Read config from environment (set by cli.js interactive prompts)
 BASE_URL="${SPECWRIGHT_BASE_URL:-http://localhost:5173}"
-PM="${SPECWRIGHT_PM:-pnpm}"
 AUTH_STRATEGY="${SPECWRIGHT_AUTH_STRATEGY:-email-password}"
+
+# Detect package manager from target project lockfile (env override takes precedence)
+detect_pm() {
+  local dir="$1"
+  if [ -f "$dir/pnpm-lock.yaml" ]; then echo "pnpm"
+  elif [ -f "$dir/yarn.lock" ]; then echo "yarn"
+  elif [ -f "$dir/package-lock.json" ]; then echo "npm"
+  else echo "pnpm" # fallback
+  fi
+}
+PM="${SPECWRIGHT_PM:-$(detect_pm "$TARGET_DIR")}"
 
 # Helper: copy file only if target doesn't exist (safe for user-customized files)
 safe_copy() {
@@ -43,6 +53,11 @@ echo "╚═══════════════════════�
 echo ""
 echo "Source: $PLUGIN_DIR"
 echo "Target: $TARGET_DIR"
+if [ -n "$SPECWRIGHT_PM" ]; then
+  echo "Package manager: $PM (from env)"
+else
+  echo "Package manager: $PM (auto-detected from lockfile)"
+fi
 if [ "$SKIP_AUTH" = true ]; then
   echo "Option: --skip-auth (authentication module will NOT be installed)"
 fi
@@ -184,6 +199,29 @@ else
   "
 fi
 
+# ── Step 5c: MCP package verification ──
+echo "📦 Step 5c: Checking MCP package dependencies..."
+
+# @specwright/mcp-server — added to devDependencies in package.json.snippet, installed via pnpm install
+echo "  ✅ @specwright/mcp-server — will be installed via '$PM install' (added to devDependencies)"
+
+# @playwright/mcp — added to devDependencies in package.json.snippet, installed via pnpm install
+echo "  ✅ @playwright/mcp — will be installed via '$PM install' (added to devDependencies)"
+
+# markitdown-mcp — Python-based, requires uv/uvx
+if command -v uvx &>/dev/null; then
+  echo "  ✅ uvx found — markitdown-mcp available (used via 'uvx markitdown-mcp')"
+elif command -v uv &>/dev/null; then
+  echo "  ✅ uv found — markitdown-mcp available (used via 'uvx markitdown-mcp')"
+else
+  echo "  ⚠️  uvx/uv not found — markitdown-mcp (file format conversion) will not work"
+  echo "     Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
+  echo "     markitdown-mcp is optional — only needed for CSV/Excel/PDF test inputs"
+fi
+
+# Atlassian MCP — hosted HTTP endpoint, no install required
+echo "  ✅ Atlassian MCP — hosted at mcp.atlassian.com (no install required; connect via Specwright Desktop)"
+
 # ── Step 6: Merge dependencies + scripts into package.json ──
 echo "📦 Step 6: Merging dependencies and scripts into package.json..."
 if [ -f "$TARGET_DIR/package.json" ]; then
@@ -249,20 +287,27 @@ echo "╚═══════════════════════�
 echo ""
 echo "📋 Next steps:"
 echo ""
-echo "  1. Install dependencies: $PM install"
+echo "  1. Install dependencies (includes @playwright/mcp):"
+echo "     $PM install"
 echo ""
-echo "  2. Install Playwright browsers: npx playwright install"
+echo "  2. Install Playwright browsers:"
+echo "     npx playwright install"
 echo ""
-echo "  3. Update e2e-tests/data/testConfig.js"
+echo "  3. (Optional) Install uv for markitdown-mcp (CSV/Excel/PDF inputs):"
+echo "     curl -LsSf https://astral.sh/uv/install.sh | sh"
+echo ""
+echo "  4. Update e2e-tests/data/testConfig.js"
 echo "     → Set your app's routes"
 echo ""
-echo "  4. Set credentials in e2e-tests/.env.testing:"
+echo "  5. Set credentials in e2e-tests/.env.testing:"
+echo "     AUTH_STRATEGY=email-password    # or: oauth | none"
 echo "     TEST_USER_EMAIL=your-email@example.com"
 echo "     TEST_USER_PASSWORD=your-password"
 echo ""
-echo "  5. Start dev server and run tests:"
+echo "  6. Start dev server and run tests:"
 echo "     $PM test:bdd:auth    # Run authentication tests"
-echo "     $PM test:bdd         # Run all tests (except auth)"
+echo "     $PM test:bdd         # Run all tests"
 echo ""
-echo "  6. Generate more tests: /e2e-automate (Claude Code CLI)"
+echo "  7. Generate tests with AI: /e2e-automate (Claude Code CLI)"
+echo "     → Connect Atlassian (Jira) via Specwright Desktop for Jira-driven generation"
 echo ""

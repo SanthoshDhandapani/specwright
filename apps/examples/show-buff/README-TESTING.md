@@ -1,4 +1,4 @@
-# E2E Testing Framework
+# E2E Testing Framework — Show-Buff
 
 ## Overview
 
@@ -10,7 +10,7 @@
 - Workflow support: `precondition → workflow-consumers` pattern with 3-layer data persistence
 - `processDataTable` / `validateExpectations` utilities for declarative form handling
 - 8 AI agents + 7 Claude Code skills for automated test generation and healing
-- Auth strategy: `email-password`, `oauth`, or `none` — configured via `.env.testing`
+- Auth strategy: OAuth via localStorage injection (`OAUTH_STORAGE_KEY`)
 
 ## Quick Start
 
@@ -19,20 +19,15 @@
 pnpm install && pnpx playwright install
 
 # 2. Configure auth in e2e-tests/.env.testing
-AUTH_STRATEGY=email-password
-TEST_USER_EMAIL=your-email@example.com
-TEST_USER_PASSWORD=your-password
-
-# (or for OAuth)
 AUTH_STRATEGY=oauth
 TEST_USER_EMAIL=your-email@example.com
-OAUTH_STORAGE_KEY=your-app-storage-key
+OAUTH_STORAGE_KEY=specwright-show-user   # localStorage key Show-Buff uses for auth
 
 # 3. Start dev server
 pnpm dev
 
-# 4. Run authentication tests (out-of-the-box)
-pnpm test:bdd:auth
+# 4. Run BDD tests
+pnpm test:bdd
 
 # 5. View report
 pnpm report:playwright
@@ -44,7 +39,7 @@ pnpm report:playwright
 
 | Project              | Purpose                    | Behavior                                                           |
 | -------------------- | -------------------------- | ------------------------------------------------------------------ |
-| `setup`              | Auth session creation       | Runs first, creates auth session                                   |
+| `setup`              | Auth session creation       | Runs first, injects OAuth user into localStorage                   |
 | `auth-tests`         | Login/logout tests          | Clean browser state, no storageState                               |
 | `serial-execution`   | Stateful features           | `@serial-execution` tag, workers: 1, browser reused across scenarios |
 | `precondition`       | Workflow setup              | `@precondition` tag, serial (workers: 1), runs before consumers    |
@@ -58,7 +53,12 @@ pnpm report:playwright
 e2e-tests/
 ├── features/playwright-bdd/
 │   ├── @Modules/                   ← Single-module tests
-│   │   └── @Authentication/        ← Out-of-the-box auth tests (7 scenarios)
+│   │   ├── @HomePage/              ← Year tabs, pagination, show cards
+│   │   ├── @ShowDetail/            ← Show info, favorites, watchlist, lists
+│   │   ├── @Favorites/             ← Favorites page
+│   │   ├── @Watchlist/             ← Watchlist page
+│   │   ├── @Lists/                 ← Custom lists management
+│   │   └── @ListDetail/            ← List detail, rename, delete
 │   ├── @Workflows/                 ← Cross-module workflow tests
 │   │   └── @YourWorkflow/
 │   │       ├── @0-Precondition/    ← Serial, creates shared data (@precondition)
@@ -71,10 +71,9 @@ e2e-tests/
 │       └── global-hooks.js         ← Auto-loaded, NEVER import manually
 ├── playwright/
 │   ├── fixtures.js                 ← Custom fixtures + browser reuse (import from HERE)
-│   ├── auth.setup.js               ← Reads AUTH_STRATEGY from env, delegates to strategy
+│   ├── auth.setup.js               ← Reads AUTH_STRATEGY, delegates to oauth.js
 │   ├── auth-strategies/
-│   │   ├── email-password.js       ← Email + password login
-│   │   └── oauth.js                ← OAuth via localStorage injection
+│   │   └── oauth.js                ← Injects user object into localStorage
 │   ├── auth-storage/.auth/         ← Saved auth state (gitignored)
 │   ├── generated/                  ← Seed files from exploration
 │   └── test-data/                  ← Scoped JSON files (auto-created)
@@ -87,7 +86,6 @@ e2e-tests/
 ├── scripts/
 │   └── generate-bdd-report.js      ← Generates HTML cucumber report
 ├── instructions.js                 ← Agent pipeline config (add your entries)
-├── instructions.example.js         ← Example configs (text, Jira, CSV, workflow)
 └── .env.testing                    ← Environment variable template
 ```
 
@@ -104,18 +102,18 @@ pnpm test:bdd:workflow      # Single targeted workflow (pair with --grep)
 pnpm test:bdd:debug         # Debug mode (PWDEBUG)
 
 ## Run by tag
-pnpm bddgen && npx playwright test --project setup --project main-e2e --grep @your-tag
-pnpm bddgen && npx playwright test --project setup --project serial-execution --grep @your-serial-tag
+pnpm bddgen && npx playwright test --project setup --project main-e2e --grep @homepage
+pnpm bddgen && npx playwright test --project setup --project serial-execution --grep @show-detail
 
 ## Run a specific workflow
 pnpm bddgen && npx playwright test --project setup --project run-workflow --grep @FavoritesWorkflow
 
 ## Run by file
 pnpm bddgen && npx playwright test --project setup --project main-e2e \
-  ".features-gen/e2e-tests/features/playwright-bdd/@Modules/@YourModule/feature.spec.js"
+  ".features-gen/e2e-tests/features/playwright-bdd/@Modules/@HomePage/homepage.spec.js"
 
 ## Run headed
-pnpm bddgen && npx playwright test --project setup --project main-e2e --grep @tag --headed
+pnpm bddgen && npx playwright test --project setup --project main-e2e --grep @homepage --headed
 
 ## Run single scenario by title
 pnpm bddgen && npx playwright test --project setup --project main-e2e -g "Scenario title"
@@ -140,18 +138,15 @@ Specwright organizes tests into two categories: **Modules** and **Workflows**. C
 
 ### Modules (`@Modules/`)
 
-A Module tests a **single page or feature area** of your application in isolation.
+A Module tests a **single page or feature area** of the application in isolation.
 
-**When to use:**
-- Testing one page's UI (e.g., HomePage, UserProfile, Settings)
-- Testing a self-contained feature (e.g., Authentication, Search, Notifications)
-- Scenarios are independent — each can run without the others
-- No shared state between scenarios (or state shared only within the same feature file via `@serial-execution`)
-
-**Examples:**
-- `@Modules/@HomePage/` — year tabs, pagination, show cards, search
-- `@Modules/@Authentication/` — sign in, sign out, protected routes
-- `@Modules/@UserProfile/` — edit name, change avatar, delete account
+**Show-Buff modules:**
+- `@Modules/@HomePage/` — year tabs, pagination, show cards, navigation
+- `@Modules/@ShowDetail/` — show info, add/remove favorites, watchlist, custom lists
+- `@Modules/@Favorites/` — favorites grid, empty state, count badge
+- `@Modules/@Watchlist/` — watchlist grid, empty state, count badge
+- `@Modules/@Lists/` — create list, validation, list card grid
+- `@Modules/@ListDetail/` — rename, delete, add/remove shows
 
 **Structure:**
 ```
@@ -159,34 +154,26 @@ A Module tests a **single page or feature area** of your application in isolatio
 ├── @HomePage/
 │   ├── homepage.feature      ← Gherkin scenarios for the home page
 │   └── steps.js              ← Step definitions (scoped to @HomePage only)
-├── @Authentication/
-│   ├── authentication.feature
+├── @ShowDetail/
+│   ├── show_detail.feature
 │   └── steps.js
-└── @Settings/
-    ├── settings.feature
+└── @Favorites/
+    ├── favorites.feature
     └── steps.js
 ```
 
 **Key rules:**
-- Each module gets its own directory under `@Modules/`
 - Steps in `@Modules/@HomePage/steps.js` are **only visible** to features inside `@HomePage/` (path-based tag scoping)
 - If a step is needed by multiple modules, move it to `shared/`
 - Modules run in **parallel by default** — add `@serial-execution` only if scenarios share state
 
 ### Workflows (`@Workflows/`)
 
-A Workflow tests a **cross-module user journey** that spans multiple pages or features with shared data.
+A Workflow tests a **cross-module user journey** with shared data flowing between feature files.
 
-**When to use:**
-- Testing an end-to-end user journey across multiple pages
-- Scenario B depends on data created by Scenario A (e.g., "create a list" then "add items to that list")
-- Data must survive across feature files (not just scenarios within one file)
-- The flow mimics a real user session: sign in → do something → verify elsewhere
-
-**Examples:**
-- Sign in → add a show to favorites → verify on favorites page
-- Create a custom list → add shows → verify list detail
-- Register → set up profile → invite team member → verify invite received
+**Show-Buff workflow examples:**
+- Add show to favorites → verify on favorites page (`@FavoritesWorkflow`)
+- Create custom list → add shows → verify list detail (`@ListWorkflow`)
 
 **Structure:**
 ```
@@ -195,11 +182,8 @@ A Workflow tests a **cross-module user journey** that spans multiple pages or fe
     ├── @0-Precondition/          ← Runs FIRST (serial), creates shared data
     │   ├── setup.feature         ← @precondition @cross-feature-data @serial-execution
     │   └── steps.js
-    ├── @1-VerifyFavorites/       ← Runs AFTER precondition, loads shared data
-    │   ├── verify.feature        ← @workflow-consumer
-    │   └── steps.js
-    └── @2-VerifyCount/
-        ├── count.feature         ← @workflow-consumer
+    └── @1-VerifyFavorites/       ← Runs AFTER precondition, loads shared data
+        ├── verify.feature        ← @workflow-consumer
         └── steps.js
 ```
 
@@ -236,7 +220,7 @@ pnpm test:bdd:workflow --grep @FavoritesWorkflow    # Single workflow
   category: '@Modules',
   fileName: 'homepage',
   pageURL: '/home',
-  // ...
+  explore: true,
 }
 
 // Workflow — cross-module journey
@@ -246,11 +230,11 @@ pnpm test:bdd:workflow --grep @FavoritesWorkflow    # Single workflow
   subModuleName: ['@0-Precondition', '@1-VerifyFavorites'],
   fileName: 'favorites_workflow',
   pageURL: '/home',
-  // ...
+  explore: true,
 }
 ```
 
-The `category` field determines where generated files are placed: `@Modules/@HomePage/` or `@Workflows/@FavoritesWorkflow/`.
+See `demo/instructions.example.js` for the full Show-Buff example with all 6 modules and 2 workflows.
 
 ---
 
@@ -259,19 +243,15 @@ The `category` field determines where generated files are placed: `@Modules/@Hom
 ### Feature Files
 
 ```gherkin
-@module-name
-Feature: Module Description
+@homepage @navigation
+Feature: Home Page Navigation
   Background:
     Given I am logged in
-    When I navigate to "PageName"
+    When I navigate to "HomePage"
 
-  Scenario: Happy path
-    When I fill the form with:
-      | Field Name | Value           | Type            |
-      | Name       | <gen_test_data> | SharedGenerated |
-      | Email      | <gen_test_data> | SharedGenerated |
-    And I click the submit button
-    Then I should see the success message
+  Scenario: Year tabs filter show grid
+    When I click the year tab for the previous year
+    Then the show grid should reload with shows from that year
 ```
 
 ### Step Definitions (with processDataTable)
@@ -281,23 +261,14 @@ import { When, Then, expect } from '../../../../playwright/fixtures.js';
 import { FIELD_TYPES, processDataTable, validateExpectations } from '../../../../utils/stepHelpers.js';
 
 const FIELD_CONFIG = {
-  Name: { type: FIELD_TYPES.FILL, testID: 'user-name' },
-  Email: { type: FIELD_TYPES.FILL, testID: 'user-email' },
+  'List Name': { type: FIELD_TYPES.FILL, testID: 'create-list-input' },
 };
 
-const VALIDATION_CONFIG = {
-  Name: { type: FIELD_TYPES.TEXT_VISIBLE, testID: 'display-name' },
-  Email: { type: FIELD_TYPES.TEXT_VISIBLE, testID: 'display-email' },
-};
+const fieldMapping = { 'List Name': 'listName' };
 
-const fieldMapping = { Name: 'name', Email: 'email' };
-
-When('I fill the form with:', async ({ page }, dataTable) => {
+When('I create a list with:', async ({ page }, dataTable) => {
   await processDataTable(page, dataTable, { mapping: fieldMapping, fieldConfig: FIELD_CONFIG });
-});
-
-Then('I should see the details:', async ({ page }, dataTable) => {
-  await validateExpectations(page, dataTable, { mapping: fieldMapping, validationConfig: VALIDATION_CONFIG });
+  await page.getByTestId('create-list-submit').click();
 });
 ```
 
@@ -334,45 +305,22 @@ No tag needed (parallel by default) when:
 3. `@1-Consumer/` — loads predata via `Given I load predata from "workflow-name"` (`@workflow-consumer`)
 4. Run: `pnpm test:bdd:workflows` or `pnpm test:bdd:workflow --grep @YourWorkflow`
 
-## Auth Strategies
+## Auth Strategy — OAuth (localStorage Injection)
 
-Auth strategy is set in `e2e-tests/.env.testing` via `AUTH_STRATEGY`. The `auth.setup.js` reads this and delegates to the appropriate strategy.
-
-### `email-password` (default)
-
-Standard username/password login flow.
+Show-Buff uses Google OAuth. The test suite bypasses the real OAuth popup by injecting a pre-built user object directly into `localStorage` under `OAUTH_STORAGE_KEY`.
 
 ```
-AUTH_STRATEGY=email-password
-TEST_USER_EMAIL=your-email@example.com
-TEST_USER_PASSWORD=your-password
-```
-
-### `oauth`
-
-Bypasses the OAuth popup by injecting a pre-built user object directly into `localStorage`. Requires a storage key the app uses to read the auth state.
-
-```
+# e2e-tests/.env.testing
 AUTH_STRATEGY=oauth
 TEST_USER_EMAIL=your-email@example.com
-OAUTH_STORAGE_KEY=your-app-auth-key    # localStorage key the app reads auth from
-TEST_USER_NAME=Display Name            # optional — derived from email if blank
-TEST_USER_PICTURE=                     # optional — auto-generated SVG initials if blank
+OAUTH_STORAGE_KEY=specwright-show-user
+TEST_USER_NAME=Your Name              # optional — derived from email if blank
+TEST_USER_PICTURE=                    # optional — auto SVG initials if blank
 ```
 
-Optional OAuth overrides:
-```
-OAUTH_SIGNIN_PATH=/signin              # default: /signin
-OAUTH_BUTTON_TEST_ID=google-signin-btn # fallback: click-based login
-OAUTH_POST_LOGIN_URL=**/               # default: **/
-```
-
-### `none`
-
-No authentication — tests run without any auth setup. The `setup` project is skipped entirely.
-
-```
-AUTH_STRATEGY=none
+To regenerate the auth session:
+```bash
+rm -f e2e-tests/playwright/auth-storage/.auth/user.json && pnpm test:bdd
 ```
 
 ## Agent Pipeline
@@ -387,36 +335,32 @@ AUTH_STRATEGY=none
 | `/e2e-validate`        | Validate seed file tests before BDD generation                                 |
 | `/e2e-process <input>` | Process Jira/files into test plan markdown                                     |
 
-Configure in `e2e-tests/instructions.js` (see `instructions.example.js` for examples).
-
-**Tip:** Set `PIPELINE_TICKET_ID` in `.env.testing` to automatically prepend your org's ticket ID to all pipeline runs (useful when hooks require a Jira reference).
+Configure in `e2e-tests/instructions.js`. See `demo/instructions.example.js` for Show-Buff specific examples with all selectors pre-documented.
 
 ## Troubleshooting
 
 | Problem                              | Fix                                                                        |
 | ------------------------------------ | -------------------------------------------------------------------------- |
 | "Step not found" after editing steps | `rm -rf .features-gen/ && pnpm test:bdd`                                   |
-| Auth failures                        | `rm -f e2e-tests/playwright/auth-storage/.auth/user.json && pnpm test:bdd` |
+| Auth failures / stale session        | `rm -f e2e-tests/playwright/auth-storage/.auth/user.json && pnpm test:bdd` |
 | Cross-module steps not visible       | Move from `@Module/steps.js` to `shared/`                                  |
 | Duplicate hook errors                | Never import `global-hooks.js` manually                                    |
 | Browser launch failures              | `pnpx playwright install`                                                  |
 | Workflow consumers run before precondition | Ensure `@precondition` tag is present on setup feature              |
+| OAuth user not injected              | Check `OAUTH_STORAGE_KEY` matches the key Show-Buff reads from localStorage |
 
 ## Environment Variables
 
 | Variable                 | Default                 | Description                                               |
 | ------------------------ | ----------------------- | --------------------------------------------------------- |
 | `BASE_URL`               | `http://localhost:5173` | Application URL                                           |
-| `AUTH_STRATEGY`          | `email-password`        | Auth mode: `email-password`, `oauth`, or `none`           |
-| `TEST_USER_EMAIL`        | —                       | Login email (email-password and oauth)                    |
-| `TEST_USER_PASSWORD`     | —                       | Login password (email-password only)                      |
-| `TEST_2FA_CODE`          | —                       | 2FA OTP code (email-password + 2FA only)                  |
-| `OAUTH_STORAGE_KEY`      | —                       | localStorage key the app reads auth from (oauth only)     |
-| `OAUTH_SIGNIN_PATH`      | `/signin`               | Sign-in page path (oauth fallback)                        |
-| `OAUTH_BUTTON_TEST_ID`   | —                       | Sign-in button testId (oauth click-based fallback)        |
-| `OAUTH_POST_LOGIN_URL`   | `**/`                   | URL pattern to wait for after login (oauth)               |
-| `TEST_USER_NAME`         | derived from email      | Display name for oauth user object                        |
-| `TEST_USER_PICTURE`      | auto SVG initials       | Avatar URL for oauth user object                          |
+| `AUTH_STRATEGY`          | `oauth`                 | Auth mode — Show-Buff uses `oauth`                        |
+| `TEST_USER_EMAIL`        | —                       | Google account email for the test user                    |
+| `OAUTH_STORAGE_KEY`      | `specwright-show-user`  | localStorage key Show-Buff reads auth from                |
+| `TEST_USER_NAME`         | derived from email      | Display name for the injected user object                 |
+| `TEST_USER_PICTURE`      | auto SVG initials       | Avatar URL for the injected user object                   |
+| `OAUTH_SIGNIN_PATH`      | `/signin`               | Sign-in page path (click-based fallback)                  |
+| `OAUTH_BUTTON_TEST_ID`   | —                       | Sign-in button testId (click-based fallback)              |
 | `PIPELINE_TICKET_ID`     | —                       | Jira ticket ID prepended to all pipeline runs             |
 | `HEADLESS`               | `true`                  | Headless browser mode                                     |
 | `TEST_TIMEOUT`           | `90000`                 | Test timeout (ms)                                         |

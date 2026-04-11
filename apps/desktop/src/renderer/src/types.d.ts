@@ -80,6 +80,12 @@ interface SpecwrightAPI {
     onToolStart: (cb: (data: ToolEventData) => void) => () => void;
     onToolEnd: (cb: (data: ToolEventData) => void) => () => void;
     onExploreResult: (cb: (data: ExploreResultData) => void) => () => void;
+    onMcpStatus: (cb: (data: { server: string; status: string }) => void) => () => void;
+  };
+  atlassian: {
+    status: () => Promise<{ status: "idle" | "connected" | "needs-auth" }>;
+    connect: () => Promise<{ success: boolean; error?: string }>;
+    disconnect: () => Promise<{ success: boolean }>;
   };
 }
 

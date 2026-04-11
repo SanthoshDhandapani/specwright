@@ -478,7 +478,7 @@ function detectPhaseFromText(text: string, currentPhase: number): number | null 
 }
 
 export default function CenterPanel(): React.JSX.Element {
-  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, splitForPhase, status } = usePipelineStore();
+  const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, splitForPhase, status, setMcpStatus } = usePipelineStore();
   const { projectState, loaded, hydrate, activeTab, setActiveTab } = useConfigStore();
   const lastPhaseRef = React.useRef<number>(0);
 
@@ -579,6 +579,9 @@ export default function CenterPanel(): React.JSX.Element {
     const offToolEnd = window.specwright.pipeline.onToolEnd(() => {
       // No phase transition on tool end — phases end when the next one starts
     });
+    const offMcpStatus = window.specwright.pipeline.onMcpStatus(({ server, status: mcpSt }) => {
+      setMcpStatus(server, mcpSt);
+    });
     return () => {
       offToken();
       offDone();
@@ -587,8 +590,9 @@ export default function CenterPanel(): React.JSX.Element {
       offPerm();
       offToolStart();
       offToolEnd();
+      offMcpStatus();
     };
-  }, [handleToken, appendLog, finishRun, setError, setPhaseStatus, showPermission, advanceToPhase]);
+  }, [handleToken, appendLog, finishRun, setError, setPhaseStatus, showPermission, advanceToPhase, setMcpStatus]);
 
   if (!loaded) {
     return (

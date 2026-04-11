@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useInstructionStore, type InstructionCard as ICard } from "@renderer/store/instruction.store";
 import { useConfigStore } from "@renderer/store/config.store";
+import { usePipelineStore } from "@renderer/store/pipeline.store";
 
 interface Props {
   card: ICard;
@@ -22,6 +23,28 @@ const CATEGORY_OPTIONS = [
 export default function InstructionCard({ card, index }: Props): React.JSX.Element {
   const { updateCard, removeCard, addStep, removeStep, updateStep, addSubModule, removeSubModule } =
     useInstructionStore();
+  const atlassianStatus = usePipelineStore((s) => s.atlassianStatus);
+  const setMcpStatus = usePipelineStore((s) => s.setMcpStatus);
+  const [connecting, setConnecting] = useState(false);
+
+  // Sync initial status from main process on mount
+  useEffect(() => {
+    window.specwright.atlassian.status().then(({ status }) => {
+      setMcpStatus("atlassian", status);
+    });
+  }, [setMcpStatus]);
+
+  const handleAtlassianConnect = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const result = await window.specwright.atlassian.connect();
+      setMcpStatus("atlassian", result.success ? "connected" : "failed");
+    } catch {
+      setMcpStatus("atlassian", "failed");
+    } finally {
+      setConnecting(false);
+    }
+  }, [setMcpStatus]);
 
   const [subModuleInput, setSubModuleInput] = useState("");
 
@@ -268,6 +291,58 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
         />
         {hasFile && (
           <p className="text-amber-500 text-[10px] mt-1">Disabled — file path is set. Clear file path to use Jira.</p>
+        )}
+        {hasJira && !hasFile && (
+          <div className="flex items-center gap-2 mt-1.5">
+            {atlassianStatus === "connected" && (
+              <>
+                <span className="flex items-center gap-1 text-green-400 text-[10px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                  Atlassian connected
+                </span>
+                <button
+                  onClick={handleAtlassianConnect}
+                  disabled={connecting}
+                  className="text-slate-500 hover:text-blue-400 disabled:text-slate-700 text-[10px] transition-colors"
+                  title="Switch Atlassian account"
+                >
+                  {connecting ? "Connecting…" : "Reconnect"}
+                </button>
+              </>
+            )}
+            {atlassianStatus === "failed" && (
+              <>
+                <span className="flex items-center gap-1 text-red-400 text-[10px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                  Connection failed
+                </span>
+                <button
+                  onClick={handleAtlassianConnect}
+                  disabled={connecting}
+                  className="text-blue-400 hover:text-blue-300 disabled:text-slate-600 text-[10px] border border-blue-800 hover:border-blue-600 disabled:border-slate-700 rounded px-1.5 py-0.5 transition-colors"
+                  title="Retry Atlassian connection"
+                >
+                  {connecting ? "Connecting…" : "Retry"}
+                </button>
+              </>
+            )}
+            {(atlassianStatus === "idle" || atlassianStatus === "needs-auth") && (
+              <>
+                <span className="flex items-center gap-1 text-slate-500 text-[10px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block" />
+                  {atlassianStatus === "needs-auth" ? "Auth required" : "Not connected"}
+                </span>
+                <button
+                  onClick={handleAtlassianConnect}
+                  disabled={connecting}
+                  className="text-blue-400 hover:text-blue-300 disabled:text-slate-600 text-[10px] border border-blue-800 hover:border-blue-600 disabled:border-slate-700 rounded px-1.5 py-0.5 transition-colors"
+                  title="Authenticate with Atlassian MCP via browser OAuth"
+                >
+                  {connecting ? "Connecting…" : "Connect"}
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
 

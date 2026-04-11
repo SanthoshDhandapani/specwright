@@ -276,7 +276,7 @@ export default function TemplatePanel(): React.JSX.Element {
         {isReady && (
           <button
             onClick={() => setRefreshKey(k => k + 1)}
-            className="text-slate-500 hover:text-brand-400 transition-colors"
+            className="text-blue-400 hover:text-blue-300 transition-colors"
             title="Reload templates from disk"
           >
             <RefreshIcon />

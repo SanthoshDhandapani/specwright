@@ -5,6 +5,7 @@ import { ProjectService } from "./services/ProjectService";
 import { registerConfigIpc } from "./ipc/config.ipc";
 import { registerProjectIpc } from "./ipc/project.ipc";
 import { registerPipelineIpc } from "./ipc/pipeline.ipc";
+import { registerAtlassianIpc } from "./ipc/atlassian.ipc";
 
 // Suppress EPIPE errors from aborted pipeline processes — these are expected
 // when the user clicks Abort and the SDK process is killed mid-write.
@@ -75,6 +76,7 @@ app.whenReady().then(async () => {
   registerConfigIpc(configService);
   registerProjectIpc(configService, projectService, () => mainWindow);
   registerPipelineIpc(configService, projectService, () => mainWindow);
+  registerAtlassianIpc();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

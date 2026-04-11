@@ -14,6 +14,8 @@
     "test:playwright:headed": "playwright test --headed",
     "test:playwright:debug": "playwright test --debug",
     "report:playwright": "playwright show-report reports/playwright",
+    "report:bdd": "node e2e-tests/scripts/generate-bdd-report.js",
+    "report:bdd:open": "open reports/cucumber-bdd/html-report/index.html",
     "test:clean": "rm -rf reports .features-gen test-results e2e-tests/playwright/test-data/*.json"
   },
 
@@ -21,6 +23,7 @@
     "@faker-js/faker": "^10.3.0",
     "@playwright/test": "^1.54.1",
     "dotenv": "^17.2.0",
+    "multiple-cucumber-html-reporter": "^3.10.0",
     "playwright-bdd": "^8.5.0"
   }
 }

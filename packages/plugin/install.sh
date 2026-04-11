@@ -78,6 +78,7 @@ mkdir -p "$TARGET_DIR/e2e-tests/playwright/test-data"
 mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared"
 mkdir -p "$TARGET_DIR/e2e-tests/utils"
 mkdir -p "$TARGET_DIR/e2e-tests/data"
+mkdir -p "$TARGET_DIR/e2e-tests/scripts"
 
 # Framework files: always overwrite (these are the framework, not user code)
 cp "$PLUGIN_DIR/e2e-tests/playwright/fixtures.js" "$TARGET_DIR/e2e-tests/playwright/"
@@ -91,6 +92,7 @@ cp "$PLUGIN_DIR/e2e-tests/playwright/auth-strategies/"*.js "$TARGET_DIR/e2e-test
 cp "$PLUGIN_DIR/e2e-tests/utils/stepHelpers.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/utils/testDataGenerator.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/shared/"*.js "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared/"
+cp "$PLUGIN_DIR/e2e-tests/scripts/generate-bdd-report.js" "$TARGET_DIR/e2e-tests/scripts/"
 
 # User-configurable files: only create if missing (never overwrite user's config)
 safe_copy "$PLUGIN_DIR/e2e-tests/data/authenticationData.js" "$TARGET_DIR/e2e-tests/data/authenticationData.js"

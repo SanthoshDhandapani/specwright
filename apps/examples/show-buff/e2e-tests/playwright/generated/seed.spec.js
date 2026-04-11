@@ -176,6 +176,123 @@ export const favoritesWorkflowSelectors = {
   }
 };
 
+// ─── @ListWorkflow Selectors (added 2026-04-12) ───────────────────────────────
+
+export const listWorkflowSelectors = {
+  // /lists page
+  pageLists: {
+    selector: "getByTestId('page-lists')",
+    type: 'testid', tag: 'DIV',
+    description: 'Main container for /lists page',
+    validated: true
+  },
+  createListInput: {
+    selector: "getByTestId('create-list-input')",
+    type: 'testid', tag: 'INPUT',
+    description: 'Inline input for new list name on /lists page',
+    validated: true
+  },
+  createListSubmit: {
+    selector: "getByTestId('create-list-submit')",
+    type: 'testid', tag: 'BUTTON', text: 'Create',
+    description: 'Submit button to create a new list',
+    validated: true
+  },
+  listsGrid: {
+    selector: "getByTestId('lists-grid')",
+    type: 'testid', tag: 'DIV',
+    description: 'Grid container for all list cards on /lists page',
+    validated: true
+  },
+  listCardDynamic: {
+    selector: "getByTestId('lists-grid').locator('a[data-testid^=\"list-card-\"]')",
+    type: 'testid-prefix', tag: 'A',
+    description: 'Dynamic list card link — pattern: list-card-{uuid}',
+    validated: true
+  },
+  listCardNameDynamic: {
+    selector: "locator('[data-testid^=\"list-card-name-\"]')",
+    type: 'testid-prefix', tag: 'H3',
+    description: 'List card name heading inside a list card — pattern: list-card-name-{uuid}',
+    validated: true
+  },
+  listCardCountDynamic: {
+    selector: "locator('[data-testid^=\"list-card-count-\"]')",
+    type: 'testid-prefix', tag: 'SPAN',
+    description: 'List card show count badge — pattern: list-card-count-{uuid}, text: "N shows"',
+    validated: true
+  },
+  // show detail page — add-to-list
+  addToListTrigger: {
+    selector: "getByTestId('add-to-list-trigger')",
+    type: 'testid', tag: 'BUTTON', text: '+ Add to List',
+    description: 'Button to open the Add to List dropdown on show detail page',
+    validated: true
+  },
+  addToListMenu: {
+    selector: "getByTestId('add-to-list-menu')",
+    type: 'testid', tag: 'DIV',
+    description: 'Dropdown menu showing user lists after clicking add-to-list-trigger',
+    validated: true
+  },
+  addToListOptionDynamic: {
+    selector: "getByTestId('add-to-list-menu').locator('[data-testid^=\"add-to-list-option-\"]')",
+    type: 'testid-prefix', tag: 'BUTTON',
+    description: 'Individual list option button in dropdown — pattern: add-to-list-option-{uuid}. Gets "✓" appended to text after show is added (no toast).',
+    validated: true
+  },
+  // list detail page (/lists/:id)
+  pageListDetail: {
+    selector: "getByTestId('page-list-detail')",
+    type: 'testid', tag: 'DIV',
+    description: 'Main container for list detail page /lists/:id',
+    validated: true
+  },
+  renameListDisplay: {
+    selector: "getByTestId('rename-list-display')",
+    type: 'testid', tag: 'H1',
+    description: 'List name H1 heading on list detail page (clickable to rename)',
+    validated: true
+  },
+  btnDeleteList: {
+    selector: "getByTestId('btn-delete-list')",
+    type: 'testid', tag: 'BUTTON', text: 'Delete List',
+    description: 'Delete list button on list detail page',
+    validated: true
+  },
+  removeShowDynamic: {
+    selector: "locator('[data-testid^=\"remove-show-\"]')",
+    type: 'testid-prefix', tag: 'BUTTON',
+    description: 'Remove show button on list detail page — pattern: remove-show-{showId}. One per show in the list.',
+    validated: true
+  },
+};
+
+export const listWorkflowBehaviors = {
+  description: 'ShowBuff list management: create lists, add shows from detail page, verify list contents and count badge',
+  authentication: 'OAuth via localStorage injection — key: specwright-show-user',
+  listsPage: {
+    createList: 'Inline form: type name in create-list-input, click create-list-submit. No modal — inline on /lists page.',
+    listCards: 'Dynamic UUIDs — find by text name using getByText() or getByRole("link", { name: listName })',
+    countBadge: 'list-card-count-{uuid} SPAN shows "N shows" (note: "1 show" not "1 shows")',
+  },
+  showDetailPage: {
+    addToList: 'Click add-to-list-trigger → add-to-list-menu opens → find option by list name text → click option. Confirmation: option text gets "✓" appended (no toast).',
+    findOptionByName: 'Use getByTestId("add-to-list-menu").getByRole("button", { name: listName }) to find option by list name.',
+  },
+  listDetailPage: {
+    showsGrid: 'No testId on the shows grid container — use remove-show-{showId} visibility to verify show presence.',
+    countBadge: 'No testId on count badge in detail page — use getByText("N show") or page-list-detail scoped assertion.',
+    renameList: 'Click rename-list-display H1 to enter rename mode.',
+  },
+  knownLimitations: [
+    'Show count badge on list DETAIL page has no testId — use page.getByText() or parent scoped text assertion',
+    'Show title/name in list detail has no testId — verify by remove-show-{showId} button presence',
+    'List card UUIDs are dynamic — always find lists by name text, never hardcode UUIDs',
+    'Count text format: "0 shows", "1 show", "2 shows" (singular for 1)',
+  ],
+};
+
 export const favoritesWorkflowBehaviors = {
     "description": "ShowBuff app with home page showing TV shows grid, detail page with add/remove favorites, and favorites page with count badge",
     "authentication": "OAuth via localStorage injection — key: specwright-show-user",

@@ -11,32 +11,11 @@
  *
  * Loads: loadScopedTestData('favoritesworkflow') → { showTitle }
  * Dependency: precondition project (playwright.config.ts) guarantees @0-Precondition runs first
+ *
+ * Shared steps used here (from shared/ — globally scoped, no re-definition needed):
+ *   Given I load predata from {string} → shared/workflow.steps.js
  */
-import { Given, When, Then, expect } from '../../../../../playwright/fixtures.js';
-import { loadScopedTestData } from '../../../../../playwright/fixtures.js';
-
-Given('I load predata from {string}', async ({ page, testData }, scope) => {
-  const data = loadScopedTestData(scope);
-  Object.assign(testData, data);
-  console.log(`📦 Loaded predata from "${scope}": showTitle="${data.showTitle}", movieStoreData=${!!data.movieStoreData}`);
-  if (!data.showTitle) {
-    throw new Error(
-      `Predata from "${scope}" is missing "showTitle" — did @0-Precondition run successfully?`,
-    );
-  }
-  // Restore favorites localStorage state so FavoritesPage renders correctly in the
-  // fresh browser context (which only has auth state, not the favorites written by precondition).
-  if (data.movieStoreData) {
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5173';
-    await page.goto(baseUrl);
-    await page.waitForLoadState('networkidle', { timeout: 30000 });
-    await page.evaluate(
-      ({ key, value }) => localStorage.setItem(key, value),
-      { key: 'specwright-show-data', value: data.movieStoreData },
-    );
-    console.log(`🗄️ Restored specwright-show-data to localStorage for workflow consumer`);
-  }
-});
+import { Then, expect } from '../../../../../playwright/fixtures.js';
 
 Then('the favorites page is loaded', async ({ page }) => {
   await expect(page).toHaveURL(/\/favorites/, { timeout: 15000 });

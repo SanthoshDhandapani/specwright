@@ -58,11 +58,16 @@ Invoke `/e2e-process` with the appropriate input for each config entry:
 
 ### Phase 4: Exploration & Planning (`/e2e-plan`)
 
-Invoke `/e2e-plan` with the `pageURL` from each config entry.
+**If `explore: false`** — skip browser exploration entirely. Instead:
+- If `pageURL` is localhost: grep `src/` for `data-testid` attributes and read relevant component files to infer selectors and UI structure. Use agent memory (`.claude/agent-memory/playwright-test-planner/MEMORY.md`) for any previously discovered selectors for this module.
+- If `pageURL` is an external URL: write test cases based on Playwright best practices, using the parsed plan from Phase 3 as the only input. Skip `seed.spec.js` generation.
+- Proceed directly to Phase 6 (User Approval).
 
-- If `explore: true`: the skill explores the app via MCP, discovers selectors, writes seed file
-- Saves test plan to `/e2e-tests/plans/{moduleName}-{fileName}-plan.md`
-- **After exploration**: the planner agent updates its memory with discovered selectors automatically.
+**If `explore: true`** — invoke `/e2e-plan` with the `pageURL` from each config entry.
+
+- Explores the app via MCP browser tools, discovers selectors, writes `seed.spec.js`
+- Saves test plan to `e2e-tests/plans/{moduleName}-{fileName}-plan.md`
+- **After exploration**: update `.claude/agent-memory/playwright-test-planner/MEMORY.md` with ALL discovered selectors, navigation paths, and patterns. Read the file first, then Edit to add new entries.
 
 ### Phase 5: Exploration Validation (`/e2e-validate`, Optional)
 
@@ -181,9 +186,26 @@ This ensures a perfect generation-only run scores 100/100, not 76.5.
 ---
 
 ## 📋 Next Steps
-1. Run tests: `pnpm test:bdd`
+
+Derive the exact run command from the generated module name and category:
+
+- **`@Workflows`** category:
+  ```
+  pnpm test:bdd:workflows --grep "@{moduleName-lowercase}"
+  ```
+  Example for `@ListWorkflow`: `pnpm test:bdd:workflows --grep "@listworkflow"`
+
+- **`@Modules`** category:
+  ```
+  pnpm test:bdd --grep "@{moduleName-lowercase}"
+  ```
+  Example for `@HomePage`: `pnpm test:bdd --grep "@homepage"`
+
+Then show:
+```
 2. Fix failures: `/e2e-heal`
 3. View report: `pnpm report:playwright`
+```
 
 ---
 

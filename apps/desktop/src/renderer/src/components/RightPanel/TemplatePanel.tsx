@@ -13,7 +13,6 @@ const RefreshIcon = (): React.JSX.Element => (
 
 interface TemplateEntry {
   templateName: string;
-  mode: ICard["mode"];
   moduleName: string;
   category: ICard["category"];
   subModules: string[];
@@ -33,7 +32,6 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
   return [
     {
       templateName: "🔍 Quick Explore",
-      mode: "explorer",
       moduleName: "HomePage",
       category: "@Modules",
       subModules: [],
@@ -49,7 +47,6 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
     },
     {
       templateName: "🧭 Page Navigation",
-      mode: "explorer",
       moduleName: "Navigation",
       category: "@Modules",
       subModules: [],
@@ -70,7 +67,6 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
     },
     {
       templateName: "📝 Form & CRUD",
-      mode: "explorer",
       moduleName: "FormTest",
       category: "@Modules",
       subModules: [],
@@ -93,7 +89,6 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
     },
     {
       templateName: "🔐 Auth Flow",
-      mode: "explorer",
       moduleName: "Authentication",
       category: "@Modules",
       subModules: [],
@@ -151,7 +146,6 @@ export default function TemplatePanel(): React.JSX.Element {
     (tmpl: TemplateEntry) => {
       const id = addCard();
       updateCard(id, {
-        mode: tmpl.mode || "explorer",
         moduleName: tmpl.moduleName,
         category: tmpl.category,
         subModules: tmpl.subModules || [],
@@ -181,7 +175,6 @@ export default function TemplatePanel(): React.JSX.Element {
     const firstCard = cards[0] as Record<string, unknown>;
     const newTemplate: TemplateEntry = {
       templateName: savingName.trim(),
-      mode: (firstCard.mode as ICard["mode"]) || "explorer",
       moduleName: (firstCard.moduleName as string) || "",
       category: (firstCard.category as ICard["category"]) || "@Modules",
       subModules: (firstCard.subModules as string[]) || [],

@@ -1,6 +1,8 @@
 /**
  * Shared common steps — generic assertions and utilities.
  * Lives in shared/ (no @-prefix) so it is globally scoped.
+ *
+ * Note: workflow predata loader and home/show-grid steps live in shared/workflow.steps.js.
  */
 import { Given, When, Then, Before, expect } from '../../../playwright/fixtures.js';
 
@@ -50,3 +52,4 @@ Given('I clear browser storage', async ({ page, testConfig }) => {
 Then('the page should have title containing {string}', async ({ page }, titlePart) => {
   await expect(page).toHaveTitle(new RegExp(titlePart));
 });
+

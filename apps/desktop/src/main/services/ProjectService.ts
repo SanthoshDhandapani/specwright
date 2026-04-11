@@ -15,7 +15,6 @@ export interface InstructionStep {
 }
 
 export interface InstructionCard {
-  mode: "explorer" | "csv" | "virtuoso";
   moduleName: string;
   category: "@Modules" | "@Workflows";
   subModules: string[];
@@ -236,7 +235,6 @@ export class ProjectService {
 
       // Map the pipeline format to InstructionCard format
       return evaluated.map((entry) => ({
-        mode: ((entry.mode as string) || "explorer") as InstructionCard["mode"],
         moduleName: (entry.moduleName as string) || "",
         category: ((entry.category as string) || "@Modules") as "@Modules" | "@Workflows",
         subModules: (entry.subModuleName as string[]) || (entry.subModules as string[]) || [],
@@ -284,7 +282,6 @@ export class ProjectService {
     const entries = cards.map((card) => {
       const lines: string[] = [];
       lines.push(`  {`);
-      lines.push(`    mode: ${q(card.mode)},`);
       lines.push(`    moduleName: ${q(card.moduleName)},`);
       lines.push(`    category: ${q(card.category)},`);
       lines.push(`    subModuleName: [${card.subModules.map(s => q(s)).join(", ")}],`);
@@ -416,7 +413,6 @@ export class ProjectService {
       const lines: string[] = [];
       lines.push(`  {`);
       lines.push(`    templateName: ${q(tmpl.templateName)},`);
-      lines.push(`    mode: ${q(tmpl.mode)},`);
       lines.push(`    moduleName: ${q(tmpl.moduleName)},`);
       lines.push(`    category: ${q(tmpl.category)},`);
       lines.push(`    subModuleName: [${tmpl.subModules.map(s => q(s)).join(", ")}],`);
@@ -459,7 +455,6 @@ export class ProjectService {
 
       return evaluated.map((entry) => ({
         templateName: (entry.templateName as string) || (entry.moduleName as string) || "Untitled",
-        mode: ((entry.mode as string) || "explorer") as InstructionCard["mode"],
         moduleName: (entry.moduleName as string) || "",
         category: ((entry.category as string) || "@Modules") as "@Modules" | "@Workflows",
         subModules: (entry.subModuleName as string[]) || (entry.subModules as string[]) || [],

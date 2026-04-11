@@ -1,11 +1,9 @@
 import { create } from "zustand";
 
-export type InstructionMode = "explorer" | "csv";
 export type InstructionCategory = "@Modules" | "@Workflows";
 
 export interface InstructionCard {
   id: string;
-  mode: InstructionMode;
   moduleName: string;
   category: InstructionCategory;
   subModules: string[];
@@ -44,7 +42,6 @@ function makeId(): string {
 function defaultCard(): InstructionCard {
   return {
     id: makeId(),
-    mode: "explorer",
     moduleName: "",
     category: "@Modules",
     subModules: [],

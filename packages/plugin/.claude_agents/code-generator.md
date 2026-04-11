@@ -92,6 +92,8 @@ When('I see a message containing {string}', async ({ page }, message) => {
 
 **🔴 PATH-BASED TAG SCOPING**: playwright-bdd v8+ scopes step files in `@`-prefixed directories by path tags (AND expression). Steps in `@Modules/@FeatureA/steps.js` are ONLY visible to features under that same path. Steps that must be reusable across modules/workflows MUST be in `shared/` (no `@` prefix = globally available).
 
+**🔴 WORKFLOW CROSS-PHASE STEPS**: When implementing steps for `@Workflows` sub-modules, the `bdd-generator` output will specify which steps belong in `shared/{workflow-name}.steps.js` or `shared/workflow.steps.js`. Fill in the Playwright implementation for those shared files first, then implement the phase-specific `steps.js` files — never add a step to a co-located `steps.js` if it is also in a shared file. Duplicate step patterns cause a runtime error in playwright-bdd.
+
 **Structure:**
 
 ```javascript

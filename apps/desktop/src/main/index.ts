@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, shell } from "electron";
+import { app, BrowserWindow, nativeImage, shell, Menu, MenuItem } from "electron";
 import { join } from "path";
 import { ConfigService } from "./services/ConfigService";
 import { ProjectService } from "./services/ProjectService";
@@ -6,23 +6,25 @@ import { registerConfigIpc } from "./ipc/config.ipc";
 import { registerProjectIpc } from "./ipc/project.ipc";
 import { registerPipelineIpc } from "./ipc/pipeline.ipc";
 import { registerAtlassianIpc } from "./ipc/atlassian.ipc";
+import { initLogger, closeLogger, log, getLogFilePath, isLoggingEnabled, setLoggingEnabled } from "./logger";
 
 // Suppress EPIPE errors from aborted pipeline processes — these are expected
 // when the user clicks Abort and the SDK process is killed mid-write.
 process.on("uncaughtException", (err) => {
   if (err.message?.includes("EPIPE") || err.message?.includes("write EPIPE")) {
     console.warn("[main] Suppressed EPIPE error (pipeline aborted)");
+    log("[main] Suppressed EPIPE error (pipeline aborted)");
     return;
   }
   // Re-throw non-EPIPE errors
   console.error("[main] Uncaught exception:", err);
+  log(`[main] Uncaught exception: ${err.message}\n${err.stack ?? ""}`);
 });
 
 let mainWindow: BrowserWindow | null = null;
 
 const configService = new ConfigService();
-// Resources live at src/main/resources/ (resolved relative to __dirname in dev)
-const projectService = new ProjectService(join(__dirname, "resources"));
+const projectService = new ProjectService();
 
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
@@ -58,7 +60,113 @@ function createWindow(): BrowserWindow {
   return mainWindow;
 }
 
+/**
+ * Build the native macOS menu bar.
+ * Includes a "Specwright" app menu and standard Edit/View/Window/Help menus.
+ * The Help menu includes log-related actions (enable/disable, open, reveal).
+ */
+function buildMenu(): void {
+  const refreshLogToggle = (): void => {
+    // Rebuild menu to reflect updated checked state
+    buildMenu();
+  };
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    // macOS app menu (first item always gets the app name automatically)
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+    {
+      label: "Help",
+      submenu: [
+        {
+          label: "Enable Logging",
+          type: "checkbox",
+          checked: isLoggingEnabled(),
+          click(item: MenuItem): void {
+            setLoggingEnabled(item.checked);
+            log(`[main] Logging ${item.checked ? "enabled" : "disabled"} via menu`);
+            refreshLogToggle();
+          },
+        },
+        { type: "separator" },
+        {
+          label: "Open Log File",
+          accelerator: "CmdOrCtrl+Shift+L",
+          enabled: !!getLogFilePath(),
+          click(): void {
+            const p = getLogFilePath();
+            if (p) shell.openPath(p);
+          },
+        },
+        {
+          label: "Show Log in Finder",
+          enabled: !!getLogFilePath(),
+          click(): void {
+            const p = getLogFilePath();
+            if (p) shell.showItemInFolder(p); // reveals the specific launch file
+          },
+        },
+        {
+          label: "Copy Log Path",
+          enabled: !!getLogFilePath(),
+          click(): void {
+            const p = getLogFilePath();
+            if (p) {
+              const { clipboard } = require("electron");
+              clipboard.writeText(p);
+            }
+          },
+        },
+        { type: "separator" },
+        { role: "toggleDevTools" },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 app.whenReady().then(async () => {
+  // Initialise file logger first so all subsequent events are captured
+  initLogger();
+  log("[main] App ready");
+
+  // In a packaged .app Electron inherits a minimal PATH (/usr/bin:/bin).
+  // Fix it once here so ALL child processes (MCP servers, npx, uvx, node)
+  // get the user's full PATH — same technique used by VS Code and Cursor.
+  if (app.isPackaged) {
+    try {
+      const { execSync } = require("child_process");
+      const shell = require("fs").existsSync("/bin/zsh") ? "/bin/zsh" : "/bin/bash";
+      const fullPath = execSync(`${shell} -l -c 'echo $PATH'`, {
+        timeout: 5000, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (fullPath) {
+        process.env.PATH = fullPath;
+        log(`[main] PATH set from login shell: ${fullPath}`);
+      }
+    } catch (err) {
+      log(`[main] WARNING: could not resolve login shell PATH: ${String(err)}`);
+    }
+  }
+
   // Init store (dynamic import required for ESM-only electron-store v10)
   await configService.init();
 
@@ -78,6 +186,12 @@ app.whenReady().then(async () => {
   registerPipelineIpc(configService, projectService, () => mainWindow);
   registerAtlassianIpc();
 
+  // Open a URL in the system default browser
+  const { ipcMain } = await import("electron");
+  ipcMain.handle("shell:open-url", (_event, url: string) => shell.openExternal(url));
+
+  buildMenu();
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -93,6 +207,8 @@ app.on("window-all-closed", () => {
 
 // Clean up zombie MCP/Playwright child processes on quit
 app.on("before-quit", () => {
+  log("[main] App quitting — cleaning up child processes");
+  closeLogger();
   try {
     const { execSync } = require("child_process");
     // Kill any playwright-mcp or specwright-mcp processes spawned by this app

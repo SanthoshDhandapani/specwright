@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
-import { execSync, exec } from "child_process";
+import { spawn } from "child_process";
+import { app } from "electron";
 
 export interface EnvVars {
   BASE_URL: string;
@@ -46,25 +47,85 @@ export interface PluginInfo {
   overlayName?: string;
 }
 
+/** Describes where to load an overlay plugin from. */
+export type PluginSource =
+  | { type: "local"; dirPath: string }
+  | { type: "npm"; packageName: string; registry?: string };
+
+/** Result of validating a local plugin directory. */
+export interface PluginValidationResult {
+  valid: boolean;
+  pluginName?: string;
+  error?: string;
+}
+
 interface BootstrapResult {
   success: boolean;
   error?: string;
 }
 
 export class ProjectService {
-  private resourcesDir: string;
+  constructor() {}
 
-  constructor(resourcesDir: string) {
-    this.resourcesDir = resourcesDir;
+  /**
+   * Run a shell command and stream each line of output to onLog as it arrives.
+   *
+   * Uses a login shell (`/bin/zsh -l -c` → `/bin/bash -l -c`) so that the
+   * user's full PATH is available even when launched from a packaged .app
+   * (which inherits only the minimal /usr/bin:/bin system PATH and would
+   * otherwise fail to find node, npx, pnpm, etc.).
+   */
+  private runStreamed(cmd: string, cwd: string, onLog?: (line: string) => void): Promise<number> {
+    return new Promise((resolve) => {
+      // Prefer zsh (macOS default since Catalina); fall back to bash.
+      const shell = fs.existsSync("/bin/zsh") ? "/bin/zsh" : "/bin/bash";
+      const child = spawn(shell, ["-l", "-c", cmd], { cwd, detached: false });
+      let settled = false;
+
+      const done = (code: number): void => {
+        if (settled) return;
+        settled = true;
+        resolve(code);
+      };
+
+      // Safety timeout — 3 minutes; resolves so bootstrap never hangs indefinitely
+      const timer = setTimeout(() => {
+        onLog?.("[bootstrap] WARNING: command timed out");
+        child.kill("SIGTERM");
+        done(1);
+      }, 180_000);
+
+      const handle = (chunk: Buffer): void => {
+        chunk
+          .toString()
+          .split("\n")
+          .forEach((line) => {
+            const trimmed = line.trim();
+            if (trimmed && onLog) onLog(trimmed);
+          });
+      };
+
+      child.stdout?.on("data", handle);
+      child.stderr?.on("data", handle);
+      child.on("close", (code) => { clearTimeout(timer); done(code ?? 0); });
+      child.on("exit",  (code) => { clearTimeout(timer); done(code ?? 0); });
+      child.on("error", (err)  => { clearTimeout(timer); onLog?.(`[bootstrap] spawn error: ${err.message}`); done(1); });
+    });
   }
 
   async bootstrap(
     projectPath: string,
-    options: { skipAuth?: boolean; authStrategy?: AuthStrategy } = {}
+    options: { skipAuth?: boolean; authStrategy?: AuthStrategy; overlay?: PluginSource } = {},
+    onLog?: (line: string) => void
   ): Promise<BootstrapResult> {
+    const sentinelPath = path.join(projectPath, ".bootstrapping");
     try {
       // Ensure directory exists
       fs.mkdirSync(projectPath, { recursive: true });
+
+      // Write sentinel BEFORE any files are copied. isBootstrapped() returns false
+      // while this file exists, so reopening the app mid-install won't skip setup.
+      fs.writeFileSync(sentinelPath, new Date().toISOString(), "utf-8");
 
       // Ensure a package.json exists (the plugin merges into it, doesn't create from scratch)
       const pkgPath = path.join(projectPath, "package.json");
@@ -99,43 +160,90 @@ export class ProjectService {
       const authFlag = skipAuth ? "--skip-auth" : "";
       const strategyFlag = `--auth-strategy=${authStrategy}`;
 
-      // Resolve the plugin's install.sh from the workspace (or fall back to npx)
-      // Desktop app uses --non-interactive to skip all prompts
+      // Step 1: Build the base-plugin install command.
+      //
+      // In a packaged .app, @specwright/plugin lives inside the .asar virtual
+      // filesystem. Executing a path inside .asar with `node` fails because
+      // asar is not a real directory — Node can require() from it but cannot
+      // exec shell scripts or spawn processes rooted there.
+      //
+      // Solution: packaged builds always use `npx` (downloads/runs from the
+      // npm registry using real files). The workspace `require.resolve` path
+      // is only used during local development where the package is a real dir.
       let pluginCmd: string;
-      try {
-        const pluginDir = path.dirname(
-          require.resolve("@specwright/plugin/cli.js")
-        );
-        pluginCmd = `node "${path.join(pluginDir, "cli.js")}" init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
-      } catch {
-        // Plugin not in workspace — use npx (downloads from npm)
-        pluginCmd = `npx @specwright/plugin init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
+      if (app.isPackaged) {
+        // Packaged app — always fetch from registry; avoids asar path issues.
+        pluginCmd = `npx --yes @specwright/plugin init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
+      } else {
+        try {
+          // Dev mode — prefer the local workspace copy (faster, no network).
+          const pluginDir = path.dirname(require.resolve("@specwright/plugin/cli.js"));
+          pluginCmd = `node "${path.join(pluginDir, "cli.js")}" init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
+        } catch {
+          pluginCmd = `npx --yes @specwright/plugin init "${projectPath}" ${authFlag} ${strategyFlag} --non-interactive`;
+        }
       }
 
-      execSync(pluginCmd, {
-        cwd: projectPath,
-        shell: true,
-        stdio: "pipe",
-        timeout: 120_000,
-      });
+      onLog?.("[bootstrap] Installing base plugin...");
+      const pluginExit = await this.runStreamed(pluginCmd, projectPath, onLog);
+      if (pluginExit !== 0) {
+        return { success: false, error: "Base plugin install failed" };
+      }
 
-      // Install dependencies in background — non-blocking so the app doesn't freeze.
-      // Use --ignore-scripts and set npm_config_ignore_scripts to skip ALL lifecycle
-      // scripts (including "prepare") — some packages like jwt-decode ship broken
-      // "prepare: husky install" that fails in non-dev environments.
-      exec("npm install --ignore-scripts", {
-        cwd: projectPath,
-        shell: true,
-        timeout: 120_000,
-        env: { ...process.env, npm_config_ignore_scripts: "true" },
-      }, (err) => {
-        if (err) {
-          console.warn("[bootstrap] npm install failed (non-fatal):", err.message);
+      // Step 2: Install overlay if provided or if .specwright.json specifies one.
+      const overlaySource = options.overlay;
+      const overlayDir = overlaySource
+        ? await this.resolveOverlaySourceDir(projectPath, overlaySource)
+        : (projectConfig.overlay ? this.resolveOverlayPath(projectPath, projectConfig) : null);
+
+      if (overlayDir) {
+        const installScript = path.join(overlayDir, "install.sh");
+        if (fs.existsSync(installScript)) {
+          onLog?.("[bootstrap] Installing overlay...");
+          // --skip-install: Desktop already ran dependency install via base plugin step
+          await this.runStreamed(`bash "${installScript}" "${projectPath}" --skip-install`, projectPath, onLog);
+          // Persist overlay info to .specwright.json for future boots
+          if (overlaySource) {
+            const overlayManifestPath = path.join(overlayDir, "specwright.plugin.json");
+            let overlayName = path.basename(overlayDir);
+            if (fs.existsSync(overlayManifestPath)) {
+              try {
+                const m = JSON.parse(fs.readFileSync(overlayManifestPath, "utf-8")) as Record<string, unknown>;
+                overlayName = (m.name as string) ?? overlayName;
+              } catch { /* use dir name */ }
+            }
+            const specwrightJson = {
+              ...projectConfig,
+              overlay: overlayName,
+              overlayPath: path.relative(projectPath, overlayDir),
+            };
+            fs.writeFileSync(specwrightConfigPath, JSON.stringify(specwrightJson, null, 2), "utf-8");
+          }
+        } else {
+          onLog?.(`[bootstrap] WARNING: overlay install.sh not found at ${overlayDir}`);
         }
-      });
+      }
 
+      // Step 3: Install dependencies — runs always (overlay uses --skip-install so Desktop owns this).
+      {
+        const hasPnpmLock = fs.existsSync(path.join(projectPath, "pnpm-lock.yaml"));
+        const hasYarnLock = fs.existsSync(path.join(projectPath, "yarn.lock"));
+        const installCmd = hasPnpmLock
+          ? "pnpm install --ignore-scripts"
+          : hasYarnLock
+          ? "yarn install --ignore-scripts"
+          : "npm install --ignore-scripts";
+        const pm = hasPnpmLock ? "pnpm" : hasYarnLock ? "yarn" : "npm";
+        onLog?.(`[bootstrap] Installing dependencies (${pm})...`);
+        await this.runStreamed(installCmd, projectPath, onLog);
+      }
+
+      // Remove sentinel — bootstrap complete. isBootstrapped() will now return true.
+      fs.rmSync(sentinelPath, { force: true });
       return { success: true };
     } catch (err: unknown) {
+      // Also remove sentinel on failure so the user can retry without getting stuck.
+      fs.rmSync(sentinelPath, { force: true });
       return { success: false, error: String(err) };
     }
   }
@@ -307,7 +415,126 @@ export class ProjectService {
     return `[\n${entries.join(",\n")}\n]`;
   }
 
+  /**
+   * Validate a local directory as a Specwright plugin (3-level check).
+   * Level 1: specwright.plugin.json exists + valid JSON + required fields
+   * Level 2: install.sh exists
+   * Level 3: all paths in overrides[] exist inside the overrides/ directory
+   */
+  validateLocalPlugin(dirPath: string): PluginValidationResult {
+    // Level 1: manifest
+    const manifestPath = path.join(dirPath, "specwright.plugin.json");
+    if (!fs.existsSync(manifestPath)) {
+      return { valid: false, error: "Not a Specwright plugin — specwright.plugin.json not found" };
+    }
+    let manifest: Record<string, unknown>;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Record<string, unknown>;
+    } catch {
+      return { valid: false, error: "specwright.plugin.json is not valid JSON" };
+    }
+    if (!manifest.name || !manifest.version || !manifest.type) {
+      return { valid: false, error: "specwright.plugin.json missing required fields: name, version, type" };
+    }
+
+    // Level 2: install script
+    const installScript = path.join(dirPath, "install.sh");
+    if (!fs.existsSync(installScript)) {
+      return { valid: false, error: "Plugin is missing install.sh" };
+    }
+
+    // Level 3: override files exist
+    const overrides = (manifest.overrides as string[]) ?? [];
+    const missing = overrides.filter((rel) => !fs.existsSync(path.join(dirPath, "overrides", rel)));
+    if (missing.length > 0) {
+      return { valid: false, error: `Plugin overrides missing: ${missing.join(", ")}` };
+    }
+
+    return { valid: true, pluginName: manifest.name as string };
+  }
+
+  /**
+   * Resolve the overlay directory from .specwright.json config fields.
+   * Returns null if overlay is not configured or cannot be found.
+   * Resolution order:
+   *   1. Explicit overlayPath in config (relative to projectPath)
+   *   2. Sibling scan: ../../{overlayName}/
+   *   3. npm package resolution: require.resolve('{overlayName}/install.sh')
+   */
+  private resolveOverlayPath(
+    projectPath: string,
+    config: { overlay?: string; overlayPath?: string }
+  ): string | null {
+    if (!config.overlay) return null;
+
+    // 1. Explicit overlayPath
+    if (config.overlayPath) {
+      const resolved = path.resolve(projectPath, config.overlayPath);
+      if (fs.existsSync(path.join(resolved, "install.sh"))) return resolved;
+    }
+
+    // 2. Sibling scan (covers monorepo: fourkites-ai-plugins/plugins/{name})
+    const sibling = path.resolve(projectPath, "..", "..", config.overlay);
+    if (fs.existsSync(path.join(sibling, "install.sh"))) return sibling;
+
+    // 3. npm package resolution
+    try {
+      const pkg = require.resolve(`${config.overlay}/install.sh`);
+      return path.dirname(pkg);
+    } catch { /* not installed as npm package */ }
+
+    console.warn(`[bootstrap] overlay '${config.overlay}' not found — skipping`);
+    return null;
+  }
+
+  /**
+   * Resolve a PluginSource to a local directory path.
+   * For npm sources, installs the package to a temp location first.
+   */
+  private async resolveOverlaySourceDir(projectPath: string, source: PluginSource): Promise<string | null> {
+    if (source.type === "local") {
+      const validation = this.validateLocalPlugin(source.dirPath);
+      if (!validation.valid) {
+        console.warn(`[bootstrap] overlay validation failed: ${validation.error}`);
+        return null;
+      }
+      return source.dirPath;
+    }
+
+    if (source.type === "npm") {
+      // Install the npm package to get the overlay directory
+      const registryFlag = source.registry ? ` --registry ${source.registry}` : "";
+      const tmpDir = path.join(projectPath, ".specwright-overlay-tmp");
+      try {
+        fs.mkdirSync(tmpDir, { recursive: true });
+        fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ name: "overlay-install", version: "1.0.0" }));
+        // Use a login shell so node/npm are on PATH in packaged .app builds.
+        const loginShell = fs.existsSync("/bin/zsh") ? "/bin/zsh" : "/bin/bash";
+        execSync(`${loginShell} -l -c 'npm install ${source.packageName}${registryFlag} --no-save --ignore-scripts'`, {
+          cwd: tmpDir, stdio: "pipe", timeout: 60_000,
+        });
+        const overlayDir = path.join(tmpDir, "node_modules", source.packageName);
+        const validation = this.validateLocalPlugin(overlayDir);
+        if (!validation.valid) {
+          console.warn(`[bootstrap] npm overlay validation failed: ${validation.error}`);
+          return null;
+        }
+        return overlayDir;
+      } catch (err) {
+        console.warn(`[bootstrap] npm overlay install failed: ${String(err)}`);
+        return null;
+      }
+    }
+
+    return null;
+  }
+
   isBootstrapped(projectPath: string): boolean {
+    // Sentinel file written at bootstrap start, deleted on success.
+    // If it exists, a previous bootstrap was interrupted mid-flight.
+    const bootstrapping = fs.existsSync(path.join(projectPath, ".bootstrapping"));
+    if (bootstrapping) return false;
+
     return (
       fs.existsSync(path.join(projectPath, "package.json")) &&
       fs.existsSync(path.join(projectPath, "playwright.config.ts")) &&
@@ -558,13 +785,6 @@ export class ProjectService {
           return raw.replace(/^---[\s\S]*?---\n?/, "").trim();
         }
       }
-    }
-
-    // Priority 3: Bundled resources
-    const mdPath = path.join(this.resourcesDir, "agents", "orchestrator.md");
-    if (fs.existsSync(mdPath)) {
-      const raw = fs.readFileSync(mdPath, "utf-8");
-      return raw.replace(/^---[\s\S]*?---\n?/, "").trim();
     }
 
     return "You are a helpful test automation assistant. Read e2e-tests/instructions.js and execute the E2E test automation pipeline.";

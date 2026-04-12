@@ -14,8 +14,10 @@ contextBridge.exposeInMainWorld("specwright", {
     pickFiles: () => ipcRenderer.invoke("project:pick-files") as Promise<string[]>,
     uploadTestFile: (sourcePath: string) =>
       ipcRenderer.invoke("project:upload-test-file", sourcePath) as Promise<string>,
-    bootstrap: (folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string }) =>
+    bootstrap: (folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string; overlay?: { type: "local"; dirPath: string } | { type: "npm"; packageName: string; registry?: string } }) =>
       ipcRenderer.invoke("project:bootstrap", folderPath, options),
+    validatePlugin: (dirPath: string) =>
+      ipcRenderer.invoke("project:validate-plugin", dirPath) as Promise<{ valid: boolean; pluginName?: string; error?: string }>,
     detectPlugin: (folderPath: string) =>
       ipcRenderer.invoke("project:detect-plugin", folderPath) as Promise<{
         name: string; version: string; authStrategy: string;
@@ -38,6 +40,10 @@ contextBridge.exposeInMainWorld("specwright", {
       ipcRenderer.on("project:bootstrap-log", (_e, data) => cb(data));
       return () => ipcRenderer.removeAllListeners("project:bootstrap-log");
     },
+    readTestScripts: (p: string) =>
+      ipcRenderer.invoke("project:read-test-scripts", p) as Promise<Record<string, string>>,
+    readFeatureModules: (p: string) =>
+      ipcRenderer.invoke("project:read-feature-modules", p) as Promise<{ modules: string[]; workflows: string[] }>,
   },
 
   pipeline: {
@@ -97,6 +103,11 @@ contextBridge.exposeInMainWorld("specwright", {
       ipcRenderer.on("pipeline:mcp-status", (_e, data) => cb(data));
       return () => ipcRenderer.removeAllListeners("pipeline:mcp-status");
     },
+
+    getLogPath: () =>
+      ipcRenderer.invoke("pipeline:get-log-path") as Promise<string | null>,
+    openLog: () =>
+      ipcRenderer.invoke("pipeline:open-log") as Promise<boolean>,
   },
 
   atlassian: {
@@ -106,5 +117,9 @@ contextBridge.exposeInMainWorld("specwright", {
       ipcRenderer.invoke("atlassian:connect") as Promise<{ success: boolean; error?: string }>,
     disconnect: () =>
       ipcRenderer.invoke("atlassian:disconnect") as Promise<{ success: boolean }>,
+  },
+
+  shell: {
+    openUrl: (url: string) => ipcRenderer.invoke("shell:open-url", url) as Promise<void>,
   },
 });

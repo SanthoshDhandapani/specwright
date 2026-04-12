@@ -5,6 +5,41 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.3.5] — 2026-04-13
+
+### Skill: `e2e-run/SKILL.md`
+
+- **Report paths instead of live server URLs** — The skill no longer runs `pnpm report:playwright` or `pnpm report:bdd:open` after tests complete. Both commands start blocking HTTP servers that hang or die when the pipeline process ends, producing dead `http://localhost:9323` links. The skill now outputs file paths only (`reports/playwright/index.html`, `reports/cucumber-bdd/html-report/index.html`) with a `→ To view: <command>` hint for manual use. The final summary line is updated to match.
+
+---
+
+## [0.3.4] — 2026-04-12
+
+### Fixed
+- **`playwright-test-planner` — removed `browser_take_screenshot` from allowed tools** — The planner agent was calling `browser_take_screenshot` with explicit filenames (e.g., `home-page.png`, `signin-step1.png`) during exploration, which saved files relative to CWD (project root) regardless of the `--output-dir .playwright-mcp` MCP flag. The `--output-dir` flag only controls auto-named screenshots; explicit paths bypass it. Removed `mcp__playwright-test__browser_take_screenshot` from the agent's `tools` frontmatter — the agent discovers all selectors via `browser_snapshot` (accessibility tree), so this has no impact on exploration quality.
+
+---
+
+## [0.3.3] — 2026-04-12
+
+### Fixed
+- **`@Authentication` module uses `safe_copy` in `install.sh`** — Previously `cp` (always overwrite) was used, which wiped any previously generated or overlay-customised `authentication.feature` and `steps.js` on every re-run of `npx @specwright/plugin init`. Changed to `safe_copy` so the generic template is only installed on a fresh setup; existing files (from `/e2e-automate` generation or an org overlay) are preserved.
+
+---
+
+## [0.3.2] — 2026-04-12
+
+### Added
+- **`e2e-tests/.knowledge/generate-context.md`** — Pre-built 2KB framework reference document containing FIELD_TYPES constants, processDataTable/validateExpectations API signatures, faker field patterns, and import depth table. The `/e2e-generate` skill reads this instead of the raw 17KB utility files, reducing agent context by ~45% on repeat runs. Falls back to reading utility files if the file is missing (new projects).
+
+### Fixed
+- **`package.json.snippet`** — Removed invalid `@playwright/mcp@^0.1.0` and `@specwright/mcp-server@^0.1.0` entries from devDependencies. Both packages do not exist at those versions on npm and caused `ERR_PNPM_NO_MATCHING_VERSION` on fresh installs.
+
+### Changed
+- **`install.sh`** — Now creates `e2e-tests/.knowledge/` directory and copies `generate-context.md` into target project during installation.
+
+---
+
 ## [0.3.1] — 2026-04-12
 
 ### Fixed

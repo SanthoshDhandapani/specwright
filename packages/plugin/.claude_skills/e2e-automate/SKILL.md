@@ -98,6 +98,7 @@ Creates complete `.feature` + `steps.js` files.
 **Performance:** Proceed DIRECTLY — do NOT read agent definition files, do NOT spawn Explore sub-agents.
 The plan file and seed file already contain all context needed. `/e2e-generate` handles the full chain internally.
 
+
 ### Phase 8: Test Execution & Healing (`/e2e-heal`, Optional)
 
 **Skip if `runGeneratedCases` is false.**

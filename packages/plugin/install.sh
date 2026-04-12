@@ -9,11 +9,13 @@ set -e
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR=""
 SKIP_AUTH=false
+SKIP_INSTALL=false
 
 # Parse arguments — first non-flag argument is the target directory
 for arg in "$@"; do
   case $arg in
-    --skip-auth) SKIP_AUTH=true ;;
+    --skip-auth)    SKIP_AUTH=true ;;
+    --skip-install) SKIP_INSTALL=true ;;
     -*) ;; # skip unknown flags
     *) [ -z "$TARGET_DIR" ] && TARGET_DIR="$arg" ;;
   esac
@@ -94,6 +96,7 @@ mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared"
 mkdir -p "$TARGET_DIR/e2e-tests/utils"
 mkdir -p "$TARGET_DIR/e2e-tests/data"
 mkdir -p "$TARGET_DIR/e2e-tests/scripts"
+mkdir -p "$TARGET_DIR/e2e-tests/.knowledge"
 
 # Framework files: always overwrite (these are the framework, not user code)
 cp "$PLUGIN_DIR/e2e-tests/playwright/fixtures.js" "$TARGET_DIR/e2e-tests/playwright/"
@@ -106,6 +109,7 @@ mkdir -p "$TARGET_DIR/e2e-tests/playwright/auth-strategies"
 cp "$PLUGIN_DIR/e2e-tests/playwright/auth-strategies/"*.js "$TARGET_DIR/e2e-tests/playwright/auth-strategies/"
 cp "$PLUGIN_DIR/e2e-tests/utils/stepHelpers.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/utils/testDataGenerator.js" "$TARGET_DIR/e2e-tests/utils/"
+cp "$PLUGIN_DIR/e2e-tests/.knowledge/generate-context.md" "$TARGET_DIR/e2e-tests/.knowledge/"
 cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/shared/"*.js "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/generate-bdd-report.js" "$TARGET_DIR/e2e-tests/scripts/"
 
@@ -146,10 +150,11 @@ if [ "$SKIP_AUTH" = true ]; then
 else
   echo "📦 Step 3: Installing authentication test module..."
   mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication"
-  cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/authentication.feature" \
-     "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/"
-  cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/steps.js" \
-     "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/"
+  # safe_copy: never overwrite user-generated or overlay-customised auth module files
+  safe_copy "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/authentication.feature" \
+     "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/authentication.feature"
+  safe_copy "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/steps.js" \
+     "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/@Authentication/steps.js"
   echo "  ✅ @Authentication module installed (7 scenarios)"
 fi
 
@@ -279,6 +284,15 @@ fi
 mkdir -p "$TARGET_DIR/e2e-tests/data/migrations/files"
 touch "$TARGET_DIR/e2e-tests/data/migrations/files/.gitkeep"
 
+# ── Step 9: Install dependencies ──
+if [ "$SKIP_INSTALL" = "true" ]; then
+  echo "⏭️  Step 9: Dependency install — SKIPPED (--skip-install, handled by caller)"
+else
+  echo "📦 Step 9: Installing dependencies ($PM install --ignore-scripts)..."
+  (cd "$TARGET_DIR" && "$PM" install --ignore-scripts)
+  echo "  ✅ Dependencies installed"
+fi
+
 # ── Done ──
 echo ""
 echo "╔══════════════════════════════════════════════╗"
@@ -287,27 +301,16 @@ echo "╚═══════════════════════�
 echo ""
 echo "📋 Next steps:"
 echo ""
-echo "  1. Install dependencies (includes @playwright/mcp):"
-echo "     $PM install"
-echo ""
-echo "  2. Install Playwright browsers:"
-echo "     npx playwright install"
-echo ""
-echo "  3. (Optional) Install uv for markitdown-mcp (CSV/Excel/PDF inputs):"
-echo "     curl -LsSf https://astral.sh/uv/install.sh | sh"
-echo ""
-echo "  4. Update e2e-tests/data/testConfig.js"
-echo "     → Set your app's routes"
-echo ""
-echo "  5. Set credentials in e2e-tests/.env.testing:"
-echo "     AUTH_STRATEGY=email-password    # or: oauth | none"
-echo "     TEST_USER_EMAIL=your-email@example.com"
-echo "     TEST_USER_PASSWORD=your-password"
-echo ""
-echo "  6. Start dev server and run tests:"
-echo "     $PM test:bdd:auth    # Run authentication tests"
-echo "     $PM test:bdd         # Run all tests"
-echo ""
-echo "  7. Generate tests with AI: /e2e-automate (Claude Code CLI)"
-echo "     → Connect Atlassian (Jira) via Specwright Desktop for Jira-driven generation"
+if [ "$SKIP_INSTALL" = "true" ]; then
+  echo "  1. Install dependencies:  $PM install"
+  echo "  2. Install browsers:      npx playwright install chromium"
+  echo "  3. Set credentials in e2e-tests/.env.testing"
+  echo "  4. Start your app and run:  /e2e-automate"
+else
+  echo "  1. Install browsers:  npx playwright install chromium"
+  echo "  2. Set credentials in e2e-tests/.env.testing:"
+  echo "       TEST_USER_EMAIL=your-email@example.com"
+  echo "       TEST_USER_PASSWORD=your-password"
+  echo "  3. Start your app and run:  /e2e-automate"
+fi
 echo ""

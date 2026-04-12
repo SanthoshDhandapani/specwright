@@ -425,7 +425,7 @@ export { fillForm };
 }
 ```
 
-### 8. Validation Checklist
+### 8. Self-Review Checklist
 
 - ✅ No RegExp constructors with literal strings
 - ✅ No manual timeouts (no `waitForTimeout`)

@@ -1,5 +1,6 @@
-import { ipcMain, BrowserWindow } from "electron";
-import { ClaudeAgentRunner, AiSdkRunner, PlaywrightMcpClient } from "@specwright/agent-runner";
+import { ipcMain, BrowserWindow, app } from "electron";
+import { execSync } from "child_process";
+import { log as fileLog, getLogFilePath } from "../logger";
 // claude-runner is ESM-only — must use dynamic import in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const dynamicImport = new Function("specifier", "return import(specifier)") as (
@@ -25,14 +26,75 @@ async function loadClaudeRunner(): Promise<ClaudeRunnerModule> {
   }
   return _claudeRunnerModule;
 }
-import type { McpServerConfig } from "@specwright/agent-runner";
 import type { ConfigService } from "../services/ConfigService";
 import type { ProjectService } from "../services/ProjectService";
 import * as fs from "fs";
 import * as path from "path";
 import { getAtlassianAccessToken } from "./atlassian.ipc";
 
-let activeRunner: ClaudeAgentRunner | AiSdkRunner | null = null;
+/**
+ * Resolve the system `claude` CLI path for use in a packaged .app.
+ *
+ * Strategy (in order):
+ * 1. Check known install locations directly (fast, no subprocess)
+ * 2. Try login shell with `source ~/.zshrc` to pick up nvm/volta/npm paths
+ * 3. Try login+interactive shell as last resort
+ *
+ * Result is cached after the first successful lookup.
+ */
+let _claudePath: string | null = null;
+function resolveClaudePath(): string | null {
+  if (_claudePath !== null) return _claudePath;
+  if (!app.isPackaged) return null; // dev: normal PATH already has claude
+
+  const home = require("os").homedir();
+
+  // 1. Check well-known install locations directly
+  const candidates = [
+    `${home}/.local/bin/claude`,          // npm global (Linux/macOS default)
+    `${home}/.npm-global/bin/claude`,     // npm --prefix ~/.npm-global
+    `/usr/local/bin/claude`,              // Homebrew (Intel Mac) or manual
+    `/opt/homebrew/bin/claude`,           // Homebrew (Apple Silicon)
+    `${home}/.volta/bin/claude`,          // Volta
+    `${home}/.nvm/versions/node/current/bin/claude`, // nvm (approximate)
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      _claudePath = p;
+      fileLog(`[pipeline] resolveClaudePath → ${p} (direct lookup)`);
+      return _claudePath;
+    }
+  }
+
+  // 2. Login shell + source .zshrc (picks up nvm/volta PATH additions)
+  const shell = fs.existsSync("/bin/zsh") ? "/bin/zsh" : "/bin/bash";
+  const rcFile = shell.includes("zsh") ? "~/.zshrc" : "~/.bashrc";
+  for (const cmd of [
+    `source ${rcFile} 2>/dev/null; which claude`,
+    `which claude`,
+  ]) {
+    try {
+      const result = execSync(`${shell} -l -c '${cmd}'`, {
+        timeout: 5000,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (result && fs.existsSync(result)) {
+        _claudePath = result;
+        fileLog(`[pipeline] resolveClaudePath → ${result} (shell lookup)`);
+        return _claudePath;
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  fileLog("[pipeline] resolveClaudePath → not found (claude CLI not on known paths)");
+  _claudePath = "";
+  return null;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeClaudeRunner: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +104,12 @@ let activeStream: any = null;
 const pendingPermissions = new Map<string, (allowed: boolean) => void>();
 // Last completed session ID — used for resume
 let lastSessionId: string | null = null;
+
+/** Send a log line to the renderer window AND write it to the file log. */
+function sendLog(win: BrowserWindow, line: string): void {
+  win.webContents.send("pipeline:log", { line });
+  fileLog(line);
+}
 
 export function registerPipelineIpc(
   configService: ConfigService,
@@ -58,8 +126,6 @@ export function registerPipelineIpc(
         userMessage: string;
         mode?: "claude-code";
         skipPermissions?: boolean;
-        /** Runner engine: "claude-agent-sdk" (default), "claude-runner", or "ai-sdk" */
-        runner?: "claude-agent-sdk" | "claude-runner" | "ai-sdk";
         /** Resume a previous session instead of starting fresh */
         resumeSessionId?: string;
       }
@@ -156,13 +222,19 @@ export function registerPipelineIpc(
       // Server name MUST be "playwright-test" to match agent frontmatter tool prefixes
       // (e.g., mcp__playwright-test__browser_navigate, mcp__playwright-test__browser_snapshot)
       // Resolve local @playwright/mcp binary (avoids npx overhead of 300ms-3s per spawn)
+      // In a packaged .app, require.resolve() returns a path inside app.asar —
+      // a virtual filesystem that can't be used as a real executable path.
+      // Only use the local binary path in dev mode; packaged builds fall back to npx.
       let playwrightMcpBin: string;
-      try {
-        const pkgPath = require.resolve("@playwright/mcp/package.json");
-        playwrightMcpBin = path.join(path.dirname(pkgPath), "cli.js");
-      } catch {
-        // Fallback to npx if local package not installed
-        playwrightMcpBin = "";
+      if (!app.isPackaged) {
+        try {
+          const pkgPath = require.resolve("@playwright/mcp/package.json");
+          playwrightMcpBin = path.join(path.dirname(pkgPath), "cli.js");
+        } catch {
+          playwrightMcpBin = "";
+        }
+      } else {
+        playwrightMcpBin = ""; // packaged: fall back to npx below
       }
 
       // Flexible type: stdio servers use McpServerConfig; HTTP/streamable-http servers use { type, url }
@@ -199,7 +271,7 @@ export function registerPipelineIpc(
               if (cfg.type && cfg.type !== "stdio" && cfg.type !== "http" && cfg.type !== "streamable-http") continue;
               // Skip if already defined (e.g., playwright-test added above)
               if (mcpServers[name]) continue;
-              mcpServers[name] = cfg as McpServerConfig;
+              mcpServers[name] = cfg as Record<string, unknown>;
             }
             win.webContents.send("pipeline:log", {
               line: `[pipeline] MCP servers: ${Object.keys(mcpServers).join(", ")}`,
@@ -210,21 +282,15 @@ export function registerPipelineIpc(
         }
       }
 
-      const runnerType = payload.runner ?? "claude-runner";
-
-      const runnerLabel = runnerType === "ai-sdk" ? "Vercel AI SDK" : runnerType === "claude-runner" ? "Claude Runner" : "Claude Agent SDK";
-      win.webContents.send("pipeline:log", {
-        line: `[pipeline] Launching ${runnerLabel}…`,
-      });
+      win.webContents.send("pipeline:log", { line: `[pipeline] Launching Claude Runner…` });
 
       pendingPermissions.clear();
 
       try {
         let fullText: string;
 
-        if (runnerType === "claude-runner") {
-          // ── claude-runner (npm package) ──
-          // Simple API: Runner.stream() → flat RunEvents
+        {
+          // ── claude-runner ──
           const { Runner } = await loadClaudeRunner();
 
           const mcpConfig: Record<string, string | { command: string; args?: string[]; env?: Record<string, string> } | { type: "http"; url: string; headers?: Record<string, string> }> = {};
@@ -241,6 +307,7 @@ export function registerPipelineIpc(
             }
           }
 
+          const claudePath = resolveClaudePath();
           const runner = new Runner({
             cwd: projectPath,
             systemPrompt: systemPrompt ? { preset: "claude_code" as const, append: systemPrompt } : undefined,
@@ -262,6 +329,9 @@ export function registerPipelineIpc(
               agentProgressSummaries: true,
               // Only use MCPs we explicitly configure — don't merge with user's system MCPs from ~/.claude.json
               strictMcpConfig: true,
+              // Pass the resolved claude CLI path so the SDK doesn't fall back to
+              // require.resolve("./cli.js") which points inside app.asar (not a real path)
+              ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
             },
           });
           activeClaudeRunner = runner;
@@ -352,134 +422,13 @@ export function registerPipelineIpc(
                 break;
             }
           }
-        } else if (runnerType === "ai-sdk") {
-          // ── Vercel AI SDK runner ──
-          // Native MCP discovery, prompt caching, streaming
-          const aiRunner = new AiSdkRunner();
-          activeRunner = aiRunner;
-
-          fullText = await aiRunner.run({
-            systemPrompt,
-            userMessage,
-            model: "claude-sonnet-4-6",
-            mcpServers,
-            includePlaywrightMcp: true,
-            playwrightMcpArgs: screenshotDir
-              ? ["--output-dir", screenshotDir]
-              : [],
-            maxSteps: 50,
-            onToken: (token) => {
-              win.webContents.send("pipeline:token", { token });
-            },
-            onLog: (line) => {
-              win.webContents.send("pipeline:log", { line });
-            },
-            onToolStart: (toolName) => {
-              win.webContents.send("pipeline:tool-start", { toolName, toolId: "" });
-            },
-            onToolEnd: (toolName, durationMs) => {
-              win.webContents.send("pipeline:tool-end", { toolName, toolId: "", durationMs });
-            },
-            onStepFinish: (info) => {
-              win.webContents.send("pipeline:log", {
-                line: `[ai-sdk] Step ${info.stepNumber} — ${info.totalTokens} tokens, tools: ${info.toolCalls.join(", ") || "none"}`,
-              });
-            },
-          });
-        } else {
-          // ── Claude Agent SDK runner (default) ──
-          const agentRunner = new ClaudeAgentRunner();
-          activeRunner = agentRunner;
-
-          // Agent SDK only supports stdio servers — filter out HTTP/streamable-http MCPs
-          const stdioMcpServers = Object.fromEntries(
-            Object.entries(mcpServers).filter(([, cfg]) => !cfg.url)
-          ) as Record<string, McpServerConfig>;
-
-          fullText = await agentRunner.run({
-            systemPrompt,
-            userMessage,
-            cwd: projectPath,
-            resumeSessionId: payload.resumeSessionId,
-            mcpServers: stdioMcpServers,
-            skipPermissions: payload.skipPermissions,
-            onToken: (token) => {
-              win.webContents.send("pipeline:token", { token });
-            },
-            onLog: (line) => {
-              win.webContents.send("pipeline:log", { line });
-            },
-            onToolStart: (toolName, toolId) => {
-              win.webContents.send("pipeline:tool-start", { toolName, toolId });
-            },
-            onToolEnd: (toolName, toolId, durationMs) => {
-              win.webContents.send("pipeline:tool-end", { toolName, toolId, durationMs });
-            },
-            onPermissionRequest: async (request) => {
-              win.webContents.send("pipeline:permission-request", request);
-              return new Promise<boolean>((resolve) => {
-                pendingPermissions.set(request.id, resolve);
-              });
-            },
-            onExplore: async (url: string) => {
-              win.webContents.send("pipeline:log", {
-                line: `[explorer] Starting browser exploration of ${url}`,
-              });
-              const explorer = new PlaywrightMcpClient();
-              try {
-                await explorer.connect({
-                  outputDir: screenshotDir,
-                  onLog: (line) => {
-                    win.webContents.send("pipeline:log", { line });
-                  },
-                });
-                // Stream exploration progress as live tokens
-                win.webContents.send("pipeline:token", { token: "\n\n**Browser Exploration:**\n" });
-                const result = await explorer.explore(url, undefined, (step) => {
-                  win.webContents.send("pipeline:token", { token: `${step}\n` });
-                });
-                await explorer.disconnect();
-
-                // Format snapshot for Claude's context injection
-                const lines: string[] = [
-                  `# Live Browser Exploration — ${result.title}`,
-                  `URL: ${result.url}`,
-                  "",
-                  "## Accessibility Snapshot (landing page)",
-                  result.snapshot,
-                ];
-                if (result.pageSnapshots.length > 0) {
-                  lines.push("", "## Additional Page Snapshots");
-                  for (const ps of result.pageSnapshots) {
-                    lines.push(`\n### ${ps.url}`, ps.snapshot);
-                  }
-                }
-                if (result.error) {
-                  lines.push("", `## Exploration Error`, result.error);
-                }
-                return lines.join("\n");
-              } catch (err) {
-                const msg = `Exploration failed: ${String(err)}`;
-                win.webContents.send("pipeline:log", {
-                  line: `[explorer] ${msg}`,
-                });
-                try { await explorer.disconnect(); } catch { /* ignore */ }
-                return null;
-              }
-            },
-          });
         }
 
-        // Save session ID for potential resume
-        if (activeRunner instanceof ClaudeAgentRunner) {
-          lastSessionId = activeRunner.getLastSessionId();
-        }
         win.webContents.send("pipeline:done", { fullText, sessionId: lastSessionId, userMessage });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         win.webContents.send("pipeline:error", { error: msg });
       } finally {
-        activeRunner = null;
         activeClaudeRunner = null;
         activeStream = null;
         pendingPermissions.clear();
@@ -488,10 +437,6 @@ export function registerPipelineIpc(
   );
 
   ipcMain.handle("pipeline:abort", () => {
-    if (activeRunner) {
-      activeRunner.abort();
-      activeRunner = null;
-    }
     if (activeClaudeRunner) {
       activeClaudeRunner.abort();
       activeClaudeRunner = null;
@@ -500,22 +445,23 @@ export function registerPipelineIpc(
     pendingPermissions.clear();
   });
 
-  ipcMain.handle("pipeline:send-message", (_event, { text, priority }: { text: string; priority?: "now" | "next" }): boolean => {
-    if (activeRunner && activeRunner instanceof ClaudeAgentRunner) {
+  ipcMain.handle("pipeline:send-message", (_event, { text }: { text: string; priority?: "now" | "next" }): boolean => {
+    if (activeStream) {
       const win = getWindow();
       win?.webContents.send("pipeline:log", { line: `[user] ${text}` });
-      return activeRunner.sendMessage(text, priority ?? "now");
+      activeStream.send(text);
+      return true;
     }
     return false;
   });
 
   ipcMain.handle("pipeline:interrupt", async () => {
-    if (activeRunner && activeRunner instanceof ClaudeAgentRunner) {
+    if (activeStream) {
       const win = getWindow();
       win?.webContents.send("pipeline:log", {
         line: `[pipeline] Interrupted by user — Claude will pause and await instructions`,
       });
-      await activeRunner.interrupt();
+      activeStream.send("\n\n[User interrupted. Pause what you're doing and wait for instructions.]");
     }
   });
 
@@ -533,6 +479,18 @@ export function registerPipelineIpc(
       }
     }
   );
+
+  // Log file helpers — expose path and allow opening via shell
+  ipcMain.handle("pipeline:get-log-path", () => getLogFilePath());
+  ipcMain.handle("pipeline:open-log", () => {
+    const logPath = getLogFilePath();
+    if (logPath && fs.existsSync(logPath)) {
+      const { shell } = require("electron");
+      shell.openPath(logPath);
+      return true;
+    }
+    return false;
+  });
 
   // Read context files (plan + seed) for continuation prompts
   ipcMain.handle("pipeline:read-context-files", async () => {

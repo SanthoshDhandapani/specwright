@@ -40,12 +40,27 @@ interface ExploreResultData {
   error: string | null;
 }
 
+type PluginSource =
+  | { type: "local"; dirPath: string }
+  | { type: "npm"; packageName: string; registry?: string };
+
+interface PluginValidationResult {
+  valid: boolean;
+  pluginName?: string;
+  error?: string;
+}
+
+interface ShellAPI {
+  openUrl: (url: string) => Promise<void>;
+}
+
 interface SpecwrightAPI {
   project: {
     pickFolder: () => Promise<string | null>;
     pickFiles: () => Promise<string[]>;
     uploadTestFile: (sourcePath: string) => Promise<string>;
-    bootstrap: (folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string }) => Promise<BootstrapResult>;
+    bootstrap: (folderPath: string, options?: { skipAuth?: boolean; authStrategy?: string; overlay?: PluginSource }) => Promise<BootstrapResult>;
+    validatePlugin: (dirPath: string) => Promise<PluginValidationResult>;
     detectPlugin: (folderPath: string) => Promise<PluginInfo>;
     getPath: () => Promise<string>;
     setPath: (p: string) => Promise<void>;
@@ -58,6 +73,8 @@ interface SpecwrightAPI {
     readCustomTemplates: (p: string) => Promise<Array<object & { templateName: string }>>;
     writeCustomTemplates: (p: string, templates: object[]) => Promise<void>;
     onBootstrapLog: (cb: (data: { line: string }) => void) => () => void;
+    readTestScripts: (p: string) => Promise<Record<string, string>>;
+    readFeatureModules: (p: string) => Promise<{ modules: string[]; workflows: string[] }>;
   };
   pipeline: {
     start: (payload: {
@@ -81,7 +98,10 @@ interface SpecwrightAPI {
     onToolEnd: (cb: (data: ToolEventData) => void) => () => void;
     onExploreResult: (cb: (data: ExploreResultData) => void) => () => void;
     onMcpStatus: (cb: (data: { server: string; status: string }) => void) => () => void;
+    getLogPath: () => Promise<string | null>;
+    openLog: () => Promise<boolean>;
   };
+  shell: ShellAPI;
   atlassian: {
     status: () => Promise<{ status: "idle" | "connected" | "needs-auth" }>;
     connect: () => Promise<{ success: boolean; error?: string }>;

@@ -1,4 +1,9 @@
 import { create } from "zustand";
+import { usePipelineStore } from "./pipeline.store";
+
+export type PluginSource =
+  | { type: "local"; dirPath: string }
+  | { type: "npm"; packageName: string; registry?: string };
 
 export type ProjectState = "none" | "bootstrapping" | "ready" | "error";
 
@@ -20,6 +25,8 @@ interface ConfigState {
   loaded: boolean;
   skipPermissions: boolean;
   activeTab: ActiveTab;
+  /** Plugin selected before project creation. null = use default @specwright/plugin. */
+  pendingPlugin: PluginSource | null;
 
   hydrate: () => Promise<void>;
   pickAndBootstrap: () => Promise<void>;
@@ -30,6 +37,7 @@ interface ConfigState {
   appendBootstrapLog: (line: string) => void;
   setSkipPermissions: (skip: boolean) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  setPendingPlugin: (source: PluginSource | null) => void;
 }
 
 const DEFAULT_ENV: EnvVars = { BASE_URL: "", TEST_ENV: "qat" };
@@ -42,6 +50,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   loaded: false,
   skipPermissions: true,
   activeTab: "explorer",
+  pendingPlugin: null,
 
   hydrate: async () => {
     const projectPath = await window.specwright.project.getPath();
@@ -63,29 +72,40 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const folder = await window.specwright.project.pickFolder();
     if (!folder) return;
 
-    // Check if already bootstrapped
+    // Check if already bootstrapped — load it directly
     const isReady = await window.specwright.project.isBootstrapped(folder);
     if (isReady) {
       await get().loadExistingProject(folder);
       return;
     }
 
+    usePipelineStore.getState().clearFeed();
     set({ projectPath: folder, projectState: "bootstrapping", bootstrapLog: [] });
 
-    const result = await window.specwright.project.bootstrap(folder);
+    const { pendingPlugin } = get();
+    const result = await window.specwright.project.bootstrap(
+      folder,
+      pendingPlugin ? { overlay: pendingPlugin } : undefined
+    );
+
     if (result.success) {
-      const envVars = await window.specwright.project.readEnv(folder);
-      set({ projectState: "ready", envVars });
+      let envVars: EnvVars = { ...DEFAULT_ENV };
+      try {
+        envVars = await window.specwright.project.readEnv(folder);
+      } catch {
+        /* env file missing or unreadable — project still ready, use defaults */
+      }
+      set({ projectState: "ready", envVars, pendingPlugin: null });
     } else {
       set({ projectState: "error" });
     }
   },
 
   loadExistingProject: async (folderPath: string) => {
+    usePipelineStore.getState().clearFeed();
     await window.specwright.project.setPath(folderPath);
     const isReady = await window.specwright.project.isBootstrapped(folderPath);
     if (!isReady) {
-      // e2e-tests not set up — drop back to bootstrap view
       set({ projectPath: folderPath, projectState: "none" });
       return;
     }
@@ -118,7 +138,12 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   setSkipPermissions: (skip) => {
     set({ skipPermissions: skip });
   },
+
   setActiveTab: (tab) => {
     set({ activeTab: tab });
+  },
+
+  setPendingPlugin: (source) => {
+    set({ pendingPlugin: source });
   },
 }));

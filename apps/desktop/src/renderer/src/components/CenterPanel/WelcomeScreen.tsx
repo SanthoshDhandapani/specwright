@@ -20,7 +20,10 @@ export default function WelcomeScreen(): React.JSX.Element {
         <div className="text-5xl mb-4">⚡</div>
         <h1 className="text-3xl font-bold text-white tracking-tight">Specwright</h1>
         <p className="text-slate-400 mt-2 text-sm max-w-sm">
-          Visual Playwright BDD test generator. Pick a folder to scaffold a new E2E test project.
+          Describe what to test. Specwright handles the rest.
+        </p>
+        <p className="text-slate-500 mt-1 text-xs max-w-sm">
+          Zero manual coding. Fully automated from exploration to report.
         </p>
       </div>
 
@@ -63,9 +66,9 @@ export default function WelcomeScreen(): React.JSX.Element {
       {/* Feature highlights */}
       <div className="grid grid-cols-3 gap-4 mt-4 w-full max-w-xl">
         {[
-          { icon: "🧪", label: "BDD Features", desc: "Gherkin .feature files with Playwright" },
-          { icon: "🤖", label: "AI Generation", desc: "Claude Code CLI runs the pipeline" },
-          { icon: "📁", label: "Zero Config", desc: "All settings live in your project folder" },
+          { icon: "🤖", label: "Zero Touch", desc: "Describe in English — AI writes, runs, and heals every test" },
+          { icon: "🔍", label: "Live Exploration", desc: "Browser agent discovers selectors before generating a single line" },
+          { icon: "📊", label: "Reports Everyone Reads", desc: "Scenarios and results in plain English, plus traces and a quality score for every run" },
         ].map(({ icon, label, desc }) => (
           <div
             key={label}

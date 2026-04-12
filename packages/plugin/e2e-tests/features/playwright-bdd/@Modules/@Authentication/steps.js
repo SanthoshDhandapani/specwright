@@ -13,6 +13,17 @@ When('I click the user menu button', async ({ page }) => {
   await userMenuButton.click();
 });
 
+When('I click the logout button', async ({ page }) => {
+  // Try data-testid first (apps that expose one), fall back to role+name
+  const byTestId = page.getByTestId('logout-button');
+  const hasByTestId = await byTestId.isVisible().catch(() => false);
+  if (hasByTestId) {
+    await byTestId.click();
+  } else {
+    await page.getByRole('button', { name: 'Logout' }).click();
+  }
+});
+
 Then('the password field should be visible', async ({ page }) => {
   const passwordInput = page.getByTestId('loginPassword');
   await expect(passwordInput).toBeVisible();

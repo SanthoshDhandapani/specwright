@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useConfigStore } from "@renderer/store/config.store";
 
 const ENVS = ["qat", "dev", "staging", "prod", "local"];
@@ -227,6 +227,172 @@ function AuthSettingsModal({
   );
 }
 
+// ── Plugin Picker Modal ────────────────────────────────────────────────────
+
+type PluginTab = "local" | "npm";
+
+interface PluginPickerModalProps {
+  onClose: () => void;
+  onApply: (source: PluginSource) => void;
+  onReset: () => void;
+}
+
+function PluginPickerModal({ onClose, onApply, onReset }: PluginPickerModalProps): React.JSX.Element {
+  const [tab, setTab] = useState<PluginTab>("local");
+  const [localPath, setLocalPath] = useState("");
+  const [localValidation, setLocalValidation] = useState<{ valid: boolean; pluginName?: string; error?: string } | null>(null);
+  const [npmPackage, setNpmPackage] = useState("specwright-plugin-");
+  const [npmRegistry, setNpmRegistry] = useState("");
+  const [validating, setValidating] = useState(false);
+  const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const inputCls = "w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600";
+
+  const handleBrowseLocal = async (): Promise<void> => {
+    const picked = await window.specwright.project.pickFolder();
+    if (picked) {
+      setLocalPath(picked);
+      setLocalValidation(null);
+      validateDir(picked);
+    }
+  };
+
+  const validateDir = (dirPath: string): void => {
+    if (!dirPath.trim()) { setLocalValidation(null); return; }
+    if (validationTimeoutRef.current) clearTimeout(validationTimeoutRef.current);
+    setValidating(true);
+    validationTimeoutRef.current = setTimeout(async () => {
+      const result = await window.specwright.project.validatePlugin(dirPath);
+      setLocalValidation(result);
+      setValidating(false);
+    }, 400);
+  };
+
+  const canApply =
+    (tab === "local" && localValidation?.valid) ||
+    (tab === "npm" && npmPackage.trim().length > 3 && npmPackage.trim() !== "specwright-plugin-");
+
+  const handleApply = (): void => {
+    if (!canApply) return;
+    if (tab === "local") {
+      onApply({ type: "local", dirPath: localPath });
+    } else {
+      onApply({ type: "npm", packageName: npmPackage.trim(), registry: npmRegistry.trim() || undefined });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-[380px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+          <div>
+            <h2 className="text-slate-200 text-sm font-semibold">Select Plugin</h2>
+            <p className="text-slate-500 text-xs mt-0.5">Plugins configure your test framework for your app</p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-sm">✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-700">
+          {(["local", "npm"] as PluginTab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 text-xs py-2 transition-colors ${tab === t ? "text-brand-400 border-b-2 border-brand-400" : "text-slate-500 hover:text-slate-300"}`}
+            >
+              {t === "local" ? "Local" : "npm"}
+            </button>
+          ))}
+        </div>
+
+        <div className="px-4 py-3 space-y-3">
+          {tab === "local" && (
+            <>
+              <p className="text-slate-500 text-xs">Browse to your org's plugin directory. It must contain a <span className="font-mono text-slate-400">specwright.plugin.json</span> file.</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={localPath}
+                  onChange={(e) => { setLocalPath(e.target.value); validateDir(e.target.value); }}
+                  placeholder="/path/to/plugin-directory"
+                  className={`${inputCls} flex-1`}
+                />
+                <button
+                  onClick={handleBrowseLocal}
+                  className="text-xs px-3 py-1.5 rounded bg-slate-700 border border-slate-600 hover:border-brand-500 text-slate-300 hover:text-brand-400 transition-colors flex-shrink-0"
+                >
+                  Browse
+                </button>
+              </div>
+              {validating && <p className="text-slate-500 text-xs">Validating…</p>}
+              {!validating && localValidation && (
+                localValidation.valid ? (
+                  <p className="text-green-400 text-xs">✓ <span className="font-mono">{localValidation.pluginName}</span></p>
+                ) : (
+                  <p className="text-red-400 text-xs">{localValidation.error}</p>
+                )
+              )}
+            </>
+          )}
+
+          {tab === "npm" && (
+            <>
+              <p className="text-slate-500 text-xs">Install a plugin from npm. Use your org's private registry if the plugin is not public.</p>
+              <div>
+                <label className="block text-slate-400 text-xs mb-1">Package name</label>
+                <input
+                  type="text"
+                  value={npmPackage}
+                  onChange={(e) => setNpmPackage(e.target.value)}
+                  placeholder="specwright-plugin-acme-corp"
+                  className={inputCls}
+                />
+                <p className="text-slate-600 text-xs mt-0.5">Convention: <span className="font-mono">specwright-plugin-*</span></p>
+              </div>
+              <div>
+                <label className="block text-slate-400 text-xs mb-1">Registry <span className="text-slate-600">(optional)</span></label>
+                <input
+                  type="text"
+                  value={npmRegistry}
+                  onChange={(e) => setNpmRegistry(e.target.value)}
+                  placeholder="https://npm.your-org.com"
+                  className={inputCls}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700">
+          <button
+            onClick={() => { onReset(); onClose(); }}
+            className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
+          >
+            Use default
+          </button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-200 text-xs px-3 py-1.5 rounded transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleApply}
+              disabled={!canApply}
+              className="text-xs px-4 py-1.5 rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-brand-600 hover:bg-brand-500 text-white"
+            >
+              Select
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ConfigPanel ────────────────────────────────────────────────────────────
 
 const EMPTY_AUTH: AuthFields = {
@@ -248,7 +414,7 @@ export default function ConfigPanel(): React.JSX.Element {
   const {
     projectPath, projectState, envVars, loaded,
     pickAndBootstrap, loadExistingProject, setEnvVar, removeEnvVar, saveEnv,
-    skipPermissions, setSkipPermissions,
+    skipPermissions, setSkipPermissions, pendingPlugin, setPendingPlugin,
   } = useConfigStore();
 
   const [customVarKey, setCustomVarKey] = useState("");
@@ -256,9 +422,18 @@ export default function ConfigPanel(): React.JSX.Element {
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(new Set());
   const [authFields, setAuthFields] = useState<AuthFields>(EMPTY_AUTH);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showPluginModal, setShowPluginModal] = useState(false);
+  const [pluginInfo, setPluginInfo] = useState<PluginInfo | null>(null);
+  const [applyingPlugin, setApplyingPlugin] = useState(false);
 
   const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
   const authRequired = authStrategy !== "none";
+
+  // Load plugin info when project is ready
+  useEffect(() => {
+    if (!projectPath || !loaded) return;
+    window.specwright.project.detectPlugin(projectPath).then(setPluginInfo).catch(() => null);
+  }, [projectPath, loaded]);
 
   // Load auth config from .env.testing when project is ready
   useEffect(() => {
@@ -319,6 +494,24 @@ export default function ConfigPanel(): React.JSX.Element {
     setShowAuthModal(false);
   };
 
+  const handleApplyPlugin = async (source: PluginSource): Promise<void> => {
+    setShowPluginModal(false);
+    if (!isReady) {
+      // Pre-create: store in the global store so the center panel's create button picks it up
+      setPendingPlugin(source);
+      return;
+    }
+    // Post-create: re-run bootstrap with the plugin on the existing project
+    setApplyingPlugin(true);
+    try {
+      await window.specwright.project.bootstrap(projectPath, { overlay: source });
+      const updated = await window.specwright.project.detectPlugin(projectPath);
+      setPluginInfo(updated);
+    } finally {
+      setApplyingPlugin(false);
+    }
+  };
+
   const isSensitiveKey = (key: string): boolean =>
     /password|secret|token|api.?key/i.test(key);
 
@@ -365,6 +558,13 @@ export default function ConfigPanel(): React.JSX.Element {
           onClose={() => setShowAuthModal(false)}
         />
       )}
+      {showPluginModal && (
+        <PluginPickerModal
+          onClose={() => setShowPluginModal(false)}
+          onApply={handleApplyPlugin}
+          onReset={() => setPendingPlugin(null)}
+        />
+      )}
 
       <div className="flex flex-col h-full px-4 py-3 gap-4 overflow-y-auto scrollable">
 
@@ -381,16 +581,17 @@ export default function ConfigPanel(): React.JSX.Element {
           <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Project</p>
 
           {isReady ? (
-            <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
+            <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 space-y-2">
+              {/* Project path */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <p className="text-green-400 text-xs font-medium flex items-center gap-1.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <p className="text-green-400 text-xs font-medium flex items-center gap-1.5 flex-shrink-0">
                     <span className="w-2 h-2 bg-green-400 rounded-full" />
                     Ready
                   </p>
                   <button
                     onClick={() => loadExistingProject(projectPath)}
-                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                    className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
                     title="Sync project — reload .env.testing from disk"
                   >
                     <SyncButtonIcon />
@@ -398,34 +599,69 @@ export default function ConfigPanel(): React.JSX.Element {
                 </div>
                 <button
                   onClick={pickAndBootstrap}
-                  className="text-slate-500 hover:text-brand-400 text-xs transition-colors"
+                  className="text-slate-500 hover:text-brand-400 text-xs transition-colors flex-shrink-0"
                   title="Change project"
                 >
                   Change
                 </button>
               </div>
-              <p className="text-slate-300 text-xs mt-1 truncate font-mono" title={projectPath}>
+              <p className="text-slate-300 text-xs truncate font-mono" title={projectPath}>
                 {basename(projectPath)}
               </p>
               <p className="text-slate-600 text-xs truncate" title={projectPath}>
                 {projectPath}
               </p>
+
+              {/* Plugin row */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
+                <div className="min-w-0">
+                  <p className="text-slate-500 text-xs uppercase tracking-wider font-medium">Plugin</p>
+                  {applyingPlugin ? (
+                    <p className="text-slate-400 text-xs flex items-center gap-1.5 mt-0.5">
+                      <span className="w-2.5 h-2.5 border border-brand-400 border-t-transparent rounded-full animate-spin inline-block" />
+                      Installing…
+                    </p>
+                  ) : pluginInfo && pluginInfo.name !== "none" ? (
+                    <p className="text-slate-300 text-xs font-mono truncate mt-0.5" title={pluginInfo.name}>
+                      {pluginInfo.hasOverlay ? pluginInfo.overlayName : pluginInfo.name}
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 text-xs font-mono mt-0.5">@specwright/plugin</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowPluginModal(true)}
+                  disabled={applyingPlugin}
+                  className="text-slate-500 hover:text-brand-400 text-xs transition-colors flex-shrink-0 ml-2 disabled:opacity-40"
+                >
+                  Change
+                </button>
+              </div>
             </div>
           ) : (
-            <button
-              onClick={pickAndBootstrap}
-              disabled={!loaded || projectState === "bootstrapping"}
-              className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-600 hover:border-brand-500 text-slate-400 hover:text-brand-400 text-xs rounded-lg px-3 py-2.5 transition-colors disabled:opacity-40"
-            >
-              {projectState === "bootstrapping" ? (
-                <>
-                  <span className="w-3 h-3 border border-brand-400 border-t-transparent rounded-full animate-spin" />
-                  Bootstrapping…
-                </>
-              ) : (
-                <>+ Create new test project</>
-              )}
-            </button>
+            /* Pre-create: plugin selector only — create button lives in the center panel */
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-slate-500 text-xs uppercase tracking-wider font-medium">Plugin</p>
+                  {pendingPlugin ? (
+                    <p className="text-brand-400 text-xs font-mono truncate mt-0.5">
+                      {pendingPlugin.type === "local"
+                        ? pendingPlugin.dirPath.split("/").pop()
+                        : pendingPlugin.packageName}
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 text-xs font-mono mt-0.5">@specwright/plugin</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowPluginModal(true)}
+                  className="text-slate-500 hover:text-brand-400 text-xs transition-colors flex-shrink-0 ml-2"
+                >
+                  Change
+                </button>
+              </div>
+            </div>
           )}
         </section>
 

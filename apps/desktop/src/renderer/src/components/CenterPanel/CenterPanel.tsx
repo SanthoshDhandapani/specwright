@@ -86,8 +86,200 @@ function PhaseHeader({ phase, isActive }: { phase: Phase; isActive: boolean }): 
   );
 }
 
+// ── Run Tests command palette ─────────────────────────────────────────────────
+type PaletteItem =
+  | { kind: "module";   label: string; arg: string }
+  | { kind: "workflow"; label: string; arg: string }
+  | { kind: "script";  label: string; arg: string }
+  | { kind: "custom";  label: string; arg: string };
+
+function RunTestsPalette({
+  testScripts,
+  featureModules,
+  onRun,
+  onClose,
+  inputRef,
+}: {
+  testScripts: Record<string, string>;
+  featureModules: { modules: string[]; workflows: string[] };
+  onRun: (arg: string) => void;
+  onClose: () => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}): React.JSX.Element {
+  const [query, setQuery] = useState("");
+  const [activeIdx, setActiveIdx] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Build flat item list — All first, then Modules, Workflows, specific Scripts.
+  // Umbrella scripts without --grep (test:bdd:all, test:bdd:ci etc.) are omitted
+  // since the "All" entry covers them and module/workflow entries cover the rest.
+  const allItems = React.useMemo((): PaletteItem[] => {
+    const items: PaletteItem[] = [];
+    // "All" is always first — runs the full test suite
+    const allScript = Object.keys(testScripts).find((k) => k === "test:bdd") ?? "test:bdd";
+    items.push({ kind: "script", label: "All Tests", arg: allScript });
+    for (const dir of featureModules.modules) {
+      const label = dir.replace(/^@/, "");
+      items.push({ kind: "module", label, arg: `@${label.toLowerCase()}` });
+    }
+    for (const dir of featureModules.workflows) {
+      const label = dir.replace(/^@/, "");
+      items.push({ kind: "workflow", label, arg: `@${label.toLowerCase()}` });
+    }
+    for (const [name, cmd] of Object.entries(testScripts)) {
+      if (name === "test:bdd") continue; // already shown as "All Tests"
+      if (cmd.includes("--grep")) {
+        items.push({ kind: "script", label: name, arg: name });
+      }
+    }
+    return items;
+  }, [featureModules, testScripts]);
+
+  // Filter by query
+  const filtered = React.useMemo((): PaletteItem[] => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allItems;
+    return allItems.filter(
+      (it) => it.label.toLowerCase().includes(q) || it.arg.toLowerCase().includes(q)
+    );
+  }, [allItems, query]);
+
+  // Append "run as custom" ONLY when the query looks like a Playwright filter
+  // (@tag or --flag), not when it's a plain text search like "fav".
+  const items = React.useMemo((): PaletteItem[] => {
+    const q = query.trim();
+    if (!q) return filtered;
+    const isFilter = q.startsWith("@") || q.startsWith("--");
+    if (!isFilter) return filtered;
+    const exactMatch = filtered.some((it) => it.arg === q);
+    if (exactMatch) return filtered;
+    return [...filtered, { kind: "custom", label: `Run "${q}"`, arg: q }];
+  }, [filtered, query]);
+
+  // Reset active index when results change
+  useEffect(() => { setActiveIdx(0); }, [query]);
+
+  // Scroll active item into view
+  useEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${activeIdx}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx]);
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, items.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); if (items[activeIdx]) onRun(items[activeIdx].arg); }
+    else if (e.key === "Escape") { onClose(); }
+  };
+
+  const kindMeta: Record<PaletteItem["kind"], { icon: string; badge: string; badgeCls: string; rowHover: string }> = {
+    module:   { icon: "▶", badge: "Module",   badgeCls: "text-brand-400 bg-brand-950/60 border-brand-800/40",   rowHover: "hover:bg-slate-800/80" },
+    workflow: { icon: "⇄", badge: "Workflow",  badgeCls: "text-emerald-400 bg-emerald-950/60 border-emerald-800/40", rowHover: "hover:bg-slate-800/80" },
+    script:   { icon: "≡", badge: "Script",    badgeCls: "text-slate-400 bg-slate-800 border-slate-700",         rowHover: "hover:bg-slate-800/80" },
+    custom:   { icon: "↵", badge: "Custom",    badgeCls: "text-amber-400 bg-amber-950/40 border-amber-800/30",   rowHover: "hover:bg-slate-800/80" },
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] pointer-events-none">
+        <div className="pointer-events-auto w-[480px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+          {/* Search input */}
+          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-700">
+            <span className="text-slate-500 text-sm">⌕</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Search modules, workflows, scripts…"
+              className="flex-1 bg-transparent text-slate-200 text-sm placeholder-slate-600 outline-none"
+              autoFocus
+            />
+            {query && (
+              <button onClick={() => setQuery("")} className="text-slate-600 hover:text-slate-400 text-xs">✕</button>
+            )}
+            <kbd className="text-slate-700 text-[10px] font-mono border border-slate-700 rounded px-1 py-0.5">esc</kbd>
+          </div>
+
+          {/* Results list */}
+          <div ref={listRef} className="max-h-72 overflow-y-auto scrollable py-1">
+            {items.length === 0 ? (
+              <p className="px-4 py-6 text-slate-600 text-xs text-center">No matches — type a tag like @auth or a script name</p>
+            ) : (
+              items.map((item, idx) => {
+                const meta = kindMeta[item.kind];
+                const isActive = idx === activeIdx;
+                return (
+                  <button
+                    key={`${item.kind}-${item.arg}`}
+                    data-idx={idx}
+                    onClick={() => onRun(item.arg)}
+                    onMouseEnter={() => setActiveIdx(idx)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${meta.rowHover} ${isActive ? "bg-slate-800" : ""}`}
+                  >
+                    <span className={`text-xs flex-shrink-0 ${item.kind === "module" ? "text-brand-400" : item.kind === "workflow" ? "text-emerald-400" : item.kind === "custom" ? "text-amber-400" : "text-slate-500"}`}>
+                      {meta.icon}
+                    </span>
+                    <span className={`flex-1 text-xs font-medium truncate ${isActive ? "text-white" : "text-slate-300"}`}>
+                      {item.label}
+                    </span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${meta.badgeCls}`}>
+                      {meta.badge}
+                    </span>
+                    {isActive && (
+                      <kbd className="text-slate-600 text-[10px] font-mono">↵</kbd>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer hint */}
+          <div className="px-4 py-2 border-t border-slate-800 flex items-center gap-3 text-slate-700 text-[10px]">
+            <span><kbd className="font-mono">↑↓</kbd> navigate</span>
+            <span><kbd className="font-mono">↵</kbd> run</span>
+            <span><kbd className="font-mono">esc</kbd> close</span>
+            <span className="ml-auto">or type a custom filter: @tag · --grep · --project</span>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── URL-aware text renderer ───────────────────────────────────────────────────
+const URL_REGEX = /https?:\/\/[^\s)>\]'"\\]+/g;
+
+function renderWithLinks(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  URL_REGEX.lastIndex = 0;
+  while ((match = URL_REGEX.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    const url = match[0];
+    parts.push(
+      <a
+        key={match.index}
+        href="#"
+        onClick={(e) => { e.preventDefault(); window.specwright.shell.openUrl(url); }}
+        className="text-brand-400 hover:text-brand-300 underline decoration-brand-700 hover:decoration-brand-400 cursor-pointer transition-colors"
+        title={`Open ${url}`}
+      >
+        {url}
+      </a>
+    );
+    lastIndex = match.index + url.length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : <>{parts}</>;
+}
+
 // ── Streaming output panel (shown while pipeline runs / after done) ──────────
-function AgentOutputPanel(): React.JSX.Element {
+function AgentOutputPanel({ onOpenRunPicker }: { onOpenRunPicker: () => void }): React.JSX.Element {
   const { messages, logLines, status, errorMessage, clearFeed, injectUserMessage, startRun, resumeRun, phases } = usePipelineStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -208,17 +400,6 @@ function AgentOutputPanel(): React.JSX.Element {
     }
   }, [handleSend]);
 
-  const handleRunTests = useCallback(async () => {
-    // Use /e2e-run skill directly — no ### Phase N: headers in output, preserves existing phase states
-    const userMessage = `/e2e-run --project setup --project main-e2e`;
-    resumeRun(userMessage);
-    const { skipPermissions } = useConfigStore.getState();
-    await window.specwright.pipeline.start({
-      userMessage,
-      mode: "claude-code",
-      skipPermissions,
-    });
-  }, [resumeRun]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -263,7 +444,7 @@ function AgentOutputPanel(): React.JSX.Element {
           {!isRunning && (
             <>
               <button
-                onClick={handleRunTests}
+                onClick={onOpenRunPicker}
                 className="text-emerald-400 hover:text-emerald-300 text-xs border border-emerald-800 hover:border-emerald-600 rounded px-2 py-0.5 transition-colors"
               >
                 ▶ Run Tests
@@ -309,7 +490,7 @@ function AgentOutputPanel(): React.JSX.Element {
               <div key={msg.id} className="group/msg relative">
                 {msg.content ? (
                   <pre className="whitespace-pre-wrap break-words font-sans text-slate-200 text-sm leading-relaxed m-0 select-text cursor-text">
-                    {msg.content}
+                    {renderWithLinks(msg.content)}
                     {msg.isStreaming && !activeTool && (
                       <span className="inline-block w-0.5 h-4 bg-brand-400 ml-0.5 align-middle animate-pulse" />
                     )}
@@ -479,8 +660,49 @@ function detectPhaseFromText(text: string, currentPhase: number): number | null 
 
 export default function CenterPanel(): React.JSX.Element {
   const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, splitForPhase, status, setMcpStatus } = usePipelineStore();
-  const { projectState, loaded, hydrate, activeTab, setActiveTab } = useConfigStore();
+  const { projectState, loaded, hydrate, activeTab, setActiveTab, projectPath } = useConfigStore();
   const lastPhaseRef = React.useRef<number>(0);
+
+  // ── Run Tests picker state (shared between tab bar + output panel) ────────────
+  const [showRunPicker, setShowRunPicker] = useState(false);
+  const [testScripts, setTestScripts] = useState<Record<string, string>>({});
+  const [featureModules, setFeatureModules] = useState<{ modules: string[]; workflows: string[] }>({ modules: [], workflows: [] });
+  const customInputRef = useRef<HTMLInputElement>(null);
+
+  // Eagerly load feature modules whenever the project changes so the Run Tests
+  // button appears as soon as tests exist — no need to open the picker first.
+  useEffect(() => {
+    if (!projectPath) return;
+    window.specwright.project.readFeatureModules(projectPath).then(setFeatureModules);
+  }, [projectPath]);
+
+  const hasTests = featureModules.modules.length > 0 || featureModules.workflows.length > 0;
+
+  const openRunPicker = useCallback(async () => {
+    if (projectPath) {
+      const [scripts, modules] = await Promise.all([
+        window.specwright.project.readTestScripts(projectPath),
+        window.specwright.project.readFeatureModules(projectPath),
+      ]);
+      setTestScripts(scripts);
+      setFeatureModules(modules);
+    }
+    setShowRunPicker(true);
+    setTimeout(() => customInputRef.current?.focus(), 80);
+  }, [projectPath]);
+
+  const closeRunPicker = useCallback(() => {
+    setShowRunPicker(false);
+  }, []);
+
+  const handleRunTests = useCallback(async (arg: string) => {
+    closeRunPicker();
+    const { resumeRun } = usePipelineStore.getState();
+    const userMessage = `/e2e-run ${arg}`.trim();
+    resumeRun(userMessage);
+    const { skipPermissions } = useConfigStore.getState();
+    await window.specwright.pipeline.start({ userMessage, mode: "claude-code", skipPermissions });
+  }, [closeRunPicker]);
 
   // Load config on mount
   useEffect(() => {
@@ -613,7 +835,7 @@ export default function CenterPanel(): React.JSX.Element {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Tab bar — shown when pipeline is NOT running */}
       {!showOutput && (
-        <div className="flex-shrink-0 border-b border-slate-700 bg-slate-900/60 px-4">
+        <div className="flex-shrink-0 border-b border-slate-700 bg-slate-900/60 px-4 flex items-center justify-between">
           <div className="flex gap-0">
             <button
               onClick={() => setActiveTab("explorer")}
@@ -636,19 +858,39 @@ export default function CenterPanel(): React.JSX.Element {
               Healer
             </button>
           </div>
+          {/* Run Tests — only shown when generated tests exist */}
+          {hasTests && (
+            <button
+              onClick={openRunPicker}
+              className="text-emerald-400 hover:text-emerald-300 text-xs border border-emerald-800 hover:border-emerald-600 rounded px-2.5 py-1 transition-colors flex items-center gap-1.5"
+            >
+              <span>▶</span> Run Tests
+            </button>
+          )}
         </div>
       )}
 
       {/* Main content: tab panels OR agent output */}
       <div className="flex-1 min-h-0 flex flex-col">
         {showOutput ? (
-          <AgentOutputPanel />
+          <AgentOutputPanel onOpenRunPicker={openRunPicker} />
         ) : activeTab === "healer" ? (
           <HealerPanel />
         ) : (
           <InstructionsBuilder />
         )}
       </div>
+
+      {/* Run Tests — command palette modal */}
+      {showRunPicker && (
+        <RunTestsPalette
+          testScripts={testScripts}
+          featureModules={featureModules}
+          onRun={handleRunTests}
+          onClose={closeRunPicker}
+          inputRef={customInputRef}
+        />
+      )}
     </div>
   );
 }

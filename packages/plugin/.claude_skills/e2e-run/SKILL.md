@@ -1,41 +1,155 @@
 ---
 name: e2e-run
 description: Run BDD tests and report results. Use to quickly execute E2E tests without the full automation pipeline.
-argument-hint: <project-or-tag>
+argument-hint: <script-name|tag|playwright-flags>
 context: fork
 ---
 
 # Quick Test Runner
 
-Run BDD tests quickly with optional filtering.
+Run BDD tests quickly with optional filtering. Accepts a package.json script name, a tag shorthand, or raw Playwright CLI flags.
 
 ## What This Does
 
-1. Runs `npx bddgen` to compile feature files
-2. Runs `npx playwright test` with optional filters from $ARGUMENTS
-3. Reports pass/fail summary
-4. Opens HTML report if failures detected
+1. Resolves the correct run command from $ARGUMENTS
+2. Runs it
+3. Reports pass/fail summary with scenario counts
+4. Shows the report location on completion
 
 ## Usage
 
 ```
-/e2e-run                                  # Run all BDD tests
-/e2e-run --project auth-tests             # Run specific project
-/e2e-run --grep @smoke                    # Run tests matching tag
-/e2e-run --project setup --project main-e2e  # Run multiple projects
+/e2e-run                          # Run everything (pnpm test:bdd)
+/e2e-run test:bdd:auth            # Named package.json script
+/e2e-run test:bdd:bookings        # Named package.json script (workflow)
+/e2e-run @authentication          # Tag shorthand — infers projects automatically
+/e2e-run @bookingworkflow         # Tag shorthand — workflow tag → run-workflow project
+/e2e-run --grep "@smoke"          # Raw Playwright flags (you pick the projects)
+/e2e-run --project main-e2e       # Raw Playwright project flag
 ```
 
-## Input: $ARGUMENTS
+---
 
-Optional Playwright CLI arguments (--project, --grep, --headed, --debug, etc.).
+## Step 0: Read project scripts (ALWAYS DO THIS FIRST)
 
-## Execution
+Read `package.json` and extract all `test:bdd*` script entries. These are the canonical run commands for this project.
+
+---
+
+## Execution Logic
+
+### Case 1: $ARGUMENTS matches a `test:bdd*` script name exactly
+
+If `scripts[$ARGUMENTS]` exists in package.json (e.g. `test:bdd:auth`, `test:bdd:workflows`):
+
+```bash
+pnpm $ARGUMENTS
+```
+
+These scripts already call `bddgen` + set the right `--project` flags. Do NOT add extra flags.
+
+---
+
+### Case 2: $ARGUMENTS is empty
+
+Run all tests:
+
+```bash
+pnpm test:bdd
+```
+
+---
+
+### Case 3: $ARGUMENTS is a tag shorthand (starts with `@`)
+
+Check if any `test:bdd*` script already covers this tag (grep its command string for the tag).
+
+**If a matching script exists** → use it:
+```bash
+pnpm <matching-script>
+```
+
+**If no matching script exists** → infer the right Playwright projects from the tag type:
+
+| Tag type | Projects to use | Notes |
+|---|---|---|
+| `@authentication` or auth-related | `--project auth-tests` | No `setup` needed — auth-tests uses clean state to test the login form |
+| `@precondition` | `--project setup --project precondition` | |
+| `@workflow-consumer` | `--project setup --project precondition --project workflow-consumers` | Consumers depend on precondition data |
+| `@*workflow*` (e.g. `@bookingworkflow`, `@userworkflow`) | `--project setup --project run-workflow` | Runs entire workflow serially; `setup` creates auth session |
+| `@serial-execution` | `--project setup --project serial-execution` | Config already greps for this tag — adding `--grep` is redundant but harmless |
+| Any other `@tag` | `--project setup --project main-e2e` | |
+
+Then run:
+```bash
+npx bddgen && npx playwright test --project <resolved-projects> --grep "$ARGUMENTS"
+```
+
+**Why projects matter:** A `--grep @bookingworkflow` without `--project run-workflow` matches nothing — `run-workflow` is the only project configured to run `@Workflows/**` files in serial filesystem order. Auth tests need `--project auth-tests` (clean state). Regular module tests need `setup` (creates auth session) then `main-e2e`.
+
+---
+
+### Case 4: $ARGUMENTS starts with `--` (raw Playwright flags)
 
 ```bash
 npx bddgen && npx playwright test $ARGUMENTS
 ```
 
-After the run, always output the report location:
+The caller is responsible for correct `--project` flags.
+
+---
+
+## After the Run
+
+### Step 1: Show pass/fail summary
+
 ```
-HTML report: reports/playwright/  (open with: pnpm report:playwright)
+✓ Passed: N   ✕ Failed: N   ○ Skipped: N
+```
+
+If there are failures, list the failed scenario names from stdout.
+
+### Step 2: Open reports
+
+Check `package.json` scripts and run whichever exist:
+
+**Playwright HTML report** — if `report:playwright` script exists, generate it:
+```bash
+pnpm report:playwright
+```
+Do NOT run `npx playwright show-report` — it starts a blocking server and hangs the pipeline. Output the path only:
+```
+Playwright report: reports/playwright/index.html
+  → To view: pnpm report:playwright
+```
+
+If no `report:playwright` script exists, output the path only:
+```
+Playwright report: reports/playwright/index.html
+  → To view: npx playwright show-report reports/playwright
+```
+
+**BDD cucumber report** — if `report:bdd` script exists, generate it first:
+```bash
+pnpm report:bdd
+```
+Output the path only (do NOT run `report:bdd:open` — it opens a blocking server):
+```
+BDD report: reports/cucumber-bdd/html-report/index.html
+  → To view: pnpm report:bdd:open
+```
+
+If neither report script exists, output the path only:
+```
+Reports saved to: reports/playwright/
+```
+
+### Step 3: Final summary line
+
+```
+─────────────────────────────────────────
+✓ N passed  ✕ N failed
+Playwright report → reports/playwright/index.html
+BDD report       → reports/cucumber-bdd/html-report/index.html
+─────────────────────────────────────────
 ```

@@ -35,7 +35,8 @@ Then('I should see the text {string}', async ({ page }, text) => {
 });
 
 Then('the element with test ID {string} should be visible', async ({ page }, testId) => {
-  await expect(page.getByTestId(testId)).toBeVisible();
+  // 15s timeout — API-dependent UI (e.g. auth checks) can take longer than Playwright's 5s default.
+  await expect(page.getByTestId(testId)).toBeVisible({ timeout: 15000 });
 });
 
 Then('the element with test ID {string} should be disabled', async ({ page }, testId) => {

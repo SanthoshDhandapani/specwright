@@ -109,6 +109,12 @@ async function runInit() {
     }
   }
 
+  // In non-interactive mode (Desktop app, CI) the caller manages dependency install.
+  // Pass --skip-install so install.sh skips the pnpm/npm/yarn install step.
+  if (nonInteractive && !installFlags.includes('--skip-install')) {
+    installFlags.push('--skip-install');
+  }
+
   try {
     const flagStr = installFlags
       .filter(f => !f.startsWith('--base-url=') && !f.startsWith('--pm='))

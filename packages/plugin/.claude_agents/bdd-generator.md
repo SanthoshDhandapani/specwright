@@ -443,9 +443,9 @@ When('I navigate to the users page', async ({ page }) => { ... });
 When('I navigate to the {string} page', async ({ page }, pageName) => { ... });
 ```
 
-#### Post-Generation Verification
+#### Post-Generation Self-Review
 
-After generating steps.js, verify:
+After writing files, review mentally:
 
 - No step pattern appears in both shared/ and the new file
 - No two steps in the new file have overlapping patterns
@@ -528,9 +528,11 @@ planFilePath: "/e2e-tests/plans/{moduleName}-{fileName}-plan.md"
 }
 ```
 
-### 11. Validation Checklist
+### 11. Self-Review Checklist
 
-- ✅ Feature file is valid Gherkin (parseable by bddgen)
+**🚫 Do NOT run `bddgen`, `pnpm install`, `npm install`, or any shell command to validate. Review mentally only.**
+
+- ✅ Feature file syntax is valid Gherkin (review the written file — do NOT run bddgen)
 - ✅ All data tables use 3-column format (Field Name | Value | Type)
 - ✅ Execution tag correctly determined from SharedGenerated analysis
 - ✅ No duplicate steps between shared/ and module steps.js

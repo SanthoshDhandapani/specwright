@@ -53,6 +53,31 @@ Parse `test(...)` blocks and extract `page.getBy*()` / `page.locator()` calls, m
 - ✅ No hardcoded values (use variables/parameters)
 - ✅ Reusable helper functions for common patterns
 
+**🔴 Never hardcode runtime-captured counts in assertions:**
+
+If a step asserts a count or total that depends on what data the app contains at runtime (filtered results, deleted row count, search result totals), implement it dynamically:
+
+```javascript
+// ❌ WRONG — hardcoded count from exploration snapshot
+Then('the results count should be "13 results available"', async ({ page }) => {
+  await expect(page.getByText('13 results available')).toBeVisible();
+});
+
+// ✅ CORRECT — dynamic: compare against predata captured by precondition
+Then('the results count should have decreased by {int}', async ({ page, testData }, n) => {
+  const text = await page.locator('p').filter({ hasText: 'results available' }).innerText();
+  const current = parseInt(text.match(/\d+/)?.[0] || '0', 10);
+  expect(current).toBe(testData.totalRows - n);
+});
+
+// ✅ CORRECT — relative assertion (safe regardless of data volume)
+Then('the filtered count should be less than or equal to the total', async ({ page, testData }) => {
+  const text = await page.locator('p').filter({ hasText: 'results available' }).innerText();
+  const count = parseInt(text.match(/\d+/)?.[0] || '0', 10);
+  expect(count).toBeLessThanOrEqual(testData.totalRows);
+});
+```
+
 **Cache Key (`page.featureKey`) — Do NOT hardcode:**
 
 - ✅ `page.featureKey` is auto-derived from the directory structure by the Before hook

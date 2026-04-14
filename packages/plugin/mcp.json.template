@@ -1,20 +1,13 @@
 {
   "mcpServers": {
-    "e2e-automation": {
+    "specwright": {
       "command": "npx",
-      "args": ["@specwright/mcp-server"]
-    },
-    "playwright-test": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--output-dir", ".playwright-mcp"]
-    },
-    "atlassian": {
-      "type": "streamable-http",
-      "url": "https://mcp.atlassian.com/v1/mcp"
-    },
-    "markitdown": {
-      "command": "uvx",
-      "args": ["markitdown-mcp"]
+      "args": ["@specwright/mcp"],
+      "env": {
+        "SPECWRIGHT_PROJECT": "${PWD}",
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "ATLASSIAN_TOKEN": "${ATLASSIAN_TOKEN}"
+      }
     }
   }
 }

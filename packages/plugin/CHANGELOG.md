@@ -5,6 +5,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.3.6] — 2026-04-14
+
+### Skill: `e2e-automate/SKILL.md`
+
+- **`autoApprove` flag for Phase 6** — If every config entry in `instructions.js` has `autoApprove: true` set, Phase 6 skips the blocking human approval prompt and proceeds directly to BDD generation. Enables fully automated pipeline runs (CI, testing) without any manual intervention. Normal runs without the flag are unchanged.
+- **Phase 6 label clarified** — Heading changed from `User Approval (MANDATORY)` to `User Approval`, with the mandatory/blocking label now on the conditional branch: `⛔ User Approval (MANDATORY) BLOCKING` — making the `autoApprove` bypass clearly distinct from the mandatory gate.
+
+### Config: `mcp.json.template`
+
+- **Consolidated to single `@specwright/mcp` entry** — The template previously listed four separate MCP servers (`e2e-automation`, `playwright-test`, `atlassian`, `markitdown`). Now a single `specwright` entry replaces all four. Playwright, markitdown, and Atlassian MCP are bundled inside `@specwright/mcp` as internal proxies — users no longer configure them independently. `ANTHROPIC_API_KEY`, `SPECWRIGHT_PROJECT`, and `ATLASSIAN_TOKEN` are passed via env.
+
+---
+
 ## [0.3.5] — 2026-04-13
 
 ### Skill: `e2e-run/SKILL.md`

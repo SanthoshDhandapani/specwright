@@ -351,7 +351,7 @@ export class ProjectService {
         steps: (entry.instructions as string[]) || (entry.steps as string[]) || [],
         filePath: (entry.filePath as string) || "",
         suitName: (entry.suitName as string) || "",
-        jiraURL: (entry.jiraURL as string) || (entry.jira as string) || "",
+        jiraURL: (entry.jiraURL as string) || (entry.jira as string) || ((entry.inputs as Record<string, Record<string, string>>)?.jira?.url) || "",
         explore: entry.explore === true,
         runExploredCases: entry.runExploredCases === true,
         runGeneratedCases: entry.runGeneratedCases === true,
@@ -397,7 +397,12 @@ export class ProjectService {
       if (card.pageURL) lines.push(`    pageURL: ${q(card.pageURL)},`);
       if (card.filePath) lines.push(`    filePath: ${q(card.filePath)},`);
       if (card.suitName) lines.push(`    suitName: ${q(card.suitName)},`);
-      if (card.jiraURL) lines.push(`    jiraURL: ${q(card.jiraURL)},`);
+      // Write inputs block — jiraURL maps to inputs.jira.url (canonical format)
+      if (card.jiraURL) {
+        lines.push(`    inputs: { jira: { url: ${q(card.jiraURL)} } },`);
+      } else {
+        lines.push(`    inputs: {},`);
+      }
       if (card.steps.length > 0) {
         lines.push(`    instructions: [`);
         for (const step of card.steps) {
@@ -645,6 +650,11 @@ export class ProjectService {
       lines.push(`    subModuleName: [${tmpl.subModules.map(s => q(s)).join(", ")}],`);
       lines.push(`    fileName: ${q(tmpl.fileName)},`);
       if (tmpl.pageURL) lines.push(`    pageURL: ${q(tmpl.pageURL)},`);
+      if (tmpl.jiraURL) {
+        lines.push(`    inputs: { jira: { url: ${q(tmpl.jiraURL)} } },`);
+      } else {
+        lines.push(`    inputs: {},`);
+      }
       if (tmpl.steps.length > 0) {
         lines.push(`    instructions: [`);
         for (const step of tmpl.steps) {
@@ -690,7 +700,7 @@ export class ProjectService {
         steps: (entry.instructions as string[]) || (entry.steps as string[]) || [],
         filePath: (entry.filePath as string) || "",
         suitName: (entry.suitName as string) || "",
-        jiraURL: (entry.jiraURL as string) || "",
+        jiraURL: (entry.jiraURL as string) || ((entry.inputs as Record<string, Record<string, string>>)?.jira?.url) || "",
         explore: entry.explore === true,
         runExploredCases: entry.runExploredCases === true,
         runGeneratedCases: entry.runGeneratedCases === true,

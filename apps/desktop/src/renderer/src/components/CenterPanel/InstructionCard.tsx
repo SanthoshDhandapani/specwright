@@ -262,8 +262,8 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
             )}
             {(atlassianStatus === "idle" || atlassianStatus === "needs-auth") && (
               <>
-                <span className="flex items-center gap-1 text-slate-500 text-[10px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block" />
+                <span className="flex items-center gap-1 text-red-400 text-[10px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
                   {atlassianStatus === "needs-auth" ? "Auth required" : "Not connected"}
                 </span>
                 <button

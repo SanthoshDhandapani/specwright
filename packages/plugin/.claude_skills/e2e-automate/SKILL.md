@@ -23,7 +23,7 @@ Phase 1:   Initialization — read config, validate setup
 Phase 2:   Detection & Routing — detect input type (jira/file/text)
 Phase 3:   Input Processing — convert input to parsed test plan MD (/e2e-process)
 Phase 4:   Exploration & Planning — explore app, discover selectors, write test plan (/e2e-plan)
-Phase 5:   Exploration Validation — run seed file, validate selectors (optional, /e2e-validate)
+Phase 5:   Exploration Validation — run seed.spec.js, auto-heal failures (optional, /e2e-validate)
 Phase 6:   ⛔ User Approval — present plan, wait for explicit approval
 Phase 7:   BDD Generation — create .feature + steps.js files (/e2e-generate)
 Phase 8:   Test Execution & Healing — run tests, auto-heal failures (optional, /e2e-heal)
@@ -73,7 +73,11 @@ Invoke `/e2e-process` with the appropriate input for each config entry:
 
 **Skip if `runExploredCases` is false.**
 
-Invoke `/e2e-validate` to run the seed file tests and auto-heal failures.
+Invoke `/e2e-validate` to run `e2e-tests/playwright/generated/seed.spec.js` and auto-heal any failures — ensuring the explored selectors are solid before BDD generation begins.
+
+- Runs ONLY the seed file (`seed.spec.js`) — NOT BDD feature files (those are Phase 8)
+- If failures occur, heals them (selector fixes, timing fixes) via `@agent-playwright-test-healer` — up to 3 iterations
+- Goal: all seed tests passing before proceeding to Phase 6 approval
 
 ### Phase 6: User Approval (MANDATORY)
 
@@ -101,9 +105,15 @@ The plan file and seed file already contain all context needed. `/e2e-generate` 
 
 ### Phase 8: Test Execution & Healing (`/e2e-heal`, Optional)
 
-**Skip if `runGeneratedCases` is false.**
+**Skip entirely if no config has `runGeneratedCases: true`.**
 
-Invoke `/e2e-heal` to run the generated BDD tests and auto-heal failures (max 3 iterations).
+For each config entry where `runGeneratedCases` is true, invoke `/e2e-heal` with the module tag:
+
+```
+/e2e-heal @{moduleName}
+```
+
+This passes the module name as a grep filter so `execution-manager` targets the correct feature files and infers the right Playwright projects (e.g. `run-workflow` for `@Workflows`, `auth-tests` for `@Authentication`, `main-e2e` for all other `@Modules`). Run configs **sequentially** — each heal completes up to 3 iterations before moving to the next config.
 
 ### Phase 9: Cleanup & Aggregation
 

@@ -64,11 +64,37 @@ This agent supports two execution modes:
 npx bddgen
 ```
 
-**Step 2: Execute Tests**
+**Step 2: Infer Projects then Execute Tests**
+
+**BDD mode — project inference (NEVER use `chromium` for BDD):**
+
+Apply these rules in order to determine `{inferred-projects}`:
+
+1. **If called via tag only** (e.g. from `/e2e-heal @ModuleName` — no explicit `category` in inputs):
+   - Check if the module directory is under `@Workflows/` or `@Modules/`:
+     ```bash
+     ls e2e-tests/features/playwright-bdd/@Workflows/ | grep "@ModuleName"
+     ls e2e-tests/features/playwright-bdd/@Modules/  | grep "@ModuleName"
+     ```
+   - Use the directory that matches to determine category.
+
+2. **Apply the inference table:**
+
+| Condition | Check | Projects |
+|---|---|---|
+| `@Workflows` category (or module found under `@Workflows/`) | category field or dir listing | `--project setup --project run-workflow` |
+| `@authentication` or `auth` appears in module name | module name | `--project auth-tests` |
+| `@serial-execution` tag present in the feature file | read `.feature` file and grep for `@serial-execution` | `--project setup --project serial-execution` |
+| All other `@Modules` | fallback | `--project setup --project main-e2e` |
+
+> **Note on `@serial-execution`**: Before running, read the `.feature` file at `e2e-tests/features/playwright-bdd/{category}/@{moduleName}/{fileName}.feature` and check if the file contains `@serial-execution`. Only then select the `serial-execution` project. Do NOT skip this check and default to `main-e2e`.
 
 ```bash
-# BDD mode
-npx playwright test ".features-gen/{category}/@{moduleName}/@{subModuleName}/{fileName}.feature.spec.js" --project {project}
+# BDD mode — running by tag (from e2e-heal @moduleName argument — most common)
+npx bddgen && npx playwright test --project {inferred-projects} --grep "@{moduleName}"
+
+# BDD mode — running a specific file path (direct invocation)
+npx bddgen && npx playwright test ".features-gen/{category}/@{moduleName}/{fileName}.feature.spec.js" --project {inferred-projects}
 
 # Seed mode
 npx playwright test "e2e-tests/playwright/generated/seed.spec.js" --project chromium --timeout 60000 --retries 0
@@ -76,7 +102,8 @@ npx playwright test "e2e-tests/playwright/generated/seed.spec.js" --project chro
 
 **Execution Configuration:**
 
-- **Project**: Specify browser project (chromium by default)
+- **Project (bdd)**: Inferred by the agent — apply Step 2 table in order (Workflows → auth → serial-execution → main-e2e). NEVER default to `chromium` for bdd mode
+- **Project (seed)**: Always `chromium`
 - **Headed Mode**: Use `--headed` for visual debugging if needed
 - **Trace**: `--trace on-first-retry` for failure diagnostics
 - **Reporter**: html + json for analysis
@@ -353,7 +380,8 @@ Example:
   category: "@Modules",
 
   // Execution config
-  project: "chromium",         // seed mode; use "main-e2e" or "serial-execution" for bdd mode
+  // project: not set by caller — agent infers from category + moduleName (see Step 2 table above)
+  // seed mode: always "chromium"  |  bdd mode: setup+run-workflow / auth-tests / serial-execution / main-e2e
   headed: false,
 
   // Diagnostics

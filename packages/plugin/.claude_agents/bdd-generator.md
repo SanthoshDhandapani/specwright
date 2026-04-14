@@ -17,9 +17,9 @@ Construct the output path DIRECTLY from plan fields. Do NOT explore the project 
 
 Where `Category`, `Module`, and `FileName` come directly from the plan file header.
 
-**Example** (from plan: Category=@Modules, Module=@HomePage, FileName=homepage):
-- Feature: `e2e-tests/features/playwright-bdd/@Modules/@HomePage/homepage.feature`
-- Steps:   `e2e-tests/features/playwright-bdd/@Modules/@HomePage/steps.js`
+**Example** (from plan: Category=@Modules, Module=@FeatureA, FileName=feature-a):
+- Feature: `e2e-tests/features/playwright-bdd/@Modules/@FeatureA/feature-a.feature`
+- Steps:   `e2e-tests/features/playwright-bdd/@Modules/@FeatureA/steps.js`
 
 Create parent directories as needed with the Write tool. No `ls`, `find`, or directory scanning required.
 
@@ -76,7 +76,23 @@ Create parent directories as needed with the Write tool. No `ls`, `find`, or dir
 
 ### 2. Feature File Generation (.feature)
 
-**File Naming:** `{fileName}.feature` in the nested module directory.
+**File Naming:** `{fileName}.feature` using **kebab-case** — e.g., `filter-and-search.feature`, `bulk-actions.feature`, `user-workflow.feature`. Never use snake_case (`filter_and_search.feature` is wrong).
+
+#### Tag Casing Convention (MANDATORY)
+
+**Module and sub-module tags derived from names MUST be lowercase:**
+
+| Source | Correct tag | Wrong tag |
+|---|---|---|
+| moduleName: `@SampleWorkflow` | `@sampleworkflow` | `@SampleWorkflow` ❌ |
+| moduleName: `@ItemsPage` | `@itemspage` | `@ItemsPage` ❌ |
+| subModule: `@1-CreateStep` | `@create-step` | `@CreateStep` ❌ |
+| subModule: `@2-ReviewStep` | `@review-step` | `@ReviewStep` ❌ |
+
+**Framework tags keep their defined casing (never change these):**
+`@serial-execution`, `@workflow-consumer`, `@precondition`, `@cross-feature-data`, `@prerequisite`, `@smoke`
+
+**Algorithm:** Take the moduleName/subModuleName value, strip `@` and any numeric prefix (`@0-`, `@1-`), lowercase it, convert CamelCase to kebab-case for sub-module tags, keep as one lowercase word for the primary module tag.
 
 #### Execution Tag Decision Logic
 
@@ -417,6 +433,18 @@ For each test case in the parsed plan:
 5. Determine data types → Build 3-column data tables
 6. Apply execution tag from decision algorithm
 
+**🔴 NEVER hardcode runtime-captured counts or values in assertions:**
+
+Assertions about counts, totals, or data values that depend on what the app contains at runtime MUST be dynamic — not hardcoded numbers observed during exploration.
+
+| Wrong (hardcoded) | Correct (dynamic) |
+|---|---|
+| `Then the results count should be "13 results available"` | `Then the filtered count should be less than the total count` |
+| `Then the results count should be "98 results available"` | `Then the results count should have decreased by 2` |
+| `Then the search results should show "53 results available"` | `Then the search results should show at least 1 result` |
+
+**Rule:** If a count came from exploration-time snapshot data (you saw "13" or "53" in the browser), it is NOT a reliable assertion — the data may differ across environments. Use a relative assertion instead (`less than`, `decreased by N`, `at least 1`). Only assert an exact count when it is a known constant independent of data (e.g., "5 tabs", "3 columns").
+
 ### 8. Step Deduplication (MANDATORY)
 
 #### Pre-Generation Audit
@@ -459,22 +487,28 @@ When generating code for a `@Workflows` entry that has multiple sub-modules (`@0
 
 List every step (Given/When/Then text) for every sub-module. Group any step that appears in 2+ phases.
 
-**Step 2: Route each shared step to the correct shared file**
+**Step 2: Route each shared step to the correct file**
 
 | Step appears in | Target | Rule |
 |---|---|---|
-| 2+ phases of the **same** workflow | `shared/{workflow-name}.steps.js` | Intra-workflow reuse. Derive name: `@OrderWorkflow` → `shared/order.steps.js` |
-| Phases of **different** workflows | `shared/workflow.steps.js` | Cross-workflow reuse |
+| 2+ phases of the **same** workflow only | `@Workflows/@WorkflowName/steps.js` (workflow root dir) | Intra-workflow reuse — all phases share the `@WorkflowName` path tag, so they all see this file |
+| Phases of **different** workflows, or needed outside workflows | `shared/{category}.steps.js` | Cross-workflow / global reuse — no `@` prefix = globally scoped |
 | Fits an existing shared category | Existing shared file | e.g., navigation → `shared/navigation.steps.js` |
-| Only ONE phase of ONE workflow | Co-located `steps.js` | No extraction needed |
+| Only ONE phase of ONE workflow | Co-located `steps.js` (inside the phase dir) | No extraction needed |
+
+**⚠️ CRITICAL — Level matters:** There are two distinct levels inside `@Workflows/@WorkflowName/`:
+- **Workflow root** (`@WorkflowName/steps.js`) — scoped to ALL features under `@WorkflowName/`. Every phase (`@0-`, `@1-`, `@2-`, …) inherits the `@WorkflowName` path tag and can see these steps. ✅ Use this for intra-workflow shared steps.
+- **Phase directory** (`@0-Phase/steps.js`) — scoped ONLY to features matching `@WorkflowName AND @0-Phase`. Other phases CANNOT see these steps. ✅ Use this for phase-specific steps only.
+
+**Do NOT** place intra-workflow shared steps inside a phase directory — they will be invisible to other phases. Use `shared/` only when steps must cross workflow boundaries.
 
 **Step 3: Write shared files FIRST — then phase steps.js files**
 
-1. Create `shared/{name}.steps.js` with the extracted steps (import from `../../../playwright/fixtures.js`)
-2. Write each phase `steps.js` WITHOUT the extracted steps — they are globally available from shared/
-3. Document reused shared steps in each phase file's JSDoc comment block under "Shared steps used here"
+1. Create `@WorkflowName/steps.js` (or `shared/{name}.steps.js` for cross-workflow) with the extracted steps
+2. Write each phase `steps.js` WITHOUT the extracted steps — they are inherited from the workflow root or shared/
+3. Document reused steps in each phase file's JSDoc comment block under "Shared steps used here"
 
-**Why this is critical:** playwright-bdd v8+ path-based scoping means a step defined inside `@Workflows/@WorkflowA/@0-Phase/steps.js` is INVISIBLE to `@1-NextPhase`. If both phases need the same step and it is co-located in only one phase, the other phase will fail with "step not defined". The only fix is shared/.
+**Why this is critical:** playwright-bdd v8+ path-based scoping means a step defined inside `@Workflows/@WorkflowA/@0-Phase/steps.js` is INVISIBLE to `@1-NextPhase`. If both phases need the same step and it is co-located in only one phase directory, the other phase will fail with "step not defined".
 
 **Rule for existing step files (overwrite scenario):** If a `steps.js` you are overwriting already contains a step being moved to shared, OMIT that step from the co-located file entirely. Do NOT keep it in both places — that causes a duplicate step definition error at runtime.
 
@@ -534,8 +568,12 @@ planFilePath: "/e2e-tests/plans/{moduleName}-{fileName}-plan.md"
 
 - ✅ Feature file syntax is valid Gherkin (review the written file — do NOT run bddgen)
 - ✅ All data tables use 3-column format (Field Name | Value | Type)
+- ✅ Feature file names use **kebab-case** (`filter-and-search.feature`, NOT `filter_and_search.feature`)
+- ✅ Module/sub-module tags are **lowercase** (`@sampleworkflow`, NOT `@SampleWorkflow`)
 - ✅ Execution tag correctly determined from SharedGenerated analysis
+- ✅ Workflow `@0-Precondition` feature has ALL THREE tags: `@precondition @cross-feature-data @serial-execution` + the module tag (lowercase)
 - ✅ No duplicate steps between shared/ and module steps.js
+- ✅ Workflow-shared steps are in `shared/{workflow-name}.steps.js` — NOT inside `@WorkflowName/` directory
 - ✅ Import paths use correct relative depth with `.js` extension
 - ✅ Imports from `playwright/fixtures.js` (not playwright-bdd or @cucumber/cucumber)
 - ✅ Background uses `When I navigate to` (page refresh), scenarios use `Given I navigate to the ... page` (SPA)
@@ -543,6 +581,7 @@ planFilePath: "/e2e-tests/plans/{moduleName}-{fileName}-plan.md"
 - ✅ Intermediate workflow phases (load predata AND save new data) tagged `@precondition @cross-feature-data @serial-execution` — NOT `@workflow-consumer`
 - ✅ @cross-feature-data only on precondition features and intermediate phases
 - ✅ Cache keys not hardcoded in steps
+- ✅ **No hardcoded runtime counts** — assertions about filtered/total counts use relative comparisons, not snapshot numbers
 
 ### 12. Error Handling
 

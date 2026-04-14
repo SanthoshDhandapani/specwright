@@ -6,7 +6,7 @@
   "scripts": {
     "bddgen": "npx bddgen",
     "test:bdd": "pnpm bddgen && playwright test --project setup --project serial-execution --project precondition --project workflow-consumers --project main-e2e",
-    "test:bdd:all": "pnpm bddgen && playwright test",
+    "test:bdd:all": "pnpm bddgen && playwright test --project setup --project auth-tests --project serial-execution --project precondition --project workflow-consumers --project main-e2e",
     "test:bdd:auth": "pnpm bddgen && playwright test --project setup --project auth-tests",
     "test:bdd:serial": "pnpm bddgen && playwright test --project setup --project serial-execution",
     "test:bdd:workflows": "pnpm bddgen && playwright test --project setup --project precondition --project workflow-consumers",

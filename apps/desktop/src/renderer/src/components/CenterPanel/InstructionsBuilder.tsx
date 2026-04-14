@@ -7,7 +7,7 @@ import InstructionCard from "./InstructionCard";
 export default function InstructionsBuilder(): React.JSX.Element {
   const { projectPath, envVars } = useConfigStore();
   const { cards, addCard, clearAll, serialize, loadCards } = useInstructionStore();
-  const { status, startRun, setError } = usePipelineStore();
+  const { status, startRun, setError, atlassianStatus } = usePipelineStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // isRunning is true while submitting OR while the pipeline store says running
@@ -18,10 +18,14 @@ export default function InstructionsBuilder(): React.JSX.Element {
     (c) => c.moduleName.trim() && (c.steps.some((s) => s.trim()) || c.jiraURL?.trim() || c.filePath?.trim())
   );
 
+  // If any card uses a Jira URL, Atlassian must be connected
+  const hasJiraCard = cards.some((c) => c.jiraURL?.trim());
+  const jiraNeedsAuth = hasJiraCard && atlassianStatus !== "connected";
+
   // If auth is oauth and required, email must be filled
   const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
   const authNeedsEmail = authStrategy === "oauth" && !envVars.TEST_USER_EMAIL?.trim();
-  const canGenerate = hasValidCard && !authNeedsEmail;
+  const canGenerate = hasValidCard && !authNeedsEmail && !jiraNeedsAuth;
 
   // Load existing instructions from disk on mount
   useEffect(() => {
@@ -169,6 +173,7 @@ export default function InstructionsBuilder(): React.JSX.Element {
           <button
             onClick={handleGenerate}
             disabled={isRunning || !projectPath || !canGenerate}
+            title={jiraNeedsAuth ? "Connect Atlassian to use Jira URL" : undefined}
             className="flex items-center gap-2 bg-brand-500 hover:bg-brand-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 py-1.5 transition-colors"
           >
             {isRunning ? (

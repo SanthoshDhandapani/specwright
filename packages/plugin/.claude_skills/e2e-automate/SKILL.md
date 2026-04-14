@@ -79,9 +79,17 @@ Invoke `/e2e-validate` to run `e2e-tests/playwright/generated/seed.spec.js` and 
 - If failures occur, heals them (selector fixes, timing fixes) via `@agent-playwright-test-healer` — up to 3 iterations
 - Goal: all seed tests passing before proceeding to Phase 6 approval
 
-### Phase 6: User Approval (MANDATORY)
+### Phase 6: User Approval
 
-⛔ **BLOCKING** — Do not proceed without explicit user approval.
+**Check `autoApprove` first:**
+
+If every config entry being processed has `autoApprove: true` set, skip the blocking prompt entirely — output a single line and proceed directly to Phase 7:
+
+```
+✅ Auto-approved (autoApprove: true) — proceeding to BDD generation.
+```
+
+**Otherwise — ⛔ User Approval (MANDATORY) BLOCKING:** Do not proceed without explicit user approval.
 
 Present the test plan summary including:
 

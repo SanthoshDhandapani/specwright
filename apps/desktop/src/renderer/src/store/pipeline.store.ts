@@ -26,6 +26,8 @@ export interface ChatMessage {
   role: "user" | "assistant" | "explore";
   content: string;
   isStreaming: boolean;
+  /** Portion of content already shown without animation — advances via advanceStableLength */
+  stableLength: number;
   /** Phase this message belongs to — set when a new phase starts via splitForPhase */
   phaseId?: number;
   exploreResult?: ExploreResult;
@@ -74,6 +76,7 @@ interface PipelineState {
   clearPermission: () => void;
   setActiveTool: (toolName: string | null) => void;
   appendExploreResult: (data: ExploreResult) => void;
+  advanceStableLength: (messageId: string, length: number) => void;
 }
 
 // Phases match SKILL.md /e2e-automate pipeline exactly
@@ -134,8 +137,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       phases: PHASES.map((p) => ({ ...p })),
       messages: [
         ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
-        { id: makeId(), role: "user",      content: userMessage, isStreaming: false },
-        { id: makeId(), role: "assistant", content: "",          isStreaming: true  },
+        { id: makeId(), role: "user",      content: userMessage, isStreaming: false, stableLength: 0 },
+        { id: makeId(), role: "assistant", content: "",          isStreaming: true,  stableLength: 0 },
       ],
     })),
 
@@ -147,8 +150,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       // Preserve phases, logLines, and activePhase — only add new message bubbles
       messages: [
         ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
-        { id: makeId(), role: "user" as const,      content: userMessage, isStreaming: false },
-        { id: makeId(), role: "assistant" as const, content: "",          isStreaming: true, phaseId: s.activePhase || undefined },
+        { id: makeId(), role: "user" as const,      content: userMessage, isStreaming: false, stableLength: 0 },
+        { id: makeId(), role: "assistant" as const, content: "",          isStreaming: true,  stableLength: 0, phaseId: s.activePhase || undefined },
       ],
     })),
 
@@ -157,8 +160,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       messages: [
         // Clear isStreaming on all previous messages
         ...s.messages.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m),
-        { id: makeId(), role: "user",      content: text, isStreaming: false },
-        { id: makeId(), role: "assistant", content: "",   isStreaming: true, phaseId: s.activePhase || undefined },
+        { id: makeId(), role: "user",      content: text, isStreaming: false, stableLength: 0 },
+        { id: makeId(), role: "assistant", content: "",   isStreaming: true,  stableLength: 0, phaseId: s.activePhase || undefined },
       ],
     })),
 
@@ -183,7 +186,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       const messages = [...s.messages];
       const lastIdx = messages.length - 1;
       if (lastIdx >= 0 && messages[lastIdx].role === "assistant") {
-        messages[lastIdx] = { ...messages[lastIdx], isStreaming: false };
+        const finalContent = messages[lastIdx].content;
+        messages[lastIdx] = { ...messages[lastIdx], isStreaming: false, stableLength: finalContent.length };
       }
       // Save the first line of the userMessage that passed the managed hook.
       // On resume, this gets prepended so the hook sees the passphrase (e.g., Jira ticket ID).
@@ -256,16 +260,17 @@ export const usePipelineStore = create<PipelineState>((set) => ({
           // Skip the header line itself — only carry over the content that follows it
           const lineEnd = fromHeader.indexOf("\n");
           leadContent = lineEnd >= 0 ? fromHeader.slice(lineEnd + 1).trimStart() : "";
-          messages[lastIdx] = { ...messages[lastIdx], content: before, isStreaming: false };
+          messages[lastIdx] = { ...messages[lastIdx], content: before, isStreaming: false, stableLength: before.length };
         } else {
           // No phase header found — just seal as-is
-          messages[lastIdx] = { ...messages[lastIdx], isStreaming: false };
+          const sealedContent = messages[lastIdx].content;
+          messages[lastIdx] = { ...messages[lastIdx], isStreaming: false, stableLength: sealedContent.length };
         }
       }
 
       // Open a new message for this phase, pre-populated with any content that
       // came after the header line in the previous message
-      messages.push({ id: makeId(), role: "assistant", content: leadContent, isStreaming: true, phaseId });
+      messages.push({ id: makeId(), role: "assistant", content: leadContent, isStreaming: true, stableLength: 0, phaseId });
       return { messages };
     }),
 
@@ -287,8 +292,16 @@ export const usePipelineStore = create<PipelineState>((set) => ({
           role: "explore" as const,
           content: "",
           isStreaming: false,
+          stableLength: 0,
           exploreResult: data,
         },
       ],
+    })),
+
+  advanceStableLength: (messageId, length) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === messageId ? { ...m, stableLength: length } : m
+      ),
     })),
 }));

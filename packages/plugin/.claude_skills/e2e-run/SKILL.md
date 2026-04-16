@@ -43,7 +43,7 @@ Read `package.json` and extract all `test:bdd*` script entries. These are the ca
 If `scripts[$ARGUMENTS]` exists in package.json (e.g. `test:bdd:auth`, `test:bdd:workflows`):
 
 ```bash
-pnpm $ARGUMENTS
+PLAYWRIGHT_HTML_OPEN=never pnpm $ARGUMENTS
 ```
 
 These scripts already call `bddgen` + set the right `--project` flags. Do NOT add extra flags.
@@ -55,7 +55,7 @@ These scripts already call `bddgen` + set the right `--project` flags. Do NOT ad
 Run all tests:
 
 ```bash
-pnpm test:bdd
+PLAYWRIGHT_HTML_OPEN=never pnpm test:bdd
 ```
 
 ---
@@ -66,7 +66,7 @@ Check if any `test:bdd*` script already covers this tag (grep its command string
 
 **If a matching script exists** → use it:
 ```bash
-pnpm <matching-script>
+PLAYWRIGHT_HTML_OPEN=never pnpm <matching-script>
 ```
 
 **If no matching script exists** → infer the right Playwright projects from the tag type:
@@ -82,7 +82,7 @@ pnpm <matching-script>
 
 Then run:
 ```bash
-npx bddgen && npx playwright test --project <resolved-projects> --grep "$ARGUMENTS"
+PLAYWRIGHT_HTML_OPEN=never npx bddgen && PLAYWRIGHT_HTML_OPEN=never npx playwright test --project <resolved-projects> --grep "$ARGUMENTS"
 ```
 
 **Why projects matter:** A `--grep @bookingworkflow` without `--project run-workflow` matches nothing — `run-workflow` is the only project configured to run `@Workflows/**` files in serial filesystem order. Auth tests need `--project auth-tests` (clean state). Regular module tests need `setup` (creates auth session) then `main-e2e`.
@@ -92,7 +92,7 @@ npx bddgen && npx playwright test --project <resolved-projects> --grep "$ARGUMEN
 ### Case 4: $ARGUMENTS starts with `--` (raw Playwright flags)
 
 ```bash
-npx bddgen && npx playwright test $ARGUMENTS
+PLAYWRIGHT_HTML_OPEN=never npx bddgen && PLAYWRIGHT_HTML_OPEN=never npx playwright test $ARGUMENTS
 ```
 
 The caller is responsible for correct `--project` flags.
@@ -113,17 +113,14 @@ If there are failures, list the failed scenario names from stdout.
 
 Check `package.json` scripts and run whichever exist:
 
-**Playwright HTML report** — if `report:playwright` script exists, generate it:
-```bash
-pnpm report:playwright
-```
-Do NOT run `npx playwright show-report` — it starts a blocking server and hangs the pipeline. Output the path only:
+**Playwright HTML report** — output the path only. Do NOT run `pnpm report:playwright` or `npx playwright show-report` — both start a blocking HTTP server on port 9323 that hangs the pipeline.
+
 ```
 Playwright report: reports/playwright/index.html
   → To view: pnpm report:playwright
 ```
 
-If no `report:playwright` script exists, output the path only:
+If no `report:playwright` script exists:
 ```
 Playwright report: reports/playwright/index.html
   → To view: npx playwright show-report reports/playwright

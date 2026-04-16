@@ -32,6 +32,16 @@ body {
   -webkit-user-select: text;
 }
 
+/* Streaming text fade-in animation */
+@keyframes tokenFadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.token-fade-in {
+  animation: tokenFadeIn 180ms ease-out both;
+}
+
 /* Terminal log */
 .terminal {
   font-family: "JetBrains Mono", "Fira Code", Menlo, Monaco, monospace;

@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 /**
  * Parse a .env file into a key-value map (no shell expansion, no quoting rules).
@@ -26,10 +27,52 @@ function parseEnvFile(filePath) {
  * Env vars are set in claude_desktop_config.json → env block for Desktop.
  * For CLI, OAuth fields are read directly from e2e-tests/.env.testing.
  */
-export function getConfig() {
-  const projectRoot = process.env.PROJECT_ROOT || path.resolve(process.cwd());
+/**
+ * Read persisted Specwright global config from ~/.specwright/config.json.
+ * This file is written by e2e_setup when the user provides a project path via the UI.
+ * Safe to call at module load — returns {} if the file doesn't exist.
+ */
+function readGlobalConfig() {
+  try {
+    const p = path.join(os.homedir(), '.specwright', 'config.json');
+    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
 
-  // Read .env.testing — OAuth fields won't be in process.env for CLI runs
+/**
+ * Write a key to ~/.specwright/config.json (merges with existing content).
+ * Called by e2e_setup when the user specifies the project path via elicitation.
+ */
+export function writeGlobalConfig(updates) {
+  const dir = path.join(os.homedir(), '.specwright');
+  fs.mkdirSync(dir, { recursive: true });
+  const existing = readGlobalConfig();
+  fs.writeFileSync(
+    path.join(dir, 'config.json'),
+    JSON.stringify({ ...existing, ...updates }, null, 2),
+  );
+}
+
+export function getConfig() {
+  const globalCfg = readGlobalConfig();
+
+  // Priority: env var (MCP config) → ~/.specwright/config.json → cwd fallback
+  // SPECWRIGHT_PROJECT is the canonical env var for Desktop/npx usage.
+  // PROJECT_ROOT is the legacy name kept for backwards compatibility.
+  const projectRoot = process.env.SPECWRIGHT_PROJECT
+    || process.env.PROJECT_ROOT
+    || globalCfg.projectRoot
+    || ''   // empty string = not configured; tools will detect and ask via elicitation
+
+  ;
+
+  // A project is "Specwright-configured" if it has a .specwright.json at the root.
+  // This is the definitive marker that `npx @specwright/plugin init` has been run.
+  const projectConfigured = Boolean(projectRoot && fs.existsSync(path.join(projectRoot, '.specwright.json')));
+
+  // Read .env.testing — single source of truth for auth credentials
   const envTestingPath = path.join(projectRoot, 'e2e-tests/.env.testing');
   const envTesting = parseEnvFile(envTestingPath);
 
@@ -46,25 +89,30 @@ export function getConfig() {
     }
   }
 
-  // OAuth config — .env.testing takes precedence for CLI, process.env for Desktop
-  const authStrategy    = envTesting.AUTH_STRATEGY      || process.env.AUTH_STRATEGY      || '';
-  const oauthStorageKey = envTesting.OAUTH_STORAGE_KEY  || process.env.OAUTH_STORAGE_KEY  || '';
-  const testUserEmail   = envTesting.TEST_USER_EMAIL     || process.env.TEST_USER_EMAIL    || '';
-  const testUserName    = envTesting.TEST_USER_NAME      || process.env.TEST_USER_NAME     || '';
-  const testUserPicture = envTesting.TEST_USER_PICTURE   || process.env.TEST_USER_PICTURE  || '';
-  const oauthSigninPath = envTesting.OAUTH_SIGNIN_PATH   || process.env.OAUTH_SIGNIN_PATH  || '/signin';
-  const oauthButtonTestId = envTesting.OAUTH_BUTTON_TEST_ID || process.env.OAUTH_BUTTON_TEST_ID || '';
+  // Auth config — .env.testing is the canonical source; process.env as fallback
+  const authStrategy      = envTesting.AUTH_STRATEGY         || process.env.AUTH_STRATEGY         || '';
+  const testUserEmail     = envTesting.TEST_USER_EMAIL        || process.env.TEST_USER_EMAIL        || '';
+  const testUserPassword  = envTesting.TEST_USER_PASSWORD     || process.env.TEST_USER_PASSWORD     || '';
+  const test2FACode       = envTesting.TEST_2FA_CODE          || process.env.TEST_2FA_CODE          || '';
+  const testUserName      = envTesting.TEST_USER_NAME         || process.env.TEST_USER_NAME         || '';
+  const testUserPicture   = envTesting.TEST_USER_PICTURE      || process.env.TEST_USER_PICTURE      || '';
+  const oauthStorageKey   = envTesting.OAUTH_STORAGE_KEY      || process.env.OAUTH_STORAGE_KEY      || '';
+  const oauthSigninPath   = envTesting.OAUTH_SIGNIN_PATH      || process.env.OAUTH_SIGNIN_PATH      || '/signin';
+  const oauthButtonTestId = envTesting.OAUTH_BUTTON_TEST_ID   || process.env.OAUTH_BUTTON_TEST_ID   || '';
 
   return {
     projectRoot,
+    projectConfigured,
     baseURL,
     authRequired,
     authData,
     authStrategy,
-    oauthStorageKey,
     testUserEmail,
+    testUserPassword,
+    test2FACode,
     testUserName,
     testUserPicture,
+    oauthStorageKey,
     oauthSigninPath,
     oauthButtonTestId,
     instructionsPath:  path.join(projectRoot, 'e2e-tests/instructions.js'),

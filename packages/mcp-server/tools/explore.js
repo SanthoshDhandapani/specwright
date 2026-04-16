@@ -62,6 +62,17 @@ export async function handler({ pageURL, moduleName, instructions, authRequired 
       ``,
       `Then call \`browser_navigate\` again to reload the app and pick up the auth state.`,
     ].join('\n');
+  } else if (config.authStrategy === 'email-password') {
+    const authDataBlock = buildEmailPasswordSection(config);
+    if (fs.existsSync(config.authStatePath)) {
+      authSection = [
+        `AVAILABLE — Auth state found at \`${config.authStatePath}\`. Try navigating directly.`,
+        `**If the page redirects to a login page**, the saved auth state may be stale. Use the auth data below to log in.`,
+        authDataBlock,
+      ].join('\n');
+    } else {
+      authSection = [`NOT_FOUND — No saved auth state. Authenticate first using email-password.`, authDataBlock].join('\n');
+    }
   } else {
     const authDataBlock = buildAuthSection(config);
     if (fs.existsSync(config.authStatePath)) {
@@ -163,6 +174,45 @@ export async function handler({ pageURL, moduleName, instructions, authRequired 
   ].join('\n');
 
   return { content: [{ type: 'text', text }] };
+}
+
+/**
+ * Build auth section for email-password strategy.
+ * Reads TEST_USER_EMAIL / TEST_USER_PASSWORD from .env.testing via config.
+ * If missing, instructs Claude to ask the user.
+ */
+function buildEmailPasswordSection(config) {
+  const email = config.testUserEmail;
+  const password = config.testUserPassword;
+
+  if (!email && !password) {
+    return [
+      '',
+      '**⚠️ No credentials found in e2e-tests/.env.testing.**',
+      'Ask the user for their login email and password before proceeding.',
+      'Once provided, use them to complete the email-password login flow.',
+    ].join('\n');
+  }
+
+  const lines = ['', '**Auth data (from e2e-tests/.env.testing):**'];
+  if (email)    lines.push(`- email: \`${email}\``);
+  if (!email)   lines.push(`- email: ⚠️ TEST_USER_EMAIL not set — ask the user`);
+  if (password) lines.push(`- password: \`${password}\``);
+  if (!password) lines.push(`- password: ⚠️ TEST_USER_PASSWORD not set — ask the user`);
+
+  // 2FA code — prefer TEST_2FA_CODE from .env.testing, fall back to authenticationData.js
+  const twoFACode = config.test2FACode || extractAuthDataFromFile(config)?.twoFactorCode;
+  if (twoFACode) {
+    lines.push(`- 2FA code: \`${twoFACode}\``);
+    lines.push(`  *(enter this when the two-factor authentication prompt appears)*`);
+  }
+
+  lines.push(
+    '',
+    'Navigate to the signin page, use `browser_snapshot` to identify the email input,',
+    'fill the email and submit, then fill the password and submit to complete login.',
+  );
+  return lines.join('\n');
 }
 
 /**

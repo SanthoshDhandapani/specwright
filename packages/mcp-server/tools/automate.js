@@ -19,6 +19,33 @@ export const definition = {
 export async function handler({ entry }) {
   const config = getConfig();
 
+  if (!config.projectConfigured) {
+    const hasRoot = Boolean(config.projectRoot);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: [
+            '## Specwright not set up for this project',
+            '',
+            hasRoot
+              ? `Project path is set to \`${config.projectRoot}\` but no \`.specwright.json\` was found there.`
+              : 'No project path is configured.',
+            '',
+            'To use Specwright, run the following in your project root:',
+            '```',
+            'npx @specwright/plugin init',
+            '```',
+            'This creates `.specwright.json` and installs the E2E framework.',
+            '',
+            '### NEXT_ACTION: CALL_E2E_SETUP',
+            'Call `e2e_setup({})` immediately — it will prompt the user for the project path and guide them through setup.',
+          ].join('\n'),
+        },
+      ],
+    };
+  }
+
   if (!fs.existsSync(config.instructionsPath)) {
     return {
       content: [
@@ -29,10 +56,8 @@ export async function handler({ entry }) {
             '',
             `Expected at: \`${config.instructionsPath}\``,
             '',
-            'Create an instructions.js file with test config entries, or use `e2e_configure` with `action: "add"` to create one.',
-            '',
-            '### NEXT_ACTION: ASK_USER',
-            'Ask the user for the page URL and test instructions to create a config entry.',
+            '### NEXT_ACTION: CALL_E2E_SETUP',
+            'Call `e2e_setup({})` immediately — do NOT ask the user any questions first. The setup form collects all required pipeline configuration.',
           ].join('\n'),
         },
       ],
@@ -65,7 +90,12 @@ export async function handler({ entry }) {
       content: [
         {
           type: 'text',
-          text: 'instructions.js is empty (no config entries). Use `e2e_configure` with `action: "add"` to add a test config entry.',
+          text: [
+            '## instructions.js is empty — no config entries found.',
+            '',
+            '### NEXT_ACTION: CALL_E2E_SETUP',
+            'Call `e2e_setup({})` immediately — do NOT ask the user any questions first. The setup form collects all required pipeline configuration.',
+          ].join('\n'),
         },
       ],
     };
@@ -93,15 +123,29 @@ export async function handler({ entry }) {
         ? e.instructions.map((inst, j) => `${j + 1}. ${inst}`).join('\n')
         : '(auto-explore)';
 
+    // Detect input type for Phase 2 routing
+    const jiraUrl = e.inputs?.jira?.url;
+    const filePath = e.filePath;
+    const inputType = jiraUrl ? `Jira` : filePath ? `File` : `Text`;
+    const inputDetail = jiraUrl ? jiraUrl : filePath ? filePath : '(use instructions above)';
+
     return [
       `### Entry ${idx + 1}: ${e.moduleName} (${e.category || '@Modules'})`,
       `**Page URL:** ${e.pageURL}`,
       e.subModuleName && e.subModuleName.length > 0 ? `**Sub-modules:** ${e.subModuleName.join(', ')}` : '',
       `**File name:** ${e.fileName || 'auto'}`,
       `**Explore:** ${e.explore !== false ? 'Yes' : 'No'}`,
+      `**Input type:** ${inputType}${jiraUrl ? ` — \`${jiraUrl}\`` : filePath ? ` — \`${filePath}\`` : ''}`,
       ``,
       `**Instructions:**`,
       instructionsList,
+      ``,
+      `**Phase 2 — Input routing: ${inputType} mode**`,
+      jiraUrl
+        ? `Jira URL detected: \`${jiraUrl}\`\nFetch this Jira ticket using Atlassian MCP tools (jira_connect if not authenticated), then convert the ticket content to a structured test plan.`
+        : filePath
+        ? `File input detected: \`${filePath}\`\nConvert the file using markitdown tools if it is PDF/Word, otherwise read it directly.`
+        : `Text instructions — use the instructions list above as the test plan input.`,
       ``,
       `**Execute these steps in order:**`,
       `1. Call \`e2e_explore\` with:`,

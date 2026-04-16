@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useReducer } from "react";
 import WelcomeScreen from "./WelcomeScreen";
 import InstructionsBuilder from "./InstructionsBuilder";
 import HealerPanel from "./HealerPanel";
@@ -290,6 +290,47 @@ function AgentOutputPanel({ onOpenRunPicker }: { onOpenRunPicker: () => void }):
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // ── Typing effect ────────────────────────────────────────────────────────────
+  // displayedText holds how much of each message has been "typed out" so far.
+  // It lives outside Zustand to avoid store-level re-renders on every frame.
+  // requestAnimationFrame syncs reveals to the display refresh rate (60fps),
+  // eliminating the irregular jumps that setInterval produces.
+  const displayedText = useRef<Map<string, string>>(new Map());
+  const [, repaint] = useReducer((x: number) => x + 1, 0);
+  const rafRef = useRef<number>(0);
+  const lastTsRef = useRef<number>(0);
+
+  useEffect(() => {
+    // 0.2 chars/ms = ~500 chars/sec — scales naturally with actual frame delta,
+    // so the speed stays consistent regardless of frame rate.
+    const CHARS_PER_MS = 0.2;
+
+    const animate = (ts: number) => {
+      const elapsed = lastTsRef.current ? ts - lastTsRef.current : 16;
+      lastTsRef.current = ts;
+      const charsToReveal = Math.max(1, Math.round(elapsed * CHARS_PER_MS));
+
+      const msgs = usePipelineStore.getState().messages;
+      let changed = false;
+      for (const msg of msgs) {
+        if (msg.role !== "assistant") continue;
+        const shown = displayedText.current.get(msg.id) ?? "";
+        if (shown.length < msg.content.length) {
+          const next = msg.isStreaming
+            ? msg.content.slice(0, shown.length + charsToReveal)
+            : msg.content; // finished: snap to full immediately
+          displayedText.current.set(msg.id, next);
+          changed = true;
+        }
+      }
+      if (changed) repaint();
+      rafRef.current = requestAnimationFrame(animate);
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
   const isRunning = status === "running";
 
   // Find the most recent active tool from log lines
@@ -490,7 +531,7 @@ function AgentOutputPanel({ onOpenRunPicker }: { onOpenRunPicker: () => void }):
               <div key={msg.id} className="group/msg relative">
                 {msg.content ? (
                   <pre className="whitespace-pre-wrap break-words font-sans text-slate-200 text-sm leading-relaxed m-0 select-text cursor-text">
-                    {renderWithLinks(msg.content)}
+                    {renderWithLinks(displayedText.current.get(msg.id) ?? msg.content)}
                     {msg.isStreaming && !activeTool && (
                       <span className="inline-block w-0.5 h-4 bg-brand-400 ml-0.5 align-middle animate-pulse" />
                     )}

@@ -1,0 +1,4 @@
+{
+  "plugin": "@specwright/plugin",
+  "authStrategy": "oauth"
+}

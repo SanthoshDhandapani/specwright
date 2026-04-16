@@ -1,8 +1,8 @@
 {
-  "name": "@specwright/mcp-server",
-  "version": "0.1.0",
+  "name": "@specwright/mcp",
+  "version": "0.2.0",
   "type": "module",
-  "description": "MCP server for E2E test automation — configure, explore, plan, and check pipeline status",
+  "description": "Unified MCP server for Specwright — bundles Playwright, markitdown, and Atlassian as internal proxies with full 10-phase E2E pipeline tools",
   "license": "MIT",
   "main": "index.js",
   "bin": {
@@ -24,7 +24,9 @@
   },
   "homepage": "https://github.com/SanthoshDhandapani/specwright",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@anthropic-ai/sdk": "^0.51.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@playwright/mcp": "^0.0.70"
   },
   "keywords": [
     "mcp",

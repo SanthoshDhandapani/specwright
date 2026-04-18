@@ -5,6 +5,7 @@ import { exec } from '../utils/exec.js';
 
 export const definition = {
   name: 'e2e_heal',
+  annotations: { title: 'E2E Heal' },
   description:
     'Auto-heal failing BDD tests — runs tests, investigates source code for selector mismatches, applies fixes, and re-runs up to 3 iterations. Generates a review plan for unfixable failures.',
   inputSchema: {
@@ -45,14 +46,6 @@ export async function handler({ moduleName, category, maxIterations = 3 }) {
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return {
-      content: [{
-        type: 'text',
-        text: '❌ ANTHROPIC_API_KEY is not set. Add it to the MCP server env config in claude_desktop_config.json.',
-      }],
-    };
-  }
 
   // Infer projects (same logic as execute.js)
   const projects = inferProjects(category, moduleName, featuresDir);
@@ -62,32 +55,90 @@ export async function handler({ moduleName, category, maxIterations = 3 }) {
   const agentsDir = path.join(projectRoot, '.claude/agents');
   const healerPrompt = readAgentPrompt(agentsDir, 'playwright/playwright-test-healer.md');
 
-  const summary = { iterations: 0, fixesApplied: 0, finalPassed: 0, finalFailed: 0 };
-  let lastFailures = [];
+  // Run bddgen + initial test pass
+  exec('npx bddgen', { cwd: projectRoot });
+  const initialResult = exec(
+    `npx playwright test ${projectFlags} --grep "@${grepTag}" --reporter json`,
+    { cwd: projectRoot, timeout: 300000 }
+  );
+  const { passed: initialPassed, failed: initialFailed, failures } = parseResults(initialResult.stdout);
+
+  if (initialFailed === 0) {
+    return {
+      content: [{
+        type: 'text',
+        text: `## e2e_heal — ${moduleName}\n\n✅ All ${initialPassed} tests passing — nothing to heal.`,
+      }],
+    };
+  }
+
+  // ── Inline mode (no API key) ─────────────────────────────────────────────
+  // Return healer context + failure details to the host Claude, which fixes
+  // steps files and re-runs tests using its own tools — no separate key needed.
+  if (!apiKey) {
+    const failureContexts = failures.map((f) => buildFailureContext(f, projectRoot)).join('\n\n---\n\n');
+    return {
+      content: [{
+        type: 'text',
+        text: [
+          `## e2e_heal — Inline Mode (no ANTHROPIC_API_KEY)`,
+          '',
+          `**Module:** ${moduleName}`,
+          `**Initial result:** ✅ ${initialPassed} passed | ❌ ${initialFailed} failed`,
+          `**Max iterations:** ${maxIterations}`,
+          '',
+          '**Fix the failures below, then re-run tests. Repeat up to the max iterations.**',
+          `⛔ Do NOT ask the user — fix and re-run autonomously up to ${maxIterations} times.`,
+          '',
+          '---',
+          '',
+          '## Healer Instructions',
+          '',
+          healerPrompt ?? '(healer prompt not found — use best judgement to fix selector mismatches)',
+          '',
+          '---',
+          '',
+          '## Failures to Fix',
+          '',
+          failureContexts,
+          '',
+          '---',
+          '',
+          '## Re-run Command',
+          '',
+          '```bash',
+          `cd ${projectRoot}`,
+          `npx bddgen && npx playwright test ${projectFlags} --grep "@${grepTag}"`,
+          '```',
+          '',
+          'After fixing all failures or reaching max iterations, summarise: iterations used, fixes applied, final pass/fail count.',
+        ].join('\n'),
+      }],
+    };
+  }
+
+  // ── API mode (ANTHROPIC_API_KEY available) ───────────────────────────────
+  const summary = { iterations: 0, fixesApplied: 0, finalPassed: initialPassed, finalFailed: initialFailed };
+  let lastFailures = failures;
 
   for (let i = 1; i <= maxIterations; i++) {
     summary.iterations = i;
+    if (summary.finalFailed === 0) break;
+    if (!healerPrompt) break;
 
-    // Run bddgen + tests
+    const fixed = await healIteration(lastFailures, projectRoot, healerPrompt, apiKey);
+    summary.fixesApplied += fixed;
+    if (fixed === 0) break;
+
     exec('npx bddgen', { cwd: projectRoot });
     const result = exec(
       `npx playwright test ${projectFlags} --grep "@${grepTag}" --reporter json`,
       { cwd: projectRoot, timeout: 300000 }
     );
-
-    const { passed, failed, failures } = parseResults(result.stdout);
+    const { passed, failed, failures: newFailures } = parseResults(result.stdout);
     summary.finalPassed = passed;
     summary.finalFailed = failed;
-    lastFailures = failures;
-
-    if (failed === 0) break; // All passing — done
-    if (!healerPrompt || !apiKey) break; // Can't heal without AI
-
-    // Investigate source + heal via Claude API
-    const fixed = await healIteration(failures, projectRoot, healerPrompt, apiKey);
-    summary.fixesApplied += fixed;
-
-    if (fixed === 0) break; // No progress — stop
+    lastFailures = newFailures;
   }
 
   const lines = [
@@ -159,6 +210,42 @@ function collectFailures(suites, results = []) {
 function extractSelector(errorMsg) {
   const m = errorMsg.match(/locator\(['"`]([^'"`]+)['"`]\)/);
   return m ? m[1] : null;
+}
+
+function buildFailureContext(failure, projectRoot) {
+  const lines = [
+    `### ${failure.title}`,
+    `**Error:** ${failure.error}`,
+  ];
+
+  const stepsPath = failure.file
+    ?.replace('.features-gen/', 'e2e-tests/features/playwright-bdd/')
+    ?.replace('.feature.spec.js', '/steps.js');
+  const resolvedSteps = stepsPath ? path.resolve(projectRoot, stepsPath) : null;
+
+  if (resolvedSteps && fs.existsSync(resolvedSteps)) {
+    lines.push(`**Steps file:** \`${resolvedSteps}\``);
+    lines.push('```javascript', fs.readFileSync(resolvedSteps, 'utf-8'), '```');
+  }
+
+  if (failure.selector) {
+    const grepResult = exec(
+      `grep -r "${failure.selector}" src/ --include="*.tsx" --include="*.jsx" --include="*.ts" --include="*.js" -l 2>/dev/null | head -3`,
+      { cwd: projectRoot }
+    );
+    if (grepResult.stdout?.trim()) {
+      const files = grepResult.stdout.trim().split('\n').slice(0, 3);
+      lines.push('**Application source (selector context):**');
+      files.forEach((f) => {
+        const fullPath = path.join(projectRoot, f);
+        if (fs.existsSync(fullPath)) {
+          lines.push(`\`${f}\``, '```', fs.readFileSync(fullPath, 'utf-8').slice(0, 2000), '```');
+        }
+      });
+    }
+  }
+
+  return lines.join('\n');
 }
 
 async function healIteration(failures, projectRoot, healerPrompt, apiKey) {

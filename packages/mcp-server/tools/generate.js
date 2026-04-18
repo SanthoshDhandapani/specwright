@@ -4,6 +4,7 @@ import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_generate',
+  annotations: { title: 'E2E Generate' },
   description:
     'Generate Playwright BDD .feature file and steps.js from an approved test plan. Reads plan + seed + stepHelpers, calls Claude API internally, writes generated files to the project.',
   inputSchema: {

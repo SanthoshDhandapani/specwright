@@ -5,6 +5,7 @@ import { exec } from '../utils/exec.js';
 
 export const definition = {
   name: 'e2e_execute',
+  annotations: { title: 'E2E Execute' },
   description:
     'Run BDD feature tests or the seed exploration file. Infers the correct Playwright projects from category and module name. Returns pass/fail counts and failure details.',
   inputSchema: {

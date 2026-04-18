@@ -16,7 +16,7 @@
     "test:bdd:auth": "pnpm bddgen && playwright test --project setup --project auth-tests",
     "test:bdd:serial": "pnpm bddgen && playwright test --project setup --project serial-execution",
     "test:bdd:workflows": "pnpm bddgen && playwright test --project setup --project precondition --project workflow-consumers",
-    "test:bdd:workflow": "pnpm bddgen && playwright test --project setup --project run-workflow",
+    "test:bdd:workflow": "pnpm bddgen && playwright test --project setup --project run-workflow-0 --project run-workflow-1 --project run-workflow-2",
     "test:bdd:debug": "pnpm bddgen && PWDEBUG=console playwright test --debug",
     "test:playwright": "playwright test",
     "test:playwright:headed": "playwright test --headed",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
-    "@playwright/test": "^1.54.1",
+    "@playwright/test": "^1.59.1",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",

@@ -34,7 +34,12 @@ export const definition = {
  * Mirrors the logic documented in execution-manager.md.
  */
 async function inferProjects(category, moduleName, featuresDir) {
-  if (category === '@Workflows') return ['setup', 'run-workflow'];
+  // Use the dedicated precondition + workflow-consumers projects instead of the
+  // single-worker `run-workflow` shortcut. `run-workflow` forces all phases
+  // through one worker, which causes playwright-bdd's `$bddContext` worker
+  // fixture to leak state between @0-Precondition and @1-Consumer spec files
+  // (manifests as `bddTestData not found`). Separate projects = fresh workers.
+  if (category === '@Workflows') return ['setup', 'precondition', 'workflow-consumers'];
   if (moduleName && /auth/i.test(moduleName)) return ['auth-tests'];
 
   // Check feature file for @serial-execution tag

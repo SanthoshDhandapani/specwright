@@ -148,16 +148,17 @@ export function registerPipelineIpc(
           return;
         }
       }
+      // Detect direct skill invocations (e.g. "/e2e-heal @tag", "/e2e-generate plan.md").
+      // When the user explicitly calls a skill by name, load that skill's prompt directly
+      // instead of the full pipeline orchestrator — prevents pipeline phase numbering
+      // (Phase 1/2/8) from bleeding into standalone skill output.
+      const skillMatch = payload.userMessage.trim().match(/^\/([a-zA-Z0-9_-]+)/);
+      const skillName = skillMatch?.[1];
+      const isSubSkill = Boolean(skillName && skillName !== "e2e-automate" && projectPath);
+
       if (!systemPrompt) {
-        // Detect direct skill invocations (e.g. "/e2e-heal @tag", "/e2e-generate plan.md").
-        // When the user explicitly calls a skill by name, load that skill's prompt directly
-        // instead of the full pipeline orchestrator — prevents pipeline phase numbering
-        // (Phase 1/2/8) from bleeding into standalone skill output.
-        const skillMatch = payload.userMessage.trim().match(/^\/([a-zA-Z0-9_-]+)/);
-        const skillName = skillMatch?.[1];
-        const isSubSkill = skillName && skillName !== "e2e-automate" && projectPath;
         const skillPrompt = isSubSkill
-          ? projectService.loadSkillPrompt(projectPath, skillName)
+          ? projectService.loadSkillPrompt(projectPath!, skillName!)
           : null;
 
         systemPrompt = skillPrompt ?? projectService.loadOrchestratorPrompt(projectPath);
@@ -172,6 +173,34 @@ export function registerPipelineIpc(
       // When skip permissions is enabled, tell the AI it doesn't need to ask
       if (payload.skipPermissions) {
         systemPrompt += `\n\nIMPORTANT: All tool permissions are pre-approved. Do NOT ask the user to grant permission or approve any tool call. Do NOT pause for approval. All tools execute automatically. Proceed directly.`;
+      }
+
+      // Phase-transition markers — the renderer's detectPhaseFromText scans for
+      // `### Phase N: <Label>` headers to split streaming output into phase cards.
+      // Only applies to the full pipeline orchestrator (e2e-automate). Sub-skills
+      // (/e2e-run, /e2e-heal, /e2e-generate, …) have no pipeline phases — injecting
+      // this rule forces them to invent Phase 1/2/8 headers that have no meaning
+      // for a standalone skill call.
+      if (!isSubSkill) {
+        systemPrompt += [
+          ``,
+          ``,
+          `## Phase transition markers (MANDATORY — Specwright Desktop UI depends on these)`,
+          ``,
+          `When you begin each phase, emit a markdown header on its OWN line:`,
+          `    ### Phase N: <Label>`,
+          ``,
+          `Valid labels:`,
+          `  1 Initialization  |  2 Detection & Routing  |  3 Input Processing`,
+          `  4 Exploration & Planning  |  5 Exploration Validation  |  6 User Approval`,
+          `  7 BDD Generation  |  8 Test Execution & Healing  |  9 Cleanup  |  10 Final Review`,
+          ``,
+          `Rules:`,
+          `- Emit the header ONCE per phase, BEFORE the phase's work begins.`,
+          `- Do NOT use bullet lists to signal phase transitions (e.g. \`- 🔄 Phase 9: Cleanup\`). Bullet checklists INSIDE a phase for progress summaries are fine, but they do NOT open a new card.`,
+          `- Example (correct):  \`### Phase 9: Cleanup\` on a fresh line, then the cleanup commands.`,
+          `- Example (incorrect, causes card misassignment): \`- 🔄 Phase 9: Cleanup\` inside a bullet list.`,
+        ].join('\n');
       }
 
       // Append env credentials and auth instructions to user message
@@ -199,9 +228,9 @@ export function registerPipelineIpc(
           });
         }
 
-        // Prepend PIPELINE_TICKET_ID to the user message to satisfy org-level Jira ticket
-        // hooks (e.g. FourKites policy) that fire at the infrastructure level before the
-        // LLM processes anything — system prompt injection cannot reach these hooks.
+        // Prepend PIPELINE_TICKET_ID to the user message to satisfy any org-level
+        // ticket-ID policy hooks that fire at the infrastructure level before the
+        // LLM processes anything — system prompt injection cannot reach those hooks.
         // Set PIPELINE_TICKET_ID=YOUR-TICKET in .env.testing (gitignored, never hardcoded).
         const ticketId = env["PIPELINE_TICKET_ID"];
         if (ticketId && !userMessage.match(/[A-Z]+-\d+/)) {
@@ -218,37 +247,29 @@ export function registerPipelineIpc(
         ? path.join(projectPath, ".playwright-mcp")
         : ".playwright-mcp";
 
-      // Load MCP servers: Playwright MCP for browser exploration + project servers from .mcp.json
-      // Server name MUST be "playwright-test" to match agent frontmatter tool prefixes
-      // (e.g., mcp__playwright-test__browser_navigate, mcp__playwright-test__browser_snapshot)
-      // Resolve local @playwright/mcp binary (avoids npx overhead of 300ms-3s per spawn)
-      // In a packaged .app, require.resolve() returns a path inside app.asar —
-      // a virtual filesystem that can't be used as a real executable path.
-      // Only use the local binary path in dev mode; packaged builds fall back to npx.
-      let playwrightMcpBin: string;
-      if (!app.isPackaged) {
-        try {
-          const pkgPath = require.resolve("@playwright/mcp/package.json");
-          playwrightMcpBin = path.join(path.dirname(pkgPath), "cli.js");
-        } catch {
-          playwrightMcpBin = "";
-        }
-      } else {
-        playwrightMcpBin = ""; // packaged: fall back to npx below
-      }
-
-      // Flexible type: stdio servers use McpServerConfig; HTTP/streamable-http servers use { type, url }
-      const playwrightMcpArgs = [
-        ...(screenshotDir ? ["--output-dir", screenshotDir] : []),
-        ...(headless ? ["--headless"] : []),
-      ];
+      // Desktop is fully self-contained — hardcodes all 3 core MCP servers.
+      // No read of project .mcp.json; that file is only for CLI users.
+      //
+      // `playwright-test` uses Microsoft's canonical agents MCP: `playwright run-test-mcp-server`
+      // (built into @playwright/test ≥1.59.1). It exposes 79 tools including browser_*,
+      // browser_verify_*, generator_*, planner_*, test_* — matches the frontmatter in
+      // .claude/agents/playwright/*.md (Microsoft's init-agents output).
+      //
+      // We still run it via the project's local playwright binary (projectPath/node_modules)
+      // so the Playwright version matches what the project's tests run against.
       const mcpServers: Record<string, Record<string, unknown>> = {
-        "playwright-test": playwrightMcpBin
-          ? { command: "node", args: [playwrightMcpBin, ...playwrightMcpArgs] }
-          : { command: "npx", args: ["@playwright/mcp@latest", ...playwrightMcpArgs] },
-        // Atlassian MCP — always available for Jira ticket processing (streamable-http, auth on first use)
-        // CLI users can also add this via project .mcp.json; Desktop manages it here directly.
-        // Bearer token is injected if the user has completed OAuth via atlassian:connect.
+        "playwright-test": {
+          command: "npx",
+          args: ["playwright", "run-test-mcp-server"],
+          env: {
+            ...(screenshotDir ? { PLAYWRIGHT_OUTPUT_DIR: screenshotDir } : {}),
+            ...(headless ? { PLAYWRIGHT_HEADLESS: "1" } : {}),
+          },
+        },
+        "markitdown": {
+          command: "npx",
+          args: ["markitdown-mcp-npx"],
+        },
         "atlassian": await (async () => {
           const token = await getAtlassianAccessToken();
           return {
@@ -258,29 +279,10 @@ export function registerPipelineIpc(
           };
         })(),
       };
-      if (projectPath) {
-        const mcpJsonPath = path.join(projectPath, ".mcp.json");
-        if (fs.existsSync(mcpJsonPath)) {
-          try {
-            const mcpConfig = JSON.parse(fs.readFileSync(mcpJsonPath, "utf-8"));
-            const projectServers = mcpConfig.mcpServers ?? {};
-            for (const [name, config] of Object.entries(projectServers)) {
-              const cfg = config as Record<string, unknown>;
-              // Allow stdio + http + streamable-http (used by Atlassian, GitHub, etc.)
-              // Skip only sse — unreliable in Electron context
-              if (cfg.type && cfg.type !== "stdio" && cfg.type !== "http" && cfg.type !== "streamable-http") continue;
-              // Skip if already defined (e.g., playwright-test added above)
-              if (mcpServers[name]) continue;
-              mcpServers[name] = cfg as Record<string, unknown>;
-            }
-            win.webContents.send("pipeline:log", {
-              line: `[pipeline] MCP servers: ${Object.keys(mcpServers).join(", ")}`,
-            });
-          } catch {
-            // ignore malformed .mcp.json
-          }
-        }
-      }
+
+      win.webContents.send("pipeline:log", {
+        line: `[pipeline] MCP servers: ${Object.keys(mcpServers).join(", ")}`,
+      });
 
       win.webContents.send("pipeline:log", { line: `[pipeline] Launching Claude Runner…` });
 
@@ -312,6 +314,14 @@ export function registerPipelineIpc(
             cwd: projectPath,
             systemPrompt: systemPrompt ? { preset: "claude_code" as const, append: systemPrompt } : undefined,
             mcp: mcpConfig,
+            // When the user has toggled "Skip permissions" in the Desktop UI they've
+            // opted in to a trusted run. Use the SDK's `bypassPermissions` mode
+            // (via sdkOptions) — this skips the classifier LLM call per tool,
+            // which otherwise adds 3–10s latency per Read/Grep/Bash and makes
+            // long-running skills like `/e2e-heal` feel frozen for 10+ minutes.
+            //
+            // When skip is OFF, use `prompt` so every tool call goes through the
+            // interactive approval flow (the safer default for untrusted runs).
             permissions: payload.skipPermissions ? "auto" : "prompt",
             onPermission: async (req) => {
               win.webContents.send("pipeline:permission-request", {
@@ -332,6 +342,14 @@ export function registerPipelineIpc(
               // Pass the resolved claude CLI path so the SDK doesn't fall back to
               // require.resolve("./cli.js") which points inside app.asar (not a real path)
               ...(claudePath ? { pathToClaudeCodeExecutable: claudePath } : {}),
+              // When the user has toggled "Skip permissions" in the Desktop UI they've
+              // opted in to a trusted run. Override claude-runner's 'auto' classifier
+              // mode with `bypassPermissions` — skips the 3–10s per-tool classifier
+              // LLM call that otherwise makes skills like /e2e-heal feel frozen for
+              // 10+ minutes during the healer's dozens of Read/Grep/Bash calls.
+              ...(payload.skipPermissions
+                ? { permissionMode: "bypassPermissions", allowDangerouslySkipPermissions: true }
+                : {}),
             },
           });
           activeClaudeRunner = runner;
@@ -416,8 +434,11 @@ export function registerPipelineIpc(
                 if (event.result.usage.input > 0 || event.result.usage.output > 0) {
                   lastSessionId = event.result.sessionId;
                 }
+                // Cost / token breakdown temporarily hidden from the pipeline terminal.
+                // Re-enable by restoring the full line below.
                 win.webContents.send("pipeline:log", {
-                  line: `[pipeline] Done — ${event.result.duration}ms, cost $${event.result.cost.toFixed(4)}, tokens: ${event.result.usage.input}in/${event.result.usage.output}out`,
+                  line: `[pipeline] Done — ${event.result.duration}ms`,
+                  // line: `[pipeline] Done — ${event.result.duration}ms, cost $${event.result.cost.toFixed(4)}, tokens: ${event.result.usage.input}in/${event.result.usage.output}out`,
                 });
                 break;
             }

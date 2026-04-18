@@ -1,12 +1,15 @@
 {
   "mcpServers": {
-    "specwright": {
+    "playwright-test": {
       "command": "npx",
-      "args": ["@specwright/mcp"],
+      "args": ["playwright", "run-test-mcp-server"],
       "env": {
-        "SPECWRIGHT_PROJECT": "${PWD}",
-        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
+        "PLAYWRIGHT_HEADLESS": "0"
       }
+    },
+    "markitdown": {
+      "command": "npx",
+      "args": ["markitdown-mcp-npx"]
     },
     "atlassian": {
       "type": "streamable-http",

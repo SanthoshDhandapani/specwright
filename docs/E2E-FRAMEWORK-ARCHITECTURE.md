@@ -322,3 +322,102 @@ Playwright MCP screenshots must go to `.playwright-mcp/` (gitignored). This is s
 - **Plugin template** (`mcp.json.template`): same — all new projects get the correct output dir
 
 The Desktop app deduplicates MCP servers (line 173 in `pipeline.ipc.ts`): `if (mcpServers[name]) continue`. Its entry wins over `.mcp.json`, so there's no conflict when both are present.
+
+---
+
+## Plugin Selection Architecture
+
+### Default Behavior
+
+`ProjectService.bootstrap()` always installs `@specwright/plugin` as the base plugin. This is the default — no user action required. The base plugin is open-source, generic, and works for any web application.
+
+Until the user explicitly changes the plugin in ConfigPanel, the project uses only the base plugin.
+
+### Changing the Plugin (Two Import Modes)
+
+#### 1. npm Ecosystem
+
+```
+Plugin source: npm package
+  ├── Package name: specwright-plugin-acme-corp   ← naming convention: specwright-plugin-*
+  ├── Registry: (blank) = npmjs.com               ← or custom: https://npm.acme.com
+  └── Install: npm install {name}, then run install.sh
+```
+
+**Naming convention**: Community plugins use `specwright-plugin-*` with `keywords: ["specwright-plugin"]` in `package.json`. Organizations can publish to private npm registries — the user provides the registry URL in ConfigPanel.
+
+**Custom registry**: Supported via `--registry` flag to npm. Can also be set project-wide via `.npmrc` in the project root.
+
+**Discovery (future)**: npm search API (`npm search specwright-plugin --json`) will surface community plugins in a marketplace view.
+
+#### 2. Local Directory Import
+
+```
+Plugin source: local path
+  ├── User browses to: /path/to/fourkites-ai-plugins/plugins/fourkites-e2e/
+  ├── Validation (3 levels):
+  │     Level 1: specwright.plugin.json present + valid JSON + required fields (name, version, type)
+  │     Level 2: install.sh present
+  │     Level 3: all paths in overrides[] exist inside the overrides/ directory
+  └── If valid: plugin name read from specwright.plugin.json
+```
+
+**Detection signal**: `specwright.plugin.json` at the root of the plugin directory is the canonical signal. Any directory without this file is rejected immediately.
+
+### 3-Level Plugin Validation
+
+Applied to any local directory before accepting it as a valid plugin source:
+
+| Level | Check | Fail message |
+|-------|-------|-------------|
+| 1 | `specwright.plugin.json` exists + is valid JSON + has `name`, `version`, `type` fields | "Not a Specwright plugin — specwright.plugin.json missing or malformed" |
+| 2 | `install.sh` exists | "Plugin is missing install.sh" |
+| 3 | Every path in `overrides[]` exists inside the `overrides/` directory | "Plugin overrides missing: {list of missing files}" |
+
+### Overlay Install Sequence
+
+An overlay plugin installs **on top of** the base plugin, replacing specific files:
+
+```
+bootstrap(projectPath, { overlaySource })
+  Step 1: Install @specwright/plugin base (always)
+  Step 2: If overlay is configured:
+    ├── Resolve overlay directory (local path, npm package, or .specwright.json overlayPath)
+    ├── Run: bash install.sh <projectPath>
+    │     → copies overrides/ files on top of base plugin files
+    │     → updates AUTH_STRATEGY in e2e-tests/.env.testing
+    │     → copies specwright.plugin.json to project root (overlay manifest)
+    └── Write overlay metadata to .specwright.json
+```
+
+`.specwright.json` records the overlay for future `detectPlugin()` calls:
+
+```json
+{
+  "plugin": "@specwright/plugin",
+  "overlay": "fourkites-e2e",
+  "overlayPath": "../fourkites-ai-plugins/plugins/fourkites-e2e"
+}
+```
+
+`overlayPath` is relative to the project root. On re-bootstrap, this lets `ProjectService` find the overlay directory without user interaction.
+
+### Overlay Resolution Order (resolveOverlayPath)
+
+When `bootstrap()` needs the overlay directory, it tries these sources in order:
+
+1. **Explicit `overlayPath`** in `.specwright.json` — resolved relative to project root
+2. **Sibling scan** — `../../{overlayName}/install.sh` (works for monorepo layouts like `fourkites-ai-plugins/plugins/{name}`)
+3. **npm resolution** — `require.resolve('{overlayName}/install.sh')` — works when overlay is installed as a package
+
+Returns `null` if none found — bootstrap logs a warning and continues without overlay.
+
+### Future: Git Connectivity
+
+Phase 2 (not yet implemented):
+
+- OAuth connect GitHub / GitLab / Bitbucket — same pattern as the Atlassian MCP integration
+- Browse public repos by topic `specwright-plugin`
+- Browse org private repos after OAuth
+- One-click install: clone repo to temp dir → validate (3-level) → run `install.sh` → activate on project
+- Connected git accounts stored in Desktop app config (never in `.specwright.json`)

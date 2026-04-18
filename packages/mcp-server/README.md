@@ -103,6 +103,12 @@ This creates `.specwright.json`, `instructions.js`, Playwright config, and all r
 
 ## Changelog
 
+### 0.3.3
+- Fixed `@playwright/mcp` output directory defaulting to a relative path (`.playwright-mcp`) — now uses `~/.playwright-mcp` (absolute) so screenshots and traces always save correctly regardless of MCP server CWD
+
+### 0.3.2
+- `e2e_configure` `set_project` action no longer writes to `~/.specwright/config.json` — sets project path in-memory for the session only and reads config directly from the project's `.specwright.json`
+
 ### 0.3.1
 - All 9 `e2e_*` tools now display with proper capitalisation in Claude Desktop (**E2E Automate**, **E2E Setup**, etc.) via MCP `annotations.title`
 - `e2e_setup` fallback (when native forms are unavailable) now asks for project path first and enforces all questions are presented verbatim

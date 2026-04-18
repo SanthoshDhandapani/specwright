@@ -424,7 +424,9 @@ function AgentOutputPanel({ onOpenRunPicker }: { onOpenRunPicker: () => void }):
           skipPermissions,
         });
       } else {
-        // Fresh start — reset everything
+        // Fresh start — startRun resets store-level phase tracking (activePhase → 1).
+        // CenterPanel's useEffect listens for this transition and resets its lastPhaseRef to 0,
+        // so all phase-advance checks on the new run start from a clean slate.
         startRun(text);
         await window.specwright.pipeline.start({
           userMessage: messageForHook,
@@ -703,6 +705,15 @@ export default function CenterPanel(): React.JSX.Element {
   const { appendToken, appendLog, finishRun, setError, setActivePhase, setPhaseStatus, splitForPhase, status, setMcpStatus } = usePipelineStore();
   const { projectState, loaded, hydrate, activeTab, setActiveTab, projectPath } = useConfigStore();
   const lastPhaseRef = React.useRef<number>(0);
+  const runId = usePipelineStore((s) => s.runId);
+
+  // Reset per-run phase tracking whenever a fresh run starts (runId increments).
+  // Without this, a previous run's final phase stays in lastPhaseRef, which causes
+  // every `phaseId > lastPhaseRef.current` check on the next run to fail — collapsing
+  // all phase content into the Phase 1 card.
+  useEffect(() => {
+    lastPhaseRef.current = 0;
+  }, [runId]);
 
   // ── Run Tests picker state (shared between tab bar + output panel) ────────────
   const [showRunPicker, setShowRunPicker] = useState(false);
@@ -777,14 +788,22 @@ export default function CenterPanel(): React.JSX.Element {
   }, [setActivePhase, setPhaseStatus, splitForPhase]);
 
   // Detect phase from streamed tokens (text fallback for phases without tool calls)
+  // Loops while transitions are found — if a burst contains multiple phase headers
+  // (e.g. "### Phase 8: Skipped" immediately followed by "### Phase 9: Cleanup"),
+  // each transition gets its own card.
   const handleToken = useCallback((token: string) => {
     appendToken(token);
 
-    const { messages } = usePipelineStore.getState();
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.role === "assistant" && lastMsg.content) {
-      const detected = detectPhaseFromText(lastMsg.content.slice(-600), lastPhaseRef.current);
-      if (detected) advanceToPhase(detected);
+    // Keep advancing while new phase headers are still visible in the streaming message.
+    // Safety cap at MAX_PHASE_ID to avoid infinite loops if detection ever drifts.
+    for (let i = 0; i < 10; i++) {
+      const { messages } = usePipelineStore.getState();
+      const lastMsg = messages[messages.length - 1];
+      if (!(lastMsg?.role === "assistant" && lastMsg.content)) break;
+
+      const detected = detectPhaseFromText(lastMsg.content.slice(-2000), lastPhaseRef.current);
+      if (!detected || detected <= lastPhaseRef.current) break;
+      advanceToPhase(detected);
     }
   }, [appendToken, advanceToPhase]);
 

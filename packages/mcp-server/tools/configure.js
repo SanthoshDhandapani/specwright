@@ -12,20 +12,29 @@ export const definition = {
     properties: {
       action: {
         type: 'string',
-        enum: ['read', 'list', 'add', 'init'],
+        enum: ['read', 'list', 'add', 'init', 'set_project'],
         description:
-          'init: get setup info + base URL + existing modules. read: show instructions.js. list: show test modules. add: append config entry.',
+          'init: get setup info + base URL + existing modules. read: show instructions.js. list: show test modules. add: append config entry. set_project: register project path for this session by reading .specwright.json — use when SPECWRIGHT_PROJECT env var is not set.',
+      },
+      projectPath: {
+        type: 'string',
+        description: 'Absolute path to the project root — only used with action=set_project.',
       },
       config: {
         type: 'object',
-        description: 'Config entry to add (only for action=add). Must include moduleName, pageURL.',
+        description: 'Config entry to add (only for action=add). Must include moduleName and pageURL.',
         properties: {
-          moduleName: { type: 'string' },
-          category: { type: 'string' },
-          subModuleName: { type: 'array', items: { type: 'string' } },
-          fileName: { type: 'string' },
-          instructions: { type: 'array', items: { type: 'string' } },
-          pageURL: { type: 'string' },
+          moduleName:         { type: 'string' },
+          category:           { type: 'string' },
+          subModuleName:      { type: 'array', items: { type: 'string' } },
+          fileName:           { type: 'string' },
+          instructions:       { type: 'array', items: { type: 'string' } },
+          pageURL:            { type: 'string' },
+          filePath:           { type: 'string', description: 'Path to a spec file (PDF, Word, Excel, CSV, text)' },
+          inputs:             { type: 'object', description: 'Structured inputs e.g. { "jira": { "url": "..." } }' },
+          explore:            { type: 'boolean' },
+          runExploredCases:   { type: 'boolean' },
+          runGeneratedCases:  { type: 'boolean' },
         },
       },
     },
@@ -33,8 +42,12 @@ export const definition = {
   },
 };
 
-export async function handler({ action, config: configInput }) {
+export async function handler({ action, config: configInput, projectPath }) {
   const config = getConfig();
+
+  if (action === 'set_project') {
+    return handleSetProject(projectPath);
+  }
 
   if (action === 'init') {
     return handleInit(config);
@@ -57,6 +70,123 @@ export async function handler({ action, config: configInput }) {
   }
 
   return { content: [{ type: 'text', text: `Unknown action: ${action}` }] };
+}
+
+function handleSetProject(projectPath) {
+  if (!projectPath) {
+    return { content: [{ type: 'text', text: 'Error: projectPath is required for action=set_project.' }] };
+  }
+
+  const spwJsonPath = path.join(projectPath, '.specwright.json');
+  if (!fs.existsSync(spwJsonPath)) {
+    return {
+      content: [{
+        type: 'text',
+        text: [
+          `⚠️ No .specwright.json found at \`${projectPath}\`.`,
+          '',
+          'Run this in your project root to initialise Specwright:',
+          '```',
+          `cd ${projectPath}`,
+          'npx @specwright/plugin init',
+          '```',
+          'Then call `e2e_configure` with `action: "set_project"` again.',
+        ].join('\n'),
+      }],
+    };
+  }
+
+  // Set for this MCP server session only — no global file written.
+  // For permanent configuration, set SPECWRIGHT_PROJECT in claude_desktop_config.json env.
+  process.env.SPECWRIGHT_PROJECT = projectPath;
+
+  const spwJson = JSON.parse(fs.readFileSync(spwJsonPath, 'utf-8'));
+
+  // Check whether the project already has config entries in instructions.js.
+  // If it does — SKIP the setup questionnaire entirely and tell Claude to proceed.
+  const instructionsPath = path.join(projectPath, 'e2e-tests/instructions.js');
+  let hasExistingEntries = false;
+  if (fs.existsSync(instructionsPath)) {
+    try {
+      const content = fs.readFileSync(instructionsPath, 'utf-8');
+      // Simple heuristic: at least one `moduleName` key in the file
+      // Matches both quoted (`"moduleName":`) and unquoted (`moduleName:`) formats
+      hasExistingEntries = /["']?moduleName["']?\s*:/.test(content);
+    } catch {
+      hasExistingEntries = false;
+    }
+  }
+
+  const header = [
+    `✅ Project set for this session: \`${projectPath}\``,
+    '',
+    `**Plugin:** ${spwJson.plugin || '(base)'}${spwJson.overlay ? ` + overlay: ${spwJson.overlay}` : ''}`,
+    `**Auth strategy:** ${spwJson.authStrategy || 'not specified'}`,
+    '',
+    'To make this permanent, add to your Claude Desktop config:',
+    '```json',
+    `"env": { "SPECWRIGHT_PROJECT": "${projectPath}" }`,
+    '```',
+    '',
+  ].join('\n');
+
+  // ── Path A: instructions.js already has entries — skip setup, go to pipeline ──
+  if (hasExistingEntries) {
+    return {
+      content: [{
+        type: 'text',
+        text: [
+          header,
+          '---',
+          '',
+          '📂 **Existing config detected** — `instructions.js` already has test module entries.',
+          '',
+          '⛔ **Do NOT ask any setup questions. Do NOT call `e2e_setup`.**',
+          '',
+          '### NEXT_ACTION: CALL_E2E_AUTOMATE',
+          '',
+          'Immediately call `mcp__specwright__e2e_automate({})` to load the existing plan and proceed with the pipeline (exploration → approval → generation → execution).',
+        ].join('\n'),
+      }],
+    };
+  }
+
+  // ── Path B: instructions.js is empty or missing — ask the 8 questions ──
+  return {
+    content: [{
+      type: 'text',
+      text: [
+        header,
+        '---',
+        '',
+        '## ⛔ PRESENT THIS ENTIRE QUESTIONNAIRE TO THE USER IN A SINGLE MESSAGE',
+        '',
+        '**CRITICAL INSTRUCTIONS — read carefully before responding to the user:**',
+        '- Copy the **entire numbered list below** into your next message to the user, verbatim',
+        '- Do NOT ask questions one at a time',
+        '- Do NOT say "Question 1" and wait for the answer before showing Question 2',
+        '- Do NOT reword, summarise, or split the questions',
+        '- The user will read ALL 8 questions and reply with ALL answers in one message',
+        '',
+        '---',
+        '',
+        '📋 **Configure your test module** — please answer all 8 questions in one reply:',
+        '',
+        '1. **What do you want to test?** — paste a Jira ticket URL, describe the feature in plain text, or give a file path to a spec document',
+        '2. **Module name** — a short tag starting with @ to group these tests (e.g. @LoginPage, @SearchPage, @CheckoutFlow)',
+        '3. **Page URL** — the full URL Claude will navigate to, including port (e.g. http://localhost:5173/your-page)',
+        '4. **Test category** — type @Modules for standalone feature tests, or @Workflows for multi-step flows with shared data between phases',
+        '5. **Sub-modules** — optional, for modules with sub-sections. @Workflows use numbered prefixes (e.g. @0-Precondition,@1-VerifyInList). @Modules can use plain names (e.g. @CreateUser,@VerifyInList). Leave blank for a single-level module.',
+        '6. **Explore in browser?** — yes to open a live browser and discover real selectors via Playwright, no to generate from description only',
+        '7. **Validate explored selectors?** — (only if explore=yes) yes to run seed.spec.js and confirm selectors work before generation, no to skip validation',
+        '8. **Run tests after generation?** — yes to execute generated BDD tests and auto-heal failures, no to only generate files',
+        '',
+        '---',
+        '',
+        '**After the user answers all 8 questions**, call `e2e_configure` with `action: "add"` to write the config to `instructions.js`, then call `e2e_automate` to proceed with the pipeline.',
+      ].join('\n'),
+    }],
+  };
 }
 
 function handleInit(config) {
@@ -168,17 +298,17 @@ function handleAdd(config, configInput) {
   }
 
   const entry = {
-    filePath: '',
-    moduleName: configInput.moduleName,
-    category: configInput.category || '@Modules',
-    subModuleName: configInput.subModuleName || [],
-    fileName: configInput.fileName || configInput.moduleName.replace('@', '').toLowerCase(),
-    instructions: configInput.instructions || [],
+    filePath:          configInput.filePath          ?? '',
+    moduleName:        configInput.moduleName,
+    category:          configInput.category          || '@Modules',
+    subModuleName:     configInput.subModuleName     || [],
+    fileName:          configInput.fileName          || configInput.moduleName.replace('@', '').toLowerCase(),
+    instructions:      configInput.instructions      || [],
     pageURL,
-    inputs: {},
-    explore: true,
-    runExploredCases: false,
-    runGeneratedCases: false,
+    inputs:            configInput.inputs            || {},
+    explore:           configInput.explore           ?? true,
+    runExploredCases:  configInput.runExploredCases  ?? false,
+    runGeneratedCases: configInput.runGeneratedCases ?? false,
   };
 
   // Read existing, append entry
@@ -191,16 +321,25 @@ function handleAdd(config, configInput) {
   const updated = existing.replace(/\];\s*$/, `  ${entryStr},\n];\n`);
   fs.writeFileSync(config.instructionsPath, updated);
 
-  const nextStep =
-    configInput.instructions && configInput.instructions.length > 0
-      ? `Next: call \`e2e_explore\` with pageURL="${pageURL}", moduleName="${configInput.moduleName}", and the instructions.`
-      : `Next: call \`e2e_explore\` with pageURL="${pageURL}", moduleName="${configInput.moduleName}" to auto-explore the page.`;
+  const jiraUrl = entry.inputs?.jira?.url;
+  const sources = [
+    jiraUrl              ? `Jira: ${jiraUrl}` : null,
+    entry.filePath       ? `File: ${entry.filePath}` : null,
+    entry.instructions.length > 0 ? `Instructions: ${entry.instructions.length} item(s)` : null,
+  ].filter(Boolean);
 
   return {
     content: [
       {
         type: 'text',
-        text: `Added config for **${configInput.moduleName}** to instructions.js.\n\n${nextStep}`,
+        text: [
+          `✅ Config for **${configInput.moduleName}** written to \`instructions.js\`.`,
+          ``,
+          `**Input sources:** ${sources.length > 0 ? sources.join(' | ') : '(none — auto-explore only)'}`,
+          `**Explore:** ${entry.explore ? 'Yes' : 'No'} | **Run after gen:** ${entry.runGeneratedCases ? 'Yes' : 'No'}`,
+          ``,
+          `Now call \`e2e_automate\` to get the full pipeline plan with input routing.`,
+        ].join('\n'),
       },
     ],
   };

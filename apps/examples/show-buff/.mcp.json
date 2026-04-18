@@ -17,12 +17,10 @@
     "playwright-test": {
       "command": "npx",
       "args": [
-        "playwright",
-        "run-test-mcp-server"
-      ],
-      "env": {
-        "PLAYWRIGHT_HEADLESS": "0"
-      }
+        "@playwright/mcp@latest",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
     },
     "markitdown": {
       "command": "npx",

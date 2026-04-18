@@ -67,11 +67,14 @@ If auth fails, stop and ask the user for help.
 ## Token Efficiency
 
 Browser exploration should be SURGICAL, not exhaustive:
-- Check agent memory FIRST — skip re-discovery of known selectors
+- **OPEN THE BROWSER FIRST** — `browser_navigate` to the target URL is always the first browser action, before reading memory or grepping source
+- Read agent memory ONLY after you have taken at least one live `browser_snapshot` — use memory to skip re-clicking known elements, not to skip opening the browser
 - Take ONE full-page snapshot (overview), then targeted snapshots only (with `ref` parameter)
 - **Maximum 20 browser calls per module**
 - Write seed file as soon as you have sufficient selectors — don't over-explore
-- If this is a repeat exploration (memory has data), do verification-only (5 calls max)
+- If memory has data for this URL: verification mode (3–5 browser calls) — open browser, snapshot target page, compare selectors against memory, note any changes
+- Memory **never** replaces live browser calls — it reduces the number of targeted clicks needed after the initial snapshot
+
 **Source code grep is a pre-step only — it NEVER replaces browser exploration:**
 - You MAY grep `src/` for `data-testid` to get a head-start on selector names
 - You MUST still open the browser and validate every selector against the live page

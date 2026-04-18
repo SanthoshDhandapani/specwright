@@ -4,6 +4,7 @@ import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_configure',
+  annotations: { title: 'E2E Configure' },
   description:
     'Read, list, add, or initialize E2E test configuration. Use action "init" to get setup info and base URL. Supports env vars E2E_BASE_URL and E2E_PROJECT_ROOT from MCP server config.',
   inputSchema: {

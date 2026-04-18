@@ -3,6 +3,7 @@ import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_explore',
+  annotations: { title: 'E2E Explore' },
   description:
     'Return a structured exploration plan for a page. Does NOT open a browser — instead provides auth data, known selectors, and step-by-step instructions for using Playwright MCP tools to explore the page.',
   inputSchema: {

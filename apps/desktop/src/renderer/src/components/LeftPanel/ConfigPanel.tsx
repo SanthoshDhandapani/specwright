@@ -414,7 +414,7 @@ export default function ConfigPanel(): React.JSX.Element {
   const {
     projectPath, projectState, envVars, loaded,
     pickAndBootstrap, loadExistingProject, setEnvVar, removeEnvVar, saveEnv,
-    skipPermissions, setSkipPermissions, pendingPlugin, setPendingPlugin,
+    skipPermissions, setSkipPermissions, pendingPlugin, setPendingPlugin, resetProject,
   } = useConfigStore();
 
   const [customVarKey, setCustomVarKey] = useState("");
@@ -425,6 +425,7 @@ export default function ConfigPanel(): React.JSX.Element {
   const [showPluginModal, setShowPluginModal] = useState(false);
   const [pluginInfo, setPluginInfo] = useState<PluginInfo | null>(null);
   const [applyingPlugin, setApplyingPlugin] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
   const authRequired = authStrategy !== "none";
@@ -597,13 +598,46 @@ export default function ConfigPanel(): React.JSX.Element {
                     <SyncButtonIcon />
                   </button>
                 </div>
-                <button
-                  onClick={pickAndBootstrap}
-                  className="text-slate-500 hover:text-brand-400 text-xs transition-colors flex-shrink-0"
-                  title="Change project"
-                >
-                  Change
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {confirmReset ? (
+                    <>
+                      <span className="text-slate-500 text-xs">Close?</span>
+                      <button
+                        onClick={() => { resetProject(); setConfirmReset(false); }}
+                        className="text-red-400 hover:text-red-300 text-xs border border-red-800 hover:border-red-600 rounded px-1.5 py-0.5 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setConfirmReset(false)}
+                        className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setConfirmReset(true)}
+                        title="Close project"
+                        className="text-slate-500 hover:text-red-400 transition-colors"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                          <polyline points="16 17 21 12 16 7" />
+                          <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={pickAndBootstrap}
+                        className="text-slate-500 hover:text-brand-400 text-xs transition-colors"
+                        title="Change project"
+                      >
+                        Change
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <p className="text-slate-300 text-xs truncate font-mono" title={projectPath}>
                 {basename(projectPath)}

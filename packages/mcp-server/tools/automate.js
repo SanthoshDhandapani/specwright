@@ -3,6 +3,7 @@ import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_automate',
+  annotations: { title: 'E2E Automate' },
   description:
     'Read instructions.js and return a structured pipeline plan. For each config entry, returns the module name, page URL, instructions, and the sequence of MCP tool calls to execute (explore → plan). Call this first to get the full automation plan.',
   inputSchema: {

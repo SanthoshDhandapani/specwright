@@ -4,9 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createRequire } from 'module';
 import path from 'path';
-import os from 'os';
 import { execSync } from 'child_process';
-import { promises as fsp } from 'fs';
 import { writeGlobalConfig } from './utils/config.js';
 
 // ── Auto-fix PATH on macOS when launched from a GUI app (e.g. Claude Desktop) ──
@@ -46,7 +44,7 @@ import { definition as generateDef, handler as generateHandler } from './tools/g
 import { definition as healDef, handler as healHandler } from './tools/heal.js';
 
 // Proxy factory
-import { createStdioProxy, createHttpProxy } from './utils/proxy.js';
+import { createStdioProxy } from './utils/proxy.js';
 
 // ── Static tools (always available) ───────────────────────────────────────
 const staticTools = [
@@ -70,12 +68,14 @@ try {
   const playwrightDir = path.dirname(require.resolve('@playwright/mcp/package.json'));
   const playwrightBin = path.join(playwrightDir, 'cli.js');
   const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR ?? '.playwright-mcp';
+  // PLAYWRIGHT_HEADLESS=true → headless mode (set by Desktop); default is visible browser for CLI exploration
+  const headlessArgs = process.env.PLAYWRIGHT_HEADLESS === 'true' ? ['--headless'] : [];
   const pw = await createStdioProxy({
     command: 'node',
     // --isolated: keeps the browser profile in memory (no disk lock file).
     // Prevents "Chrome profile already in use" errors when a previous session
     // didn't close cleanly or when two MCP instances start simultaneously.
-    args: [playwrightBin, '--isolated', '--output-dir', outputDir],
+    args: [playwrightBin, '--isolated', '--output-dir', outputDir, ...headlessArgs],
     label: 'browser',
   });
   if (pw) proxies.push(pw);
@@ -83,37 +83,22 @@ try {
   process.stderr.write('[specwright-mcp] @playwright/mcp not found — browser tools unavailable\n');
 }
 
-// 2. Markitdown MCP — file conversion (uvx stdio)
-const md = await createStdioProxy({
-  command: 'uvx',
-  args: ['markitdown-mcp'],
-  label: 'markitdown',
-});
-if (md) proxies.push(md);
-
-// 3. Atlassian MCP — Jira (streamable-http, requires bearer token)
-// The Atlassian hosted MCP requires auth even to list tools. If a token is available
-// (from env or stored ~/.specwright/atlassian-auth.json), connect and proxy all Jira tools.
-// Otherwise expose a jira_connect helper tool so Claude can prompt the user.
-let storedAtlassianToken = '';
+// 2. Markitdown MCP — file conversion (bundled npm package, no uvx/Python required)
 try {
-  const stored = JSON.parse(await fsp.readFile(path.join(os.homedir(), '.specwright/atlassian-auth.json'), 'utf-8'));
-  storedAtlassianToken = stored?.token ?? '';
-} catch { /* file doesn't exist yet */ }
-
-let atlassianConnected = false;
-const atlassianToken = process.env.ATLASSIAN_TOKEN || storedAtlassianToken;
-if (atlassianToken) {
-  const at = await createHttpProxy({
-    url: 'https://mcp.atlassian.com/v1/mcp',
-    headers: { Authorization: `Bearer ${atlassianToken}` },
-    label: 'atlassian',
+  const require = createRequire(import.meta.url);
+  const markitdownBin = require.resolve('markitdown-mcp-npx/bin/markitdown-mcp-npx.js');
+  const md = await createStdioProxy({
+    command: 'node',
+    args: [markitdownBin],
+    label: 'markitdown',
   });
-  if (at) { proxies.push(at); atlassianConnected = true; }
+  if (md) proxies.push(md);
+} catch {
+  process.stderr.write('[specwright-mcp] markitdown-mcp-npx not found — file conversion unavailable\n');
 }
 
-// jira_connect is defined later (after server is created) so it can use server.elicitInput()
-let atlassianConnectedFinal = atlassianConnected; // captured for the inline handler below
+// 3. Atlassian MCP — handled as a direct streamable-http entry in .mcp.json.
+// Claude CLI and Claude Desktop manage Atlassian OAuth natively; no token proxying needed here.
 
 // ── Merge proxy tools into tool registry ─────────────────────────────────
 const tools = [...staticTools];
@@ -132,98 +117,12 @@ const server = new Server(
   { capabilities: { tools: {}, elicitation: {} } }
 );
 
-// ── jira_connect — URL + form elicitation for Atlassian API token ────────
-if (!atlassianConnectedFinal) {
-  tools.push({
-    definition: {
-      name: 'jira_connect',
-      description:
-        'Connect to Jira/Atlassian. Opens the Atlassian API token page in the browser, then asks for the token via a native form. Call this whenever a Jira ticket URL is provided or Jira data is needed.',
-      inputSchema: { type: 'object', properties: {} },
-    },
-    handler: async () => {
-      try {
-        // Step 1: open Atlassian API tokens page in browser
-        await server.elicitInput({
-          mode: 'url',
-          message:
-            'To connect Jira, create an API token on the page that just opened in your browser, then come back here.',
-          url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
-        });
-
-        // Step 2: ask for the token via form
-        const tokenResult = await server.elicitInput({
-          message: 'Paste your Atlassian API token below.',
-          requestedSchema: {
-            type: 'object',
-            properties: {
-              token: {
-                type: 'string',
-                title: 'Atlassian API token',
-                description: 'Generated at id.atlassian.com → Security → API tokens',
-              },
-            },
-            required: ['token'],
-          },
-        });
-
-        if (tokenResult.action === 'cancel') {
-          return { content: [{ type: 'text', text: 'Jira connection cancelled.' }] };
-        }
-
-        const token = tokenResult.content?.token;
-        if (!token) {
-          return { content: [{ type: 'text', text: '⚠️ No token provided. Try again.' }] };
-        }
-
-        // Step 3: store token to disk
-        const authDir = path.join(os.homedir(), '.specwright');
-        await fsp.mkdir(authDir, { recursive: true });
-        await fsp.writeFile(
-          path.join(authDir, 'atlassian-auth.json'),
-          JSON.stringify({ token, createdAt: new Date().toISOString() }, null, 2),
-        );
-
-        return {
-          content: [{
-            type: 'text',
-            text: [
-              '## Jira token saved ✅',
-              '',
-              'The Atlassian API token has been stored at `~/.specwright/atlassian-auth.json`.',
-              '',
-              '**To activate:** restart Claude Desktop — the Specwright MCP server will pick up the token automatically on next start.',
-              '',
-              'Alternatively, add `ATLASSIAN_TOKEN` to your Claude Desktop MCP config env block for a permanent setup.',
-            ].join('\n'),
-          }],
-        };
-      } catch (err) {
-        // URL elicitation not supported — fall back to text instructions
-        return {
-          content: [{
-            type: 'text',
-            text: [
-              '## Connect Jira',
-              '',
-              '1. Open: https://id.atlassian.com/manage-profile/security/api-tokens',
-              '2. Create a new API token',
-              '3. Add it to your Claude Desktop MCP config:',
-              '   `"ATLASSIAN_TOKEN": "<your-token>"`',
-              '4. Restart Claude Desktop',
-            ].join('\n'),
-          }],
-        };
-      }
-    },
-  });
-}
-
 // ── e2e_setup — native form via server.elicitInput() ─────────────────────
 // Defined here (not in tools/) so it has access to the server instance.
 tools.push({
   definition: {
     name: 'e2e_setup',
+    annotations: { title: 'E2E Setup' },
     description:
       'Show a native UI form to collect all pipeline configuration from the user. ' +
       'Call this whenever instructions.js is empty or missing, or when the user asks to set up a new module.',
@@ -384,20 +283,30 @@ tools.push({
       };
     } catch (err) {
       // elicitInput not supported by this client — fall back gracefully
+      const { getConfig } = await import('./utils/config.js').catch(() => ({ getConfig: () => ({}) }));
+      const cfg = getConfig?.() ?? {};
+      const projectConfigured = cfg.projectConfigured;
+      const projectQuestion = projectConfigured
+        ? []
+        : [
+            '0. **Project path** — absolute path to your project root (must contain `.specwright.json`). Run `npx @specwright/plugin init` in the project first if not set up yet.',
+            '',
+          ];
       return {
         content: [{
           type: 'text',
           text: [
-            '⚠️ Native form not supported. Ask the user these questions in order. Use the exact placeholder examples shown — do NOT replace them with project-specific names or URLs:',
+            '⚠️ Native form not supported. Ask the user ALL of the following questions in order, exactly as written. Do NOT skip any. Do NOT reword them. Do NOT combine them:',
             '',
+            ...projectQuestion,
             '1. **What do you want to test?** — paste a Jira ticket URL, describe the feature in plain text, or give a file path to a spec document',
             '2. **Module name** — a short tag starting with @ to group these tests (e.g. @LoginPage, @SearchPage, @CheckoutFlow)',
             '3. **Page URL** — the full URL Claude will navigate to, including port (e.g. http://localhost:5173/your-page)',
             '4. **Test category** — type @Modules for standalone feature tests, or @Workflows for multi-step flows with shared data between phases',
             '5. **Sub-modules** — optional, for modules with sub-sections. @Workflows use numbered prefixes (e.g. @0-Precondition,@1-VerifyInList). @Modules can use plain names (e.g. @CreateUser,@VerifyInList). Leave blank for a single-level module.',
             '6. **Explore in browser?** — yes to open a live browser and discover real selectors via Playwright, no to generate from description only',
-            '7. **Validate explored selectors?** — (only if explore=yes) yes to run seed tests and confirm selectors work before generation',
-            '8. **Run tests after generation?** — yes to execute generated BDD tests and auto-heal failures',
+            '7. **Validate explored selectors?** — (only if explore=yes) yes to run seed.spec.js and confirm selectors work before generation, no to skip validation',
+            '8. **Run tests after generation?** — yes to execute generated BDD tests and auto-heal failures, no to only generate files',
           ].join('\n'),
         }],
       };

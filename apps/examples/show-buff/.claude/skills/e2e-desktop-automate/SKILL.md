@@ -158,7 +158,7 @@ Required sequence (every run, even when memory has cached selectors):
 3. **Call `mcp__playwright-test__browser_navigate`** with the target `pageURL`
 4. **Call `mcp__playwright-test__browser_snapshot`** to capture the live accessibility tree
 5. Perform targeted interactions (`browser_click`, `browser_type`, `browser_fill_form`, etc.) for each scenario — verify memory selectors still resolve; re-discover any that drifted
-6. ONLY AFTER live exploration completes: write the seed file (`Write` → `e2e-tests/playwright/generated/seed.spec.js`), write the plan file (`planner_save_plan` or `Write` → `e2e-tests/plans/{module}-{file}-plan.md`), and update `.claude/agent-memory/playwright-test-planner/MEMORY.md`
+6. ONLY AFTER live exploration completes: write the seed file (`Write` → `e2e-tests/playwright/generated/seed.spec.js`), write the plan file (`Write` → `e2e-tests/plans/{module}-{file}-plan.md`), and update `.claude/agent-memory/playwright-test-planner/MEMORY.md`
 
 ### Budget
 

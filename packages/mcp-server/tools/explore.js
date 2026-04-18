@@ -1,271 +1,247 @@
 import fs from 'fs';
+import path from 'path';
 import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_explore',
   annotations: { title: 'E2E Explore' },
   description:
-    'Return a structured exploration plan for a page. Does NOT open a browser — instead provides auth data, known selectors, and step-by-step instructions for using Playwright MCP tools to explore the page.',
+    'Return a self-contained Claude Desktop workflow for exploring a page. Uses only standard `@playwright/mcp` browser tools + built-in `Write`/`Edit` — does NOT rely on project-scoped tools like planner_setup_page.',
   inputSchema: {
     type: 'object',
     properties: {
-      pageURL: {
-        type: 'string',
-        description: 'Full URL to explore (e.g., http://localhost:5173/home).',
-      },
-      moduleName: {
-        type: 'string',
-        description: 'Module name with @ prefix (e.g., @HomePage).',
-      },
+      pageURL: { type: 'string', description: 'Full URL to explore (e.g. http://localhost:5173/home).' },
+      moduleName: { type: 'string', description: 'Module name with @ prefix (e.g. @HomePage).' },
+      category: { type: 'string', enum: ['@Modules', '@Workflows'], description: 'Default: @Modules' },
+      fileName: { type: 'string', description: 'Output file stem (e.g. homepage). Auto-derived if omitted.' },
       instructions: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Test scenarios or instructions to guide exploration. Empty array for auto-explore.',
-      },
-      authRequired: {
-        type: 'boolean',
-        description: 'Whether the page requires authentication. Default: from AUTH_REQUIRED env var (true if not set).',
+        description: 'Combined test scenarios + guidance. If e2e_process was run (Jira or file input), MERGE the parsed scenarios AND the original config instructions[] here — both inform exploration. Never drop the user\'s config instructions just because Jira/file content is present.',
       },
     },
     required: ['pageURL', 'moduleName'],
   },
 };
 
-export async function handler({ pageURL, moduleName, instructions, authRequired }) {
+export async function handler({ pageURL, moduleName, category, fileName, instructions }) {
   const config = getConfig();
-  const needsAuth = authRequired !== undefined ? authRequired : config.authRequired;
+  if (!config.projectConfigured) return notConfigured();
 
-  // Build auth section
-  let authSection;
-  if (!needsAuth) {
-    authSection = 'NOT_REQUIRED — Page is public, no authentication needed.';
-  } else if (config.authStrategy === 'oauth' && config.oauthStorageKey) {
-    // OAuth localStorage injection — values read by Node.js, not the LLM.
-    // JSON.stringify ensures picture URLs with & or ? are emitted as valid JS string literals.
-    const derivedName = config.testUserName ||
-      config.testUserEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const { projectRoot } = config;
+  const cat = category || '@Modules';
+  const stem = fileName || moduleName.replace('@', '').toLowerCase();
+  const seedFile = path.join(projectRoot, 'e2e-tests/playwright/generated/seed.spec.js');
+  const planFile = path.join(projectRoot, 'e2e-tests/plans', `${moduleName.replace('@', '').toLowerCase()}-${stem}-plan.md`);
+  const memoryFile = path.join(projectRoot, '.claude/agent-memory/playwright-test-planner/MEMORY.md');
+  const envFile = path.join(projectRoot, 'e2e-tests/.env.testing');
 
-    const script = [
-      `var u = {};`,
-      `u.name    = ${JSON.stringify(derivedName)};`,
-      `u.email   = ${JSON.stringify(config.testUserEmail)};`,
-      `u.picture = ${JSON.stringify(config.testUserPicture)};`,
-      `localStorage.setItem(${JSON.stringify(config.oauthStorageKey)}, JSON.stringify(u));`,
-    ].join('\n');
-
-    authSection = [
-      `OAUTH_LOCALSTORAGE — Inject auth directly into localStorage (no popup needed).`,
-      ``,
-      `Call \`browser_evaluate\` with this exact script (do not modify it):`,
-      `\`\`\`javascript`,
-      script,
-      `\`\`\``,
-      ``,
-      `Then call \`browser_navigate\` again to reload the app and pick up the auth state.`,
-    ].join('\n');
-  } else if (config.authStrategy === 'email-password') {
-    const authDataBlock = buildEmailPasswordSection(config);
-    if (fs.existsSync(config.authStatePath)) {
-      authSection = [
-        `AVAILABLE — Auth state found at \`${config.authStatePath}\`. Try navigating directly.`,
-        `**If the page redirects to a login page**, the saved auth state may be stale. Use the auth data below to log in.`,
-        authDataBlock,
-      ].join('\n');
-    } else {
-      authSection = [`NOT_FOUND — No saved auth state. Authenticate first using email-password.`, authDataBlock].join('\n');
-    }
-  } else {
-    const authDataBlock = buildAuthSection(config);
-    if (fs.existsSync(config.authStatePath)) {
-      authSection = [
-        `AVAILABLE — Auth state found at \`${config.authStatePath}\`. Try navigating directly.`,
-        `**If the page redirects to a login page**, the saved auth state may be stale. Use the auth data below to log in.`,
-        authDataBlock,
-      ].join('\n');
-    } else {
-      authSection = [`NOT_FOUND — No saved auth state. Authenticate first.`, authDataBlock].join('\n');
-    }
-  }
-
-  // Check agent memory for known selectors
-  let knownSelectors = '(none — first exploration of this module)';
-  const memoryPath = `${config.agentMemoryDir}/playwright-test-planner/MEMORY.md`;
-  if (fs.existsSync(memoryPath)) {
-    const memory = fs.readFileSync(memoryPath, 'utf-8');
-    const moduleTag = moduleName.replace('@', '').toLowerCase();
-    const moduleRegex = new RegExp(`#{1,3}.*${moduleTag}[\\s\\S]*?(?=\\n#{1,3} |$)`, 'i');
-    const match = memory.match(moduleRegex);
-    if (match) {
-      knownSelectors = match[0].trim();
-    }
-  }
-
-  // Build exploration instructions
-  const instructionsList =
-    instructions && instructions.length > 0
-      ? instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')
-      : '(auto-explore — discover all interactive elements and page structure)';
+  const instrList = (instructions || []).map((s, i) => `  ${i + 1}. ${s}`).join('\n') || '  (auto-explore)';
 
   const text = [
-    `## Exploration Plan: ${moduleName} (${pageURL})`,
+    `# Phase 4: Exploration — ${moduleName}`,
     ``,
-    `### AUTH_STATUS`,
-    authSection,
+    `## 🔒 CREDENTIAL PRIVACY (non-negotiable)`,
     ``,
-    `### KNOWN_SELECTORS`,
-    knownSelectors,
+    `Credentials in \`e2e-tests/.env.testing\` — including TEST_USER_PASSWORD, TEST_USER_EMAIL, TEST_2FA_CODE, OAUTH_STORAGE_KEY, API tokens, session keys — are WRITE-ONLY for tool calls.`,
     ``,
-    `### EXPLORATION_STEPS`,
-    `Execute these Playwright MCP tool calls in order:`,
+    `**Strict rules:**`,
+    `- ✅ Use credential values silently inside \`browser_evaluate\`, \`browser_type\`, auth scripts`,
+    `- ❌ NEVER echo, print, quote, summarise, or list credential values in your chat response`,
+    `- ❌ NEVER include credential values in seed files, plan files, memory files, or any committed output`,
+    `- ✅ OK to display booleans like "Auth: configured ✓" or field names like "Email: (set)"`,
+    `- ❌ NEVER say "Email: automation@example.com" or "Password: qaP@ssw0rd..."`,
     ``,
-    `1. **Navigate** — \`browser_navigate({ url: "${pageURL}" })\``,
-    `2. **Initial snapshot** — \`browser_snapshot()\` — capture the full accessibility tree`,
-    `3. **Screenshot** — \`browser_take_screenshot()\` — visual capture of initial state`,
-    `4. **Explore interactive elements** — For each button, link, form field, dropdown:`,
-    `   - Record the element's selector (from snapshot ref attributes)`,
-    `   - Click/interact to discover state changes`,
-    `   - \`browser_snapshot()\` after each major interaction`,
-    `5. **Explore forms** — If forms exist:`,
-    `   - Identify all input fields, their types, and labels`,
-    `   - Try filling with test data via \`browser_fill_form()\` or \`browser_type()\``,
-    `   - Submit and capture validation/success states`,
-    `6. **Explore navigation** — Check tabs, menus, pagination if present`,
-    `7. **Final snapshot** — \`browser_snapshot()\` — capture end state`,
+    `If a phase completes and you want to summarise what you did, describe ACTIONS ("authenticated successfully", "injected localStorage auth") — never the values.`,
     ``,
-    `### SELECTOR_DISCOVERY_RULES`,
-    `Priority order (use the highest available):`,
-    `1. \`getByTestId('...')\` — data-testid attributes`,
-    `2. \`getByRole('...', { name: '...' })\` — ARIA roles`,
-    `3. \`getByText('...')\` — visible text content`,
+    `## ⛔ LIVE BROWSER WORK IS MANDATORY`,
+    ``,
+    `Perform at least one live navigation + snapshot before writing ANY output file. Memory is a hint, not a source of truth.`,
+    ``,
+    `## Target`,
+    `- **Page URL:** ${pageURL}`,
+    `- **Module:** ${moduleName}`,
+    `- **Category:** ${cat}`,
+    `- **File stem:** ${stem}`,
+    ``,
+    `## Scenarios to cover`,
+    instrList,
+    ``,
+    `## Required outputs (in order)`,
+    `1. **Seed file** → \`${seedFile}\``,
+    `2. **Plan file** → \`${planFile}\``,
+    `3. **Memory file** → \`${memoryFile}\``,
+    ``,
+    `---`,
+    ``,
+    `## Step 1: Read memory + authenticate`,
+    ``,
+    `- \`Read\` \`${memoryFile}\` — check if this module's selectors exist`,
+    `  - If present → **verification mode** (2–5 browser calls minimum, still MUST do live checks)`,
+    `  - If absent → **full exploration** (5–20 browser calls)`,
+    `- \`Read\` \`${envFile}\` — get \`AUTH_STRATEGY\` and auth credentials`,
+    `  - If \`AUTH_STRATEGY=oauth\` + \`OAUTH_STORAGE_KEY\` set → use localStorage injection (see Step 2)`,
+    `  - If \`AUTH_STRATEGY=email-password\` → login flow via form`,
+    `  - If \`AUTH_STRATEGY=none\` or missing → skip authentication`,
+    ``,
+    `## Step 2: Authenticate (if needed)`,
+    ``,
+    `For OAuth localStorage injection (bypasses popup):`,
+    `\`\`\``,
+    `mcp__playwright-test__browser_navigate url: <BASE_URL>`,
+    `mcp__playwright-test__browser_evaluate function: |`,
+    `  () => {`,
+    `    const u = { name: "<TEST_USER_NAME>", email: "<TEST_USER_EMAIL>", picture: "<TEST_USER_PICTURE>" };`,
+    `    localStorage.setItem("<OAUTH_STORAGE_KEY>", JSON.stringify(u));`,
+    `  }`,
+    `mcp__playwright-test__browser_navigate url: <BASE_URL>       # reload to pick up auth`,
+    `mcp__playwright-test__browser_snapshot                       # verify signed in`,
+    `\`\`\``,
+    ``,
+    `## Step 3: Explore the target page (live — MANDATORY)`,
+    ``,
+    `\`\`\``,
+    `mcp__playwright-test__browser_navigate url: ${pageURL}`,
+    `mcp__playwright-test__browser_snapshot                       # full accessibility tree — your source of truth for selectors`,
+    `\`\`\``,
+    ``,
+    `Then for each scenario above, perform the interaction:`,
+    `- Navigation / clicks → \`browser_click\` using refs from the snapshot`,
+    `- Form fills → \`browser_type\` or \`browser_fill_form\``,
+    `- Dropdowns → \`browser_select_option\``,
+    `- Key presses → \`browser_press_key\``,
+    `- After interactions that change state → another \`browser_snapshot\` (targeted via \`ref\` when possible)`,
+    ``,
+    `## Step 4: Discover + validate selectors`,
+    ``,
+    `For every interactive element involved in the scenarios, record its Playwright locator using this priority:`,
+    ``,
+    `1. \`getByTestId('...')\` — if \`data-testid\` attributes exist (highest)`,
+    `2. \`getByRole('button', { name: '...' })\` — semantic HTML with ARIA`,
+    `3. \`getByText('...')\` — unique visible text`,
     `4. \`getByLabel('...')\` — form labels`,
     `5. \`getByPlaceholder('...')\` — input placeholders`,
-    `6. CSS selectors — last resort only`,
+    `6. CSS / XPath — last resort only`,
     ``,
-    `For each element, record:`,
-    `- **name** — camelCase key (e.g., submitButton, searchInput)`,
-    `- **selector** — Playwright selector string`,
-    `- **type** — how discovered (testid/role/text/label/placeholder/css)`,
-    `- **tag** — HTML tag (BUTTON, INPUT, etc.)`,
-    `- **text** — visible text content`,
-    `- **description** — what the element does`,
-    `- **validated** — true (confirmed from live browser)`,
+    `## Step 5: Update memory file`,
     ``,
-    `### INSTRUCTIONS_TO_COVER`,
-    instructionsList,
+    `Use \`Edit\` or \`Write\` to append / update memory at \`${memoryFile}\` with a table:`,
     ``,
-    `### SCENARIO_DESIGN`,
-    `While exploring, identify test scenarios:`,
-    `- **Happy path** — primary user flow works correctly`,
-    `- **Validation** — required fields, format checks, error messages`,
-    `- **Edge cases** — empty state, boundary values, special characters`,
-    `- **Negative** — invalid inputs, unauthorized access, error handling`,
-    ``,
-    `### OUTPUT_FORMAT`,
-    `After exploration is complete, call \`e2e_plan\` with:`,
-    `\`\`\`json`,
-    `{`,
-    `  "moduleName": "${moduleName}",`,
-    `  "pageURL": "${pageURL}",`,
-    `  "selectors": [ ... discovered selectors ... ],`,
-    `  "behaviors": { ... page behavior observations ... },`,
-    `  "scenarios": [ ... identified test scenarios ... ],`,
-    `  "instructions": ${JSON.stringify(instructions || [])}`,
-    `}`,
+    `\`\`\`markdown`,
+    `## Key Selectors: ${moduleName} (${pageURL})`,
+    `| Element | Selector | Notes |`,
+    `| ------- | -------- | ----- |`,
+    `| Search box | getByRole("searchbox", { name: "Search" }) | |`,
     `\`\`\``,
+    ``,
+    `## Step 6: Close the browser`,
+    ``,
+    `\`mcp__playwright-test__browser_close\``,
+    ``,
+    `## Step 7: Write the seed file`,
+    ``,
+    `Use \`Write\` to create \`${seedFile}\` with the structure:`,
+    ``,
+    '```javascript',
+    `import { test, expect } from '@playwright/test';`,
+    ``,
+    `const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';`,
+    `const OAUTH_STORAGE_KEY = process.env.OAUTH_STORAGE_KEY;  // required for oauth strategy`,
+    `const TEST_USER_NAME = process.env.TEST_USER_NAME || '';`,
+    `const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || '';`,
+    `const TEST_USER_PICTURE = process.env.TEST_USER_PICTURE || '';`,
+    ``,
+    `test.setTimeout(90000);`,
+    ``,
+    `async function authenticate(page) {`,
+    `  await page.goto(BASE_URL);`,
+    `  await page.evaluate(`,
+    `    ({ key, user }) => localStorage.setItem(key, JSON.stringify(user)),`,
+    `    { key: OAUTH_STORAGE_KEY, user: { name: TEST_USER_NAME, email: TEST_USER_EMAIL, picture: TEST_USER_PICTURE } }`,
+    `  );`,
+    `  await page.goto(\`\${BASE_URL}${new URL(pageURL).pathname}\`);`,
+    `}`,
+    ``,
+    `test.describe('${moduleName}', () => {`,
+    `  test.beforeEach(async ({ page }) => {`,
+    `    await authenticate(page);`,
+    `  });`,
+    ``,
+    `  test('TC1: <scenario>', async ({ page }) => {`,
+    `    // use selectors discovered above`,
+    `    await expect(page.getByTestId('...')).toBeVisible();`,
+    `  });`,
+    `});`,
+    '```',
+    ``,
+    `⚠️ Do NOT hardcode \`OAUTH_STORAGE_KEY\` with a fallback — it MUST fail loudly if missing.`,
+    ``,
+    `## Step 8: Write the plan file`,
+    ``,
+    `Use \`Write\` to create \`${planFile}\` with:`,
+    ``,
+    `- Module info (name, URL, category, file stem)`,
+    `- Discovered selectors table (same as memory)`,
+    `- Test scenarios (happy-path, edge-case, negative) with step-by-step instructions, expected outcomes, and success criteria`,
+    `- Assumes fresh / blank starting state`,
+    `- Scenarios independent and runnable in any order`,
+    ``,
+    `## Budget`,
+    ``,
+    `| Mode | Min calls | Max calls |`,
+    `|------|-----------|-----------|`,
+    `| Verification (memory exists) | 2 | 5 |`,
+    `| Full exploration (no memory) | 5 | 20 |`,
+    ``,
+    `## Forbidden shortcuts`,
+    ``,
+    `- ❌ Writing seed/plan/memory without at least one live \`browser_snapshot\` of \`${pageURL}\``,
+    `- ❌ Using \`browser_take_screenshot\` for selector discovery (use \`browser_snapshot\` — screenshots don't give refs)`,
+    `- ❌ Inventing selectors not seen in snapshot output`,
+    `- ❌ Waiting on \`networkidle\` or deprecated Playwright APIs`,
+    ``,
+    `## ⛔ If a browser tool fails`,
+    ``,
+    `**Retry the same tool once.** Most transient failures clear on a retry.`,
+    ``,
+    `If the retry also fails with a filesystem error (\`ENOENT\`, \`mkdir\`, \`EACCES\`), the MCP client config is missing \`--output-dir\`. Report the exact error to the user and STOP — do NOT:`,
+    ``,
+    `- ❌ **Do NOT** conclude "the browser is unreachable" or "this Claude session can't reach localhost". Claude Desktop runs locally and the browser IS reachable — the error is purely about where Playwright writes artefacts.`,
+    `- ❌ **Do NOT** fall back to reading the project's \`src/\` source code as a substitute for exploration. Static source analysis misses runtime behaviour (auth redirects, API mocks, client-rendered content).`,
+    `- ❌ **Do NOT** write the seed/plan/memory from guessed selectors. Stop instead, tell the user the MCP config needs \`--output-dir\`, and wait.`,
+    ``,
+    `Correct user-facing message when browser tools fail due to filesystem errors:`,
+    `> ⚠️ The Playwright MCP server couldn't write to its output directory. Add \`--output-dir <absolute-path>\` to the \`playwright-test\` entry in \`claude_desktop_config.json\`, restart Claude Desktop, and retry.`,
+    ``,
+    `---`,
+    ``,
+    `## ⛔ What happens AFTER user approval (CRITICAL — read carefully)`,
+    ``,
+    `When you finish writing seed + plan + memory, present the plan summary to the user and wait for approval. Once the user types "approve" / "yes" / "proceed":`,
+    ``,
+    `1. ✅ **Call \`mcp__specwright__e2e_generate\` immediately** — this is Phase 7 (BDD Generation)`,
+    `   \`\`\`json`,
+    `   { "planFilePath": "${planFile}", "moduleName": "${moduleName}", "category": "${cat}", "fileName": "${stem}" }`,
+    `   \`\`\``,
+    `   The \`e2e_generate\` tool returns the BDD generation instructions — BDD files go to \`e2e-tests/features/playwright-bdd/${cat}/${moduleName}/\`, NOT to \`e2e-tests/playwright/\`.`,
+    ``,
+    `2. ❌ **Do NOT re-explore the page** — exploration is complete. The seed file is your source of truth for selectors.`,
+    ``,
+    `3. ❌ **Do NOT write native Playwright \`.spec.js\` files to \`e2e-tests/playwright/\`** — this framework generates BDD \`.feature\` + \`steps.js\` files via the \`e2e_generate\` tool.`,
+    ``,
+    `4. ❌ **Do NOT write BDD files manually with the Write tool before calling \`e2e_generate\`** — the tool returns the correct paths, conventions, and system prompt for generation.`,
+    ``,
+    `5. ❌ **Do NOT investigate "Playwright MCP filesystem config issues"** — use the tools as they are; re-try if a single call fails.`,
   ].join('\n');
 
   return { content: [{ type: 'text', text }] };
 }
 
-/**
- * Build auth section for email-password strategy.
- * Reads TEST_USER_EMAIL / TEST_USER_PASSWORD from .env.testing via config.
- * If missing, instructs Claude to ask the user.
- */
-function buildEmailPasswordSection(config) {
-  const email = config.testUserEmail;
-  const password = config.testUserPassword;
-
-  if (!email && !password) {
-    return [
-      '',
-      '**⚠️ No credentials found in e2e-tests/.env.testing.**',
-      'Ask the user for their login email and password before proceeding.',
-      'Once provided, use them to complete the email-password login flow.',
-    ].join('\n');
-  }
-
-  const lines = ['', '**Auth data (from e2e-tests/.env.testing):**'];
-  if (email)    lines.push(`- email: \`${email}\``);
-  if (!email)   lines.push(`- email: ⚠️ TEST_USER_EMAIL not set — ask the user`);
-  if (password) lines.push(`- password: \`${password}\``);
-  if (!password) lines.push(`- password: ⚠️ TEST_USER_PASSWORD not set — ask the user`);
-
-  // 2FA code — prefer TEST_2FA_CODE from .env.testing, fall back to authenticationData.js
-  const twoFACode = config.test2FACode || extractAuthDataFromFile(config)?.twoFactorCode;
-  if (twoFACode) {
-    lines.push(`- 2FA code: \`${twoFACode}\``);
-    lines.push(`  *(enter this when the two-factor authentication prompt appears)*`);
-  }
-
-  lines.push(
-    '',
-    'Navigate to the signin page, use `browser_snapshot` to identify the email input,',
-    'fill the email and submit, then fill the password and submit to complete login.',
-  );
-  return lines.join('\n');
-}
-
-/**
- * Build auth data section from AUTH_DATA env var or authenticationData.js fallback.
- * Returns credentials + extra auth data as simple key-value pairs.
- * Claude handles the actual login flow — no step-by-step instructions needed.
- */
-function buildAuthSection(config) {
-  // Layer 1: AUTH_DATA env var
-  let data = config.authData;
-
-  // Layer 2: authenticationData.js fallback (extract data only, not flow)
-  if (!data) {
-    data = extractAuthDataFromFile(config);
-  }
-
-  // Layer 3: nothing configured
-  if (!data) {
-    return '\n**No auth data configured.** Ask the user for login credentials, or set AUTH_DATA in the MCP server env config.';
-  }
-
-  const { instructions: authInstructions, ...fields } = data;
-  const lines = ['', '**Auth data:**'];
-  for (const [key, value] of Object.entries(fields)) {
-    lines.push(`- ${key}: \`${value}\``);
-  }
-  if (authInstructions) {
-    lines.push('', `**Auth instructions:** ${authInstructions}`);
-  }
-  lines.push(
-    '',
-    'Navigate to the login page, use `browser_snapshot` to identify form fields, and complete the login flow using the auth data above.',
-  );
-  return lines.join('\n');
-}
-
-/**
- * Fallback: extract auth data (not flow) from authenticationData.js.
- * Only used when AUTH_DATA env var is not set.
- */
-function extractAuthDataFromFile(config) {
-  if (!fs.existsSync(config.authDataPath)) return null;
-  try {
-    const content = fs.readFileSync(config.authDataPath, 'utf-8');
-    const data = {};
-
-    // Extract 2FA code
-    const codeMatch = content.match(/twoFactor[\s\S]*?code:\s*['"]([^'"]+)['"]/);
-    if (codeMatch) data.twoFactorCode = codeMatch[1];
-
-    return Object.keys(data).length > 0 ? data : null;
-  } catch {
-    return null;
-  }
+function notConfigured() {
+  return {
+    content: [{
+      type: 'text',
+      text: '⚠️ Project not configured. Call `e2e_configure` with `action: "set_project"` first.',
+    }],
+  };
 }

@@ -97,6 +97,7 @@ mkdir -p "$TARGET_DIR/e2e-tests/utils"
 mkdir -p "$TARGET_DIR/e2e-tests/data"
 mkdir -p "$TARGET_DIR/e2e-tests/scripts"
 mkdir -p "$TARGET_DIR/e2e-tests/.knowledge"
+mkdir -p "$TARGET_DIR/e2e-tests/plans"
 
 # Framework files: always overwrite (these are the framework, not user code)
 cp "$PLUGIN_DIR/e2e-tests/playwright/fixtures.js" "$TARGET_DIR/e2e-tests/playwright/"
@@ -138,6 +139,7 @@ fi
 touch "$TARGET_DIR/e2e-tests/playwright/auth-storage/.auth/.gitkeep"
 touch "$TARGET_DIR/e2e-tests/playwright/generated/.gitkeep"
 touch "$TARGET_DIR/e2e-tests/playwright/test-data/.gitkeep"
+touch "$TARGET_DIR/e2e-tests/plans/.gitkeep"
 mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules"
 mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Workflows"
 touch "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/.gitkeep"
@@ -188,11 +190,16 @@ else
       const target = JSON.parse(fs.readFileSync(targetPath, 'utf-8'));
       const template = JSON.parse(fs.readFileSync(templatePath, 'utf-8'));
       target.mcpServers = target.mcpServers || {};
-      // Add specwright servers without overwriting existing entries
+      // Force-update stale entries for core servers (where the template moved to a new package/command).
+      // These names are tightly coupled to our agents — must stay in sync.
+      const FORCE_UPDATE = new Set(['playwright-test', 'markitdown']);
       for (const [name, config] of Object.entries(template.mcpServers || {})) {
         if (!target.mcpServers[name]) {
           target.mcpServers[name] = config;
           console.log('  ✅ Added MCP server: ' + name);
+        } else if (FORCE_UPDATE.has(name) && JSON.stringify(target.mcpServers[name]) !== JSON.stringify(config)) {
+          target.mcpServers[name] = config;
+          console.log('  🔄 Updated MCP server: ' + name + ' (stale config replaced)');
         } else {
           console.log('  ⏭️  MCP server ' + name + ' already configured — skipping');
         }
@@ -207,25 +214,14 @@ fi
 # ── Step 5c: MCP package verification ──
 echo "📦 Step 5c: Checking MCP package dependencies..."
 
-# @specwright/mcp-server — added to devDependencies in package.json.snippet, installed via pnpm install
-echo "  ✅ @specwright/mcp-server — will be installed via '$PM install' (added to devDependencies)"
+# playwright-test MCP — built into @playwright/test ≥1.59 via `playwright run-test-mcp-server`
+echo "  ✅ playwright-test MCP — bundled with @playwright/test ≥1.59.1 (run-test-mcp-server built in)"
 
-# @playwright/mcp — added to devDependencies in package.json.snippet, installed via pnpm install
-echo "  ✅ @playwright/mcp — will be installed via '$PM install' (added to devDependencies)"
-
-# markitdown-mcp — Python-based, requires uv/uvx
-if command -v uvx &>/dev/null; then
-  echo "  ✅ uvx found — markitdown-mcp available (used via 'uvx markitdown-mcp')"
-elif command -v uv &>/dev/null; then
-  echo "  ✅ uv found — markitdown-mcp available (used via 'uvx markitdown-mcp')"
-else
-  echo "  ⚠️  uvx/uv not found — markitdown-mcp (file format conversion) will not work"
-  echo "     Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
-  echo "     markitdown-mcp is optional — only needed for CSV/Excel/PDF test inputs"
-fi
+# markitdown-mcp — Node package (no Python/uvx required)
+echo "  ✅ markitdown-mcp-npx — Node package, installed lazily via 'npx markitdown-mcp-npx' on first use"
 
 # Atlassian MCP — hosted HTTP endpoint, no install required
-echo "  ✅ Atlassian MCP — hosted at mcp.atlassian.com (no install required; connect via Specwright Desktop)"
+echo "  ✅ Atlassian MCP — hosted at mcp.atlassian.com (no install required; OAuth managed by client)"
 
 # ── Step 6: Merge dependencies + scripts into package.json ──
 echo "📦 Step 6: Merging dependencies and scripts into package.json..."

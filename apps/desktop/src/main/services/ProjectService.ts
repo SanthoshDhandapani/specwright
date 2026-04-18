@@ -43,7 +43,7 @@ export interface PluginInfo {
   authStrategy: AuthStrategy;
   /** Whether an org overlay is applied */
   hasOverlay: boolean;
-  /** Overlay plugin name (e.g., "@fourkites/e2e-plugin") */
+  /** Overlay plugin name (e.g., "@your-org/e2e-plugin") */
   overlayName?: string;
 }
 
@@ -478,7 +478,7 @@ export class ProjectService {
       if (fs.existsSync(path.join(resolved, "install.sh"))) return resolved;
     }
 
-    // 2. Sibling scan (covers monorepo: fourkites-ai-plugins/plugins/{name})
+    // 2. Sibling scan (covers monorepo layout: ../../overlay-plugins/{name})
     const sibling = path.resolve(projectPath, "..", "..", config.overlay);
     if (fs.existsSync(path.join(sibling, "install.sh"))) return sibling;
 

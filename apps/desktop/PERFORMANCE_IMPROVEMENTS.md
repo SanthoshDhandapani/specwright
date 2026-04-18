@@ -1,7 +1,5 @@
 # Performance Improvements — Specwright Desktop
 
-Ticket: **DYFN-12091**
-
 A record of all performance and token-efficiency improvements made to the desktop pipeline and plugin agents.
 
 ---

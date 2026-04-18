@@ -5,7 +5,7 @@ export const definition = {
   name: 'e2e_automate',
   annotations: { title: 'E2E Automate' },
   description:
-    'Read instructions.js and return a structured pipeline plan. For each config entry, returns the module name, page URL, instructions, and the sequence of MCP tool calls to execute (explore → plan). Call this first to get the full automation plan.',
+    '⚠️ CALL THIS FIRST before asking the user any questions about Specwright. Reads instructions.js and returns the pipeline plan if config already exists, or tells you to call e2e_setup when it does not. Do NOT ask the user for project path, credentials, module name, or any other setup info until you have called this tool and read its response.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -124,11 +124,20 @@ export async function handler({ entry }) {
         ? e.instructions.map((inst, j) => `${j + 1}. ${inst}`).join('\n')
         : '(auto-explore)';
 
-    // Detect input type for Phase 2 routing
+    // Detect all present input sources — combinations are valid
     const jiraUrl = e.inputs?.jira?.url;
     const filePath = e.filePath;
-    const inputType = jiraUrl ? `Jira` : filePath ? `File` : `Text`;
-    const inputDetail = jiraUrl ? jiraUrl : filePath ? filePath : '(use instructions above)';
+    const hasInstructions = e.instructions && e.instructions.length > 0;
+
+    const activeSources = [
+      jiraUrl        ? 'Jira'         : null,
+      filePath       ? 'File'         : null,
+      hasInstructions ? 'Instructions' : null,
+    ].filter(Boolean);
+
+    // Primary determines processing order: Jira > File > Instructions
+    const primarySource = jiraUrl ? 'Jira' : filePath ? 'File' : 'Instructions';
+    const isSupplementary = activeSources.length > 1;
 
     return [
       `### Entry ${idx + 1}: ${e.moduleName} (${e.category || '@Modules'})`,
@@ -136,26 +145,72 @@ export async function handler({ entry }) {
       e.subModuleName && e.subModuleName.length > 0 ? `**Sub-modules:** ${e.subModuleName.join(', ')}` : '',
       `**File name:** ${e.fileName || 'auto'}`,
       `**Explore:** ${e.explore !== false ? 'Yes' : 'No'}`,
-      `**Input type:** ${inputType}${jiraUrl ? ` — \`${jiraUrl}\`` : filePath ? ` — \`${filePath}\`` : ''}`,
+      `**Primary input:** ${primarySource}${jiraUrl ? ` — \`${jiraUrl}\`` : filePath ? ` — \`${filePath}\`` : ''}${isSupplementary ? ` (+${activeSources.length - 1} supplementary source${activeSources.length > 2 ? 's' : ''})` : ''}`,
       ``,
       `**Instructions:**`,
       instructionsList,
       ``,
-      `**Phase 2 — Input routing: ${inputType} mode**`,
-      jiraUrl
-        ? `Jira URL detected: \`${jiraUrl}\`\nFetch this Jira ticket using Atlassian MCP tools (jira_connect if not authenticated), then convert the ticket content to a structured test plan.`
-        : filePath
-        ? `File input detected: \`${filePath}\`\nConvert the file using markitdown tools if it is PDF/Word, otherwise read it directly.`
-        : `Text instructions — use the instructions list above as the test plan input.`,
+      `**Phase 2 — Input sources detected:**`,
+      jiraUrl         ? `- ✅ Jira: \`${jiraUrl}\`` : `- ✗ Jira: none`,
+      filePath        ? `- ✅ File: \`${filePath}\`` : `- ✗ File: none`,
+      hasInstructions ? `- ✅ Instructions: ${e.instructions.length} item(s)` : `- ✗ Instructions: none`,
+      ``,
+      activeSources.length === 0
+        ? `⛔ No input sources — skip this entry.`
+        : [
+            `**Primary source: ${primarySource}**${isSupplementary ? ` | Supplementary: ${activeSources.filter(s => s !== primarySource).join(', ')}` : ''}`,
+            ``,
+            `**Phase 3 processing order:**`,
+            jiraUrl         ? `1. Fetch Jira ticket \`${jiraUrl}\` via Atlassian MCP tools → convert to markdown` : null,
+            filePath        ? `${jiraUrl ? '2' : '1'}. Read/convert file \`${filePath}\` via markitdown tools` : null,
+            hasInstructions && (jiraUrl || filePath)
+              ? `${[jiraUrl, filePath].filter(Boolean).length + 1}. Append instructions[] as "Additional scenario guidance" — do NOT discard`
+              : hasInstructions
+              ? `1. Format instructions[] directly as markdown test plan`
+              : null,
+            `→ Write merged content to \`e2e-tests/plans/\``,
+          ].filter(Boolean).join('\n'),
       ``,
       `**Execute these steps in order:**`,
-      `1. Call \`e2e_explore\` with:`,
-      `   - pageURL: \`${e.pageURL}\``,
-      `   - moduleName: \`${e.moduleName}\``,
-      `   - instructions: ${JSON.stringify(e.instructions || [])}`,
-      `2. Follow the exploration plan using Playwright MCP tools (browser_navigate, browser_snapshot, browser_click, etc.)`,
-      `3. Call \`e2e_plan\` with discovered selectors, behaviors, and scenarios`,
-      `4. Present the plan to the user for approval`,
+      (jiraUrl || filePath)
+        ? [
+            `1. **⚠️ MANDATORY Phase 3:** Call \`e2e_process\` FIRST to extract scenarios from ${jiraUrl ? 'the Jira ticket' : 'the file'}:`,
+            `   \`\`\`json`,
+            `   {`,
+            `     "moduleName": "${e.moduleName}",`,
+            `     "category": "${e.category || '@Modules'}",`,
+            `     "fileName": "${e.fileName || 'auto'}",`,
+            `     ${jiraUrl ? `"jiraUrl": "${jiraUrl}",` : ''}`,
+            `     ${filePath ? `"filePath": "${filePath}",` : ''}`,
+            `     "instructions": ${JSON.stringify(e.instructions || [])}`,
+            `   }`,
+            `   \`\`\``,
+            `   Follow the returned routing steps: fetch Jira / convert file → extract scenarios for \`${e.moduleName}\` → write parsed plan. The returned scenario list is the Jira/file-derived subset for this module.`,
+            ``,
+            `2. Call \`e2e_explore\` with the **merged scenario list**. Combine:`,
+            `   a) Scenarios extracted by \`e2e_process\` in step 1 (from the Jira ticket / file, filtered to \`${e.moduleName}\`)`,
+            `   b) The original config \`instructions[]\`: ${JSON.stringify(e.instructions || [])}`,
+            `   De-duplicate near-identical items; both sets inform exploration — never drop the user's config instructions just because Jira/file content is present.`,
+            ``,
+            `   \`\`\`json`,
+            `   {`,
+            `     "pageURL": "${e.pageURL}",`,
+            `     "moduleName": "${e.moduleName}",`,
+            `     "category": "${e.category || '@Modules'}",`,
+            `     "fileName": "${e.fileName || 'auto'}",`,
+            `     "instructions": [ /* merged list of Jira/file-extracted + config instructions[] */ ]`,
+            `   }`,
+            `   \`\`\``,
+          ].join('\n')
+        : [
+            `1. Call \`e2e_explore\` with:`,
+            `   - pageURL: \`${e.pageURL}\``,
+            `   - moduleName: \`${e.moduleName}\``,
+            `   - instructions: ${JSON.stringify(e.instructions || [])}`,
+          ].join('\n'),
+      `3. Perform live browser exploration (planner_setup_page → browser_navigate → browser_snapshot → interactions)`,
+      `4. Write the seed file, plan file, and update agent memory`,
+      `5. Present the plan to the user for approval (Phase 6)`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -163,6 +218,17 @@ export async function handler({ entry }) {
 
   const text = [
     `## E2E Automation Pipeline`,
+    ``,
+    `### ⚠️ FIRST — preload all pipeline tools before calling them`,
+    `Claude Desktop loads MCP tools on demand. Before proceeding, call \`tool_search\` ONCE to register every specwright pipeline tool you will need:`,
+    ``,
+    '```',
+    'tool_search({ query: "select:e2e_explore,e2e_plan,e2e_generate,e2e_execute,e2e_heal,e2e_configure,e2e_status" })',
+    '```',
+    ``,
+    `Do this BEFORE calling \`e2e_explore\` or any other tool below — otherwise you will hit "tool not loaded" errors.`,
+    ``,
+    `---`,
     ``,
     `**Entries:** ${toProcess.length} config(s) to process`,
     `**Auth required:** ${config.authRequired ? 'Yes' : 'No'}`,

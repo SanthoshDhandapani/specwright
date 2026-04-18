@@ -90,7 +90,7 @@ export async function handler() {
     testStatus.includes('\n') ? `### Recent Failures\n${testStatus.split('\n').slice(1).join('\n')}\n` : '',
     `**Base URL:** ${config.baseURL}`,
     `**View report:** \`pnpm report:playwright\``,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   return { content: [{ type: 'text', text }] };
 }

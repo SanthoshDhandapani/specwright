@@ -2,8 +2,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { createRequire } from 'module';
-import path from 'path';
 import { execSync } from 'child_process';
 import { writeGlobalConfig } from './utils/config.js';
 
@@ -42,14 +40,13 @@ import { definition as automateDef, handler as automateHandler } from './tools/a
 import { definition as executeDef, handler as executeHandler } from './tools/execute.js';
 import { definition as generateDef, handler as generateHandler } from './tools/generate.js';
 import { definition as healDef, handler as healHandler } from './tools/heal.js';
-
-// Proxy factory
-import { createStdioProxy } from './utils/proxy.js';
+import { definition as processDef, handler as processHandler } from './tools/process.js';
 
 // ── Static tools (always available) ───────────────────────────────────────
 const staticTools = [
   { definition: automateDef,  handler: automateHandler  },
   { definition: configureDef, handler: configureHandler },
+  { definition: processDef,   handler: processHandler    },
   { definition: exploreDef,   handler: exploreHandler   },
   { definition: planDef,      handler: planHandler       },
   { definition: statusDef,    handler: statusHandler     },
@@ -58,63 +55,57 @@ const staticTools = [
   { definition: healDef,      handler: healHandler       },
 ];
 
-// ── Start proxied child servers ───────────────────────────────────────────
-const proxies = [];
-
-// 1. Playwright MCP — browser automation (stdio)
-try {
-  const require = createRequire(import.meta.url);
-  // Resolve package dir via package.json, then find cli.js next to it
-  const playwrightDir = path.dirname(require.resolve('@playwright/mcp/package.json'));
-  const playwrightBin = path.join(playwrightDir, 'cli.js');
-  const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR ?? '.playwright-mcp';
-  // PLAYWRIGHT_HEADLESS=true → headless mode (set by Desktop); default is visible browser for CLI exploration
-  const headlessArgs = process.env.PLAYWRIGHT_HEADLESS === 'true' ? ['--headless'] : [];
-  const pw = await createStdioProxy({
-    command: 'node',
-    // --isolated: keeps the browser profile in memory (no disk lock file).
-    // Prevents "Chrome profile already in use" errors when a previous session
-    // didn't close cleanly or when two MCP instances start simultaneously.
-    args: [playwrightBin, '--isolated', '--output-dir', outputDir, ...headlessArgs],
-    label: 'browser',
-  });
-  if (pw) proxies.push(pw);
-} catch {
-  process.stderr.write('[specwright-mcp] @playwright/mcp not found — browser tools unavailable\n');
-}
-
-// 2. Markitdown MCP — file conversion (bundled npm package, no uvx/Python required)
-try {
-  const require = createRequire(import.meta.url);
-  const markitdownBin = require.resolve('markitdown-mcp-npx/bin/markitdown-mcp-npx.js');
-  const md = await createStdioProxy({
-    command: 'node',
-    args: [markitdownBin],
-    label: 'markitdown',
-  });
-  if (md) proxies.push(md);
-} catch {
-  process.stderr.write('[specwright-mcp] markitdown-mcp-npx not found — file conversion unavailable\n');
-}
-
-// 3. Atlassian MCP — handled as a direct streamable-http entry in .mcp.json.
-// Claude CLI and Claude Desktop manage Atlassian OAuth natively; no token proxying needed here.
-
-// ── Merge proxy tools into tool registry ─────────────────────────────────
+// @specwright/mcp is a thin Claude Desktop bridge — it exposes e2e_* pipeline tools only.
+// Browser automation (@playwright/mcp), file conversion (markitdown-mcp), and Atlassian MCP
+// are configured as separate entries in the client project's .mcp.json (CLI/Desktop context)
+// or in the user's claude_desktop_config.json (Claude Desktop context).
 const tools = [...staticTools];
-for (const proxy of proxies) {
-  for (const tool of proxy.tools) {
-    tools.push({
-      definition: tool,
-      handler: (args) => proxy.call(tool.name, args),
-    });
-  }
-}
 
 // ── MCP Server ───────────────────────────────────────────────────────────
+// `instructions` is read by Claude Desktop (and other MCP clients that honor it)
+// at connection time. It teaches the client the canonical tool invocation order
+// so it does NOT improvise (e.g. asking the user for credentials before checking
+// instructions.js).
+const SERVER_INSTRUCTIONS = [
+  'Specwright E2E Pipeline — canonical tool flow:',
+  '',
+  'STEP 0 (one-time, REQUIRED for clients with deferred tool loading like Claude Desktop):',
+  '  Call tool_search with this exact query to preload every specwright tool:',
+  '    select:e2e_automate,e2e_setup,e2e_configure,e2e_process,e2e_explore,e2e_plan,e2e_execute,e2e_generate,e2e_heal,e2e_status',
+  '  Skipping this causes "tool not loaded" errors when later tools are called.',
+  '',
+  '1. ALWAYS call `e2e_automate({})` FIRST. Do NOT ask the user any setup questions before calling it.',
+  '   - If it returns a pipeline plan → proceed to Phase 4 (exploration).',
+  '   - If it returns "NEXT_ACTION: CALL_E2E_SETUP" → call `e2e_setup({})` next.',
+  '2. `e2e_setup({})` collects new config via a native form or fallback questions.',
+  '   - When the fallback fires with a "project path" question, the user answers, then call',
+  '     `e2e_configure({ action: "set_project", projectPath: "<answer>" })` before anything else.',
+  '3. `e2e_configure({ action: "add", config: {...} })` writes the collected config to instructions.js.',
+  '4. Call `e2e_automate({})` again — now it will return the pipeline plan.',
+  '5. For each entry: `e2e_explore` → user approval → `e2e_generate` → optional `e2e_heal`.',
+  '',
+  'Strict rules:',
+  '- NEVER ask the user "what project", "what module", or "what credentials" before calling e2e_automate.',
+  '- NEVER call `e2e_setup` before `e2e_automate` — always check existing state first.',
+  '- NEVER improvise domain-specific or custom setup flows. The tools drive the flow.',
+  '- After user approval in Phase 6, call `e2e_generate` IMMEDIATELY. Do NOT re-explore. Do NOT write `.spec.js` files manually. BDD output goes to `e2e-tests/features/playwright-bdd/{category}/{moduleName}/` as `.feature` + `steps.js`, NEVER to `e2e-tests/playwright/`.',
+  '- If a tool returns an error, RETRY the same tool — do NOT switch to filesystem investigation or improvised workflows.',
+  '- If a browser tool fails with a filesystem error (ENOENT / mkdir / EACCES), the MCP client is missing --output-dir. Report the exact error and STOP — NEVER conclude "the browser is unreachable", NEVER fall back to reading src/ as an exploration substitute.',
+  '',
+  'CREDENTIAL PRIVACY (applies to EVERY phase and every response):',
+  '- Values in `.env.testing` (TEST_USER_PASSWORD, TEST_USER_EMAIL, TEST_2FA_CODE, OAUTH_STORAGE_KEY, API tokens) are WRITE-ONLY.',
+  '- You MAY use them inside tool calls (browser_evaluate, browser_type, etc.).',
+  '- You MUST NOT echo, list, quote, or summarise the values in your chat output to the user.',
+  '- You MUST NOT write them into seed/plan/memory files or any committed output.',
+  '- OK: "auth configured ✓", "email: (set)". NOT OK: "email: user@example.com", "password: xyz".',
+].join('\n');
+
 const server = new Server(
-  { name: 'specwright', version: '0.2.0' },
-  { capabilities: { tools: {}, elicitation: {} } }
+  { name: 'specwright', version: '0.4.0' },
+  {
+    capabilities: { tools: {}, elicitation: {} },
+    instructions: SERVER_INSTRUCTIONS,
+  }
 );
 
 // ── e2e_setup — native form via server.elicitInput() ─────────────────────
@@ -124,8 +115,7 @@ tools.push({
     name: 'e2e_setup',
     annotations: { title: 'E2E Setup' },
     description:
-      'Show a native UI form to collect all pipeline configuration from the user. ' +
-      'Call this whenever instructions.js is empty or missing, or when the user asks to set up a new module.',
+      '⚠️ ONLY call this after e2e_automate returned "NEXT_ACTION: CALL_E2E_SETUP" — meaning instructions.js is empty or missing. Never call this as the first action; always call e2e_automate first. Shows a native UI form (or fallback questions) to collect pipeline configuration.',
     inputSchema: { type: 'object', properties: {} },
   },
   handler: async () => {
@@ -292,11 +282,37 @@ tools.push({
             '0. **Project path** — absolute path to your project root (must contain `.specwright.json`). Run `npx @specwright/plugin init` in the project first if not set up yet.',
             '',
           ];
+      const projectNote = projectConfigured
+        ? []
+        : [
+            '⚠️ **Special handling for question 0 (project path):** ask ONLY that question first. Once answered, immediately call `e2e_configure` with `{ "action": "set_project", "projectPath": "<answer>" }` — the tool response will include the remaining 8 questions which you will then present as one message.',
+            '',
+          ];
+
+      const totalQuestions = projectConfigured ? 8 : 1;
+      const phrasing = projectConfigured
+        ? `please answer all ${totalQuestions} questions in one reply`
+        : 'please answer question 0 first';
+
       return {
         content: [{
           type: 'text',
           text: [
-            '⚠️ Native form not supported. Ask the user ALL of the following questions in order, exactly as written. Do NOT skip any. Do NOT reword them. Do NOT combine them:',
+            '⚠️ Native form not supported — use the chat-based questionnaire below.',
+            '',
+            '## ⛔ PRESENT THIS ENTIRE QUESTIONNAIRE TO THE USER IN A SINGLE MESSAGE',
+            '',
+            '**CRITICAL INSTRUCTIONS — read carefully before responding to the user:**',
+            '- Copy the **entire numbered list below** into your next message to the user, verbatim',
+            '- Do NOT ask questions one at a time',
+            '- Do NOT say "Question 1" and wait for the answer before showing Question 2',
+            '- Do NOT reword, summarise, or split the questions',
+            '- The user will read ALL questions and reply with ALL answers in one message',
+            '',
+            ...projectNote,
+            '---',
+            '',
+            `📋 **Configure your test module** — ${phrasing}:`,
             '',
             ...projectQuestion,
             '1. **What do you want to test?** — paste a Jira ticket URL, describe the feature in plain text, or give a file path to a spec document',

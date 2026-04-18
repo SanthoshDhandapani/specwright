@@ -1,18 +1,153 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useConfigStore } from "@renderer/store/config.store";
 
+type AuthStrategy = "email-password" | "oauth" | "none";
+
+const AUTH_STRATEGIES: { value: AuthStrategy; title: string; desc: string }[] = [
+  {
+    value: "email-password",
+    title: "Email + Password",
+    desc: "Two-step login (email → password → optional 2FA). Installs @Authentication module.",
+  },
+  {
+    value: "oauth",
+    title: "OAuth",
+    desc: "Click-based SSO or mock sign-in button. Includes localStorage injection fast-path.",
+  },
+  {
+    value: "none",
+    title: "No auth",
+    desc: "Public site — skip login. @Authentication module will NOT be installed.",
+  },
+];
+
 export default function WelcomeScreen(): React.JSX.Element {
-  const { projectState, bootstrapLog, pickAndBootstrap, appendBootstrapLog } = useConfigStore();
+  const { projectState, bootstrapLog, appendBootstrapLog, bootstrapAt, loadExistingProject } = useConfigStore();
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [authStrategy, setAuthStrategy] = useState<AuthStrategy>("email-password");
 
   const isBootstrapping = projectState === "bootstrapping";
+  const hasError = projectState === "error";
 
   // Wire bootstrap log IPC events
   useEffect(() => {
     const off = window.specwright.project.onBootstrapLog(({ line }) => appendBootstrapLog(line));
     return off;
   }, [appendBootstrapLog]);
-  const hasError = projectState === "error";
 
+  const handlePickFolder = async (): Promise<void> => {
+    const folder = await window.specwright.project.pickFolder();
+    if (!folder) return;
+    // If already bootstrapped, load it directly — no auth step needed
+    const isReady = await window.specwright.project.isBootstrapped(folder);
+    if (isReady) {
+      await loadExistingProject(folder);
+      return;
+    }
+    setSelectedFolder(folder);
+  };
+
+  const handleBootstrap = async (): Promise<void> => {
+    if (!selectedFolder) return;
+    await bootstrapAt(selectedFolder, authStrategy);
+  };
+
+  const handleBack = (): void => {
+    setSelectedFolder(null);
+  };
+
+  // ── Step 2: auth strategy selector (after folder picked) ────────────────
+  if (selectedFolder) {
+    const folderLabel = selectedFolder.split("/").slice(-2).join("/");
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-6 px-8 py-8 overflow-y-auto">
+        <div className="text-center">
+          <div className="text-4xl mb-3">⚡</div>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Bootstrap setup</h2>
+          <p className="text-slate-400 mt-2 text-sm">
+            Project: <span className="text-slate-200 font-mono text-xs bg-slate-800 px-2 py-1 rounded">…/{folderLabel}</span>
+          </p>
+        </div>
+
+        <div className="w-full max-w-lg">
+          <label className="block text-slate-300 text-sm font-medium mb-2">
+            Authentication strategy
+          </label>
+          <p className="text-slate-500 text-xs mb-3">
+            How does your app authenticate users? This controls which auth module the plugin installs.
+          </p>
+          <div className="space-y-2">
+            {AUTH_STRATEGIES.map(({ value, title, desc }) => (
+              <label
+                key={value}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  authStrategy === value
+                    ? "bg-brand-500/10 border-brand-500/50"
+                    : "bg-slate-800/50 border-slate-700 hover:border-slate-600"
+                } ${isBootstrapping ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="auth-strategy"
+                  value={value}
+                  checked={authStrategy === value}
+                  onChange={() => setAuthStrategy(value)}
+                  disabled={isBootstrapping}
+                  className="mt-1 accent-brand-500"
+                />
+                <div className="flex-1">
+                  <div className="text-slate-200 text-sm font-medium">{title}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">{desc}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleBack}
+            disabled={isBootstrapping}
+            className="text-slate-400 hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium px-4 py-2.5 transition-all text-sm"
+          >
+            ← Change folder
+          </button>
+          <button
+            onClick={handleBootstrap}
+            disabled={isBootstrapping}
+            className="flex items-center gap-3 bg-brand-500 hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl px-6 py-2.5 transition-all shadow-lg hover:shadow-brand-500/20 text-sm"
+          >
+            {isBootstrapping ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Bootstrapping…
+              </>
+            ) : (
+              <>Bootstrap project →</>
+            )}
+          </button>
+        </div>
+
+        {(isBootstrapping || hasError) && bootstrapLog.length > 0 && (
+          <div className="w-full max-w-lg bg-slate-900 rounded-lg border border-slate-700 p-4 font-mono text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+            {bootstrapLog.map((line, i) => (
+              <div key={i} className={line.includes("Error") ? "text-red-400" : "text-slate-300"}>
+                {line}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {hasError && (
+          <p className="text-red-400 text-sm">
+            Bootstrap failed. Check the log above and try again.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // ── Step 1: landing (pick folder) ────────────────────────────────────────
   return (
     <div className="flex flex-col items-center justify-center h-full gap-8 px-8">
       {/* Logo / Title */}
@@ -27,41 +162,15 @@ export default function WelcomeScreen(): React.JSX.Element {
         </p>
       </div>
 
-      {/* Create button */}
+      {/* Create button — opens folder picker */}
       <button
-        onClick={pickAndBootstrap}
+        onClick={handlePickFolder}
         disabled={isBootstrapping}
         className="flex items-center gap-3 bg-brand-500 hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl px-8 py-4 transition-all shadow-lg hover:shadow-brand-500/20 text-base"
       >
-        {isBootstrapping ? (
-          <>
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Bootstrapping…
-          </>
-        ) : (
-          <>
-            <span className="text-xl">+</span>
-            Create new test project
-          </>
-        )}
+        <span className="text-xl">+</span>
+        Create new test project
       </button>
-
-      {/* Bootstrap log */}
-      {(isBootstrapping || hasError) && bootstrapLog.length > 0 && (
-        <div className="w-full max-w-lg bg-slate-900 rounded-lg border border-slate-700 p-4 font-mono text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto">
-          {bootstrapLog.map((line, i) => (
-            <div key={i} className={line.includes("Error") ? "text-red-400" : "text-slate-300"}>
-              {line}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {hasError && (
-        <p className="text-red-400 text-sm">
-          Bootstrap failed. Check the log above and try again.
-        </p>
-      )}
 
       {/* Feature highlights */}
       <div className="grid grid-cols-3 gap-4 mt-4 w-full max-w-xl">

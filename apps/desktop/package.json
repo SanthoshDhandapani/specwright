@@ -18,11 +18,14 @@
   "dependencies": {
     "@assistant-ui/react": "^0.12.24",
     "@assistant-ui/react-markdown": "^0.12.8",
+    "@specwright/mcp": "workspace:*",
     "@specwright/plugin": "workspace:*",
-    "claude-runner": "^0.4.1",
-    "electron-store": "^10.0.0"
+    "claude-runner": "^0.5.0",
+    "electron-store": "^10.0.0",
+    "markitdown-mcp-npx": "^1.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/node": "^22.19.17",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",

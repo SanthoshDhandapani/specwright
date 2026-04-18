@@ -250,21 +250,21 @@ export function registerPipelineIpc(
       // Desktop is fully self-contained — hardcodes all 3 core MCP servers.
       // No read of project .mcp.json; that file is only for CLI users.
       //
-      // `playwright-test` uses Microsoft's canonical agents MCP: `playwright run-test-mcp-server`
-      // (built into @playwright/test ≥1.59.1). It exposes 79 tools including browser_*,
-      // browser_verify_*, generator_*, planner_*, test_* — matches the frontmatter in
-      // .claude/agents/playwright/*.md (Microsoft's init-agents output).
-      //
-      // We still run it via the project's local playwright binary (projectPath/node_modules)
-      // so the Playwright version matches what the project's tests run against.
+      // `playwright-test` uses @playwright/mcp (installed as a workspace dependency).
+      // Uses the local cli.js so no npx download delay. Headed by default; --headless
+      // flag added only when the user enables headless mode in the Desktop ConfigPanel.
+      const playwrightMcpCli = path.join(
+        path.dirname(require.resolve("@playwright/mcp/cli")),
+        "cli.js"
+      );
       const mcpServers: Record<string, Record<string, unknown>> = {
         "playwright-test": {
-          command: "npx",
-          args: ["playwright", "run-test-mcp-server"],
-          env: {
-            ...(screenshotDir ? { PLAYWRIGHT_OUTPUT_DIR: screenshotDir } : {}),
-            ...(headless ? { PLAYWRIGHT_HEADLESS: "1" } : {}),
-          },
+          command: "node",
+          args: [
+            playwrightMcpCli,
+            "--output-dir", screenshotDir,
+            ...(headless ? ["--headless"] : []),
+          ],
         },
         "markitdown": {
           command: "npx",

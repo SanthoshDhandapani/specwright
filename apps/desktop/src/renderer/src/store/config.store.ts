@@ -38,6 +38,7 @@ interface ConfigState {
   setSkipPermissions: (skip: boolean) => void;
   setActiveTab: (tab: ActiveTab) => void;
   setPendingPlugin: (source: PluginSource | null) => void;
+  resetProject: () => Promise<void>;
 }
 
 const DEFAULT_ENV: EnvVars = { BASE_URL: "", TEST_ENV: "qat" };
@@ -145,5 +146,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   setPendingPlugin: (source) => {
     set({ pendingPlugin: source });
+  },
+
+  resetProject: async () => {
+    usePipelineStore.getState().clearFeed();
+    await window.specwright.project.setPath("");
+    set({ projectPath: "", projectState: "none", envVars: { ...DEFAULT_ENV }, pendingPlugin: null });
   },
 }));

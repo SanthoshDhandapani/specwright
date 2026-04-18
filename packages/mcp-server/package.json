@@ -1,8 +1,8 @@
 {
   "name": "@specwright/mcp",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "type": "module",
-  "description": "Unified MCP server for Specwright — bundles Playwright, markitdown, and Atlassian as internal proxies with full 10-phase E2E pipeline tools",
+  "description": "Unified MCP server for Specwright — bundles Playwright browser automation, file conversion, and a full 10-phase E2E pipeline in a single npx command",
   "license": "MIT",
   "main": "index.js",
   "bin": {
@@ -23,11 +23,6 @@
     "directory": "packages/mcp-server"
   },
   "homepage": "https://github.com/SanthoshDhandapani/specwright",
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "@playwright/mcp": "^0.0.70"
-  },
   "keywords": [
     "mcp",
     "playwright",
@@ -35,6 +30,16 @@
     "testing",
     "automation",
     "specwright",
-    "claude"
-  ]
+    "claude",
+    "bdd",
+    "markitdown",
+    "file-conversion",
+    "ai-testing"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.51.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@playwright/mcp": "^0.0.70",
+    "markitdown-mcp-npx": "^1.0.3"
+  }
 }

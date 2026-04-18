@@ -4,6 +4,7 @@ import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_plan',
+  annotations: { title: 'E2E Plan' },
   description:
     'Generate a seed file (validated selectors) and test plan markdown from exploration results. Call this after exploring a page with Playwright MCP tools.',
   inputSchema: {

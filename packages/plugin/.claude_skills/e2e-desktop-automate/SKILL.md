@@ -90,9 +90,15 @@ Call `mcp__specwright__e2e_setup` immediately — the user provides all configur
 mcp__specwright__e2e_setup({})
 ```
 
-This opens Claude Desktop's native form UI — the user fills in all fields (what to test, module name, page URL, category, explore options) via a dialog. The tool returns a complete config object when the user submits.
+**If the tool opens a native form dialog** — the user fills all fields directly. The tool returns a complete config object when the user submits.
 
-After the tool returns, confirm to the user in one line:
+**If the tool returns `⚠️ Native form not supported`** — the tool provides a numbered list of questions. You MUST:
+- Ask ALL questions exactly as written — do NOT skip, combine, reword, or reorder any
+- If question 0 (project path) appears, ask it first before the others
+- Present them one at a time or as a clearly numbered list — do NOT reformat into prose
+- Collect ALL answers before proceeding
+
+After the tool returns (either path), confirm to the user in one line:
 
 ```
 ✅ Config collected: @<ModuleName> | <pageURL> | explore: yes/no | run tests: yes/no — starting pipeline.

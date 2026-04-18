@@ -4,6 +4,7 @@ import { getConfig } from '../utils/config.js';
 
 export const definition = {
   name: 'e2e_status',
+  annotations: { title: 'E2E Status' },
   description:
     'Get the current E2E pipeline status — shows which phases are complete (config, exploration, plans, test results).',
   inputSchema: {

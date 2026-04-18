@@ -2,7 +2,9 @@
   "mcpServers": {
     "specwright": {
       "command": "npx",
-      "args": ["@specwright/mcp"],
+      "args": [
+        "@specwright/mcp"
+      ],
       "env": {
         "SPECWRIGHT_PROJECT": "${PWD}",
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
@@ -11,6 +13,22 @@
     "atlassian": {
       "type": "streamable-http",
       "url": "https://mcp.atlassian.com/v1/mcp"
+    },
+    "playwright-test": {
+      "command": "npx",
+      "args": [
+        "playwright",
+        "run-test-mcp-server"
+      ],
+      "env": {
+        "PLAYWRIGHT_HEADLESS": "0"
+      }
+    },
+    "markitdown": {
+      "command": "npx",
+      "args": [
+        "markitdown-mcp-npx"
+      ]
     }
   }
 }

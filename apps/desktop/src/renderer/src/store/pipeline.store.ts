@@ -46,6 +46,9 @@ interface PipelineState {
   messages: ChatMessage[];
   logLines: string[];
   activePhase: number;
+  /** Monotonic counter incremented every fresh startRun. Consumers use this
+   * to reset per-run refs (e.g. CenterPanel's lastPhaseRef) on a new run. */
+  runId: number;
   phases: Phase[];
   errorMessage: string | null;
   pendingPermission: PendingPermission | null;
@@ -109,6 +112,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   messages: [],
   logLines: [],
   activePhase: 0,
+  runId: 0,
   phases: PHASES.map((p) => ({ ...p })),
   errorMessage: null,
   pendingPermission: null,
@@ -132,6 +136,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       status: "running",
       logLines: [],
       activePhase: 1,
+      runId: s.runId + 1,
       errorMessage: null,
       pendingPermission: null,
       phases: PHASES.map((p) => ({ ...p })),
@@ -250,17 +255,42 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 
       if (lastIdx >= 0 && messages[lastIdx].isStreaming) {
         const raw = messages[lastIdx].content;
-        // Find the last "### Phase N" header in the current message — that's the split point.
-        // Everything before the header stays in the sealed message; everything after the
-        // header line becomes the opening content of the new phase message.
-        const lastHashIdx = raw.lastIndexOf("###");
-        if (lastHashIdx >= 0 && /###\s*Phase\s+\d+/i.test(raw.slice(lastHashIdx))) {
-          const before = raw.slice(0, lastHashIdx).trimEnd();
-          const fromHeader = raw.slice(lastHashIdx);
+
+        // Find the "### Phase {phaseId}" header specifically — NOT just the last "###".
+        // If Claude writes multiple phase headers in one message chunk (e.g. Phase 8
+        // then Phase 9), we must split on the header matching the target phase, so
+        // each card gets its own content. Falls back to last-header logic if the
+        // specific header isn't found.
+        const phaseHeaderRe = new RegExp(`###\\s*Phase\\s+${phaseId}\\b`, "i");
+        const phaseMatch = raw.match(phaseHeaderRe);
+        let splitIdx = phaseMatch?.index;
+
+        if (splitIdx === undefined) {
+          // Fallback: any "### Phase N" that appears after lastPhase content.
+          // Prefer the EARLIEST phase header we haven't already committed to, so
+          // content doesn't get swallowed by a later phase written in the same burst.
+          const anyPhase = raw.match(/###\s*Phase\s+\d+/i);
+          if (anyPhase) splitIdx = anyPhase.index;
+        }
+
+        if (splitIdx !== undefined && splitIdx >= 0) {
+          const before = raw.slice(0, splitIdx).trimEnd();
+          const fromHeader = raw.slice(splitIdx);
           // Skip the header line itself — only carry over the content that follows it
           const lineEnd = fromHeader.indexOf("\n");
           leadContent = lineEnd >= 0 ? fromHeader.slice(lineEnd + 1).trimStart() : "";
-          messages[lastIdx] = { ...messages[lastIdx], content: before, isStreaming: false, stableLength: before.length };
+
+          // Note: if leadContent contains MORE phase headers (e.g. "### Phase 9"
+          // appeared in the same burst), the caller (CenterPanel.handleToken loop)
+          // will detect them on the NEXT iteration and call splitForPhase again.
+          // Do NOT trim them out here — we'd lose the content.
+
+          messages[lastIdx] = {
+            ...messages[lastIdx],
+            content: before,
+            isStreaming: false,
+            stableLength: before.length,
+          };
         } else {
           // No phase header found — just seal as-is
           const sealedContent = messages[lastIdx].content;

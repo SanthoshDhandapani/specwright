@@ -1,8 +1,8 @@
 {
   "name": "@specwright/mcp",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
-  "description": "Unified MCP server for Specwright — bundles Playwright browser automation, file conversion, and a full 10-phase E2E pipeline in a single npx command",
+  "description": "Specwright MCP bridge — exposes the E2E pipeline (e2e_*) as tools for Claude Desktop. Browser automation, markitdown, and Atlassian are configured separately in .mcp.json or claude_desktop_config.json.",
   "license": "MIT",
   "main": "index.js",
   "bin": {
@@ -37,9 +37,6 @@
     "ai-testing"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "@playwright/mcp": "^0.0.70",
-    "markitdown-mcp-npx": "^1.0.3"
+    "@modelcontextprotocol/sdk": "^1.12.1"
   }
 }

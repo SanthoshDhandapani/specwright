@@ -29,7 +29,9 @@ interface ConfigState {
   pendingPlugin: PluginSource | null;
 
   hydrate: () => Promise<void>;
-  pickAndBootstrap: () => Promise<void>;
+  pickAndBootstrap: (authStrategy?: "email-password" | "oauth" | "none") => Promise<void>;
+  /** Two-step alternative: caller already has a folder; we only need to run bootstrap. */
+  bootstrapAt: (folderPath: string, authStrategy?: "email-password" | "oauth" | "none") => Promise<void>;
   loadExistingProject: (folderPath: string) => Promise<void>;
   setEnvVar: (key: string, value: string) => void;
   removeEnvVar: (key: string) => void;
@@ -69,7 +71,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
   },
 
-  pickAndBootstrap: async () => {
+  pickAndBootstrap: async (authStrategy?: "email-password" | "oauth" | "none") => {
     const folder = await window.specwright.project.pickFolder();
     if (!folder) return;
 
@@ -80,13 +82,20 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       return;
     }
 
+    await get().bootstrapAt(folder, authStrategy);
+  },
+
+  bootstrapAt: async (folder: string, authStrategy?: "email-password" | "oauth" | "none") => {
     usePipelineStore.getState().clearFeed();
     set({ projectPath: folder, projectState: "bootstrapping", bootstrapLog: [] });
 
     const { pendingPlugin } = get();
+    const bootstrapOptions: { authStrategy?: string; overlay?: PluginSource } = {};
+    if (authStrategy) bootstrapOptions.authStrategy = authStrategy;
+    if (pendingPlugin) bootstrapOptions.overlay = pendingPlugin;
     const result = await window.specwright.project.bootstrap(
       folder,
-      pendingPlugin ? { overlay: pendingPlugin } : undefined
+      Object.keys(bootstrapOptions).length > 0 ? bootstrapOptions : undefined
     );
 
     if (result.success) {

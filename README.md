@@ -9,9 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@specwright/plugin"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/plugin?label=%40specwright%2Fplugin&color=blue"></a>
-  <a href="https://www.npmjs.com/package/@specwright/mcp"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/mcp?label=%40specwright%2Fmcp&color=blue"></a>
+  <a href="https://www.npmjs.com/package/@specwright/plugin"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/plugin?logo=npm&label=%40specwright%2Fplugin&color=red"></a>
+  <a href="https://www.npmjs.com/package/@specwright/mcp"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/mcp?logo=npm&label=%40specwright%2Fmcp&color=red"></a>
+  <a href="https://github.com/SanthoshDhandapani/specwright"><img alt="GitHub" src="https://img.shields.io/badge/github-SanthoshDhandapani%2Fspecwright-black?logo=github"></a>
   <a href="https://github.com/SanthoshDhandapani/specwright/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/SanthoshDhandapani/specwright"></a>
+  <a href="https://specwright-e2e-test-automator.vercel.app"><img alt="Docs" src="https://img.shields.io/badge/docs-specwright-blue?logo=vercel"></a>
 </p>
 
 <p align="center">
@@ -20,7 +22,7 @@
   <a href="#the-10-phase-pipeline">Pipeline</a> &bull;
   <a href="#showbuff-demo">Demo</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="https://specwright.dev/docs">Documentation</a>
+  <a href="https://specwright-e2e-test-automator.vercel.app/docs">Documentation</a>
 </p>
 
 ---
@@ -80,7 +82,7 @@ claude       # open Claude Code
 /e2e-automate
 ```
 
-Full docs: **[specwright.dev/docs](https://specwright.dev/docs)**
+Full docs: **[specwright-e2e-test-automator.vercel.app/docs](https://specwright-e2e-test-automator.vercel.app/docs)**
 
 ---
 
@@ -235,7 +237,7 @@ export default [
 ];
 ```
 
-Full field reference: [specwright.dev/docs/configuration/instructions](https://specwright.dev/docs/configuration/instructions)
+Full field reference: [specwright-e2e-test-automator.vercel.app/docs/configuration/instructions](https://specwright-e2e-test-automator.vercel.app/docs/configuration/instructions)
 
 ### `e2e-tests/.env.testing`
 
@@ -260,13 +262,13 @@ HEADLESS=true                      # set false to watch the browser
 
 ## Documentation
 
-Full documentation at **[specwright.dev/docs](https://specwright.dev/docs)**
+Full documentation at **[specwright-e2e-test-automator.vercel.app/docs](https://specwright-e2e-test-automator.vercel.app/docs)**
 
-- [Getting Started](https://specwright.dev/docs/getting-started/introduction)
-- [10-Phase Pipeline](https://specwright.dev/docs/core-concepts/pipeline)
-- [instructions.js reference](https://specwright.dev/docs/configuration/instructions)
-- [Auth Strategies](https://specwright.dev/docs/configuration/auth-strategies)
-- [Troubleshooting](https://specwright.dev/docs/troubleshooting/common-errors)
+- [Getting Started](https://specwright-e2e-test-automator.vercel.app/docs/getting-started/introduction)
+- [10-Phase Pipeline](https://specwright-e2e-test-automator.vercel.app/docs/core-concepts/pipeline)
+- [instructions.js reference](https://specwright-e2e-test-automator.vercel.app/docs/configuration/instructions)
+- [Auth Strategies](https://specwright-e2e-test-automator.vercel.app/docs/configuration/auth-strategies)
+- [Troubleshooting](https://specwright-e2e-test-automator.vercel.app/docs/troubleshooting/common-errors)
 
 ---
 

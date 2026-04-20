@@ -1,0 +1,39 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Introduction
+
+Specwright is an **AI-powered E2E test automation framework** that runs entirely inside Claude Code. It explores your live app, writes production-grade BDD tests in Gherkin format, and self-heals failures — all through a 10-phase pipeline orchestrated by specialized Claude agents.
+
+## What it does
+
+1. **Explores** your app with a real browser via Playwright MCP — discovers selectors, forms, navigation flows
+2. **Plans** a test suite from your plain-English instructions
+3. **Generates** Gherkin `.feature` files + Playwright step definitions
+4. **Executes** and **heals** failing tests automatically (up to 3 iterations)
+5. **Scores** the output (0–100 quality score) and presents a final review
+
+## Why Specwright
+
+| Without Specwright | With Specwright |
+|---|---|
+| Write selectors by hand | AI discovers selectors from live browser |
+| Maintain tests manually after UI changes | Self-healing fixes selectors automatically |
+| Boilerplate step definitions | Generated from your instructions + exploration |
+| SaaS tool with telemetry | Runs 100% locally, zero data leaves your machine |
+
+## Key facts
+
+- **License**: MIT — open source, free forever
+- **Format**: Gherkin BDD (`.feature` files + `steps.js`)
+- **Runtime**: Playwright + playwright-bdd
+- **AI**: Claude (via Claude Code CLI, Desktop app, or Claude Desktop MCP)
+- **Phases**: 10 (init → detect → process → explore → validate → approve → generate → heal → cleanup → review)
+- **Agents**: 8 specialized agents (planner, bdd-generator, code-generator, healer, execution-manager, …)
+
+## Prerequisites
+
+- Node.js ≥ 20
+- Claude Code CLI (`npm install -g @anthropic/claude-code`) **or** Specwright Desktop **or** Claude Desktop
+- A running web app to test (local or remote)
+
+<DocsPrevNext />

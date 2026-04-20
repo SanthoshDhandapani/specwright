@@ -1,0 +1,64 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Claude Desktop (MCP)
+
+Claude Desktop users can run the full pipeline through a natural language prompt. The `e2e-desktop-automate` skill is auto-discovered from your project, and `@specwright/mcp` provides 9 pipeline tools that Claude uses to orchestrate the run.
+
+## Setup
+
+**Step 1 — Install the plugin** (scaffolds the skill automatically):
+
+```bash
+npx @specwright/plugin init
+```
+
+**Step 2 — Add `@specwright/mcp` to Claude Desktop config**:
+
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "specwright": {
+      "command": "npx",
+      "args": ["-y", "@specwright/mcp"],
+      "env": {
+        "PROJECT_PATH": "/absolute/path/to/your-project"
+      }
+    }
+  }
+}
+```
+
+**Step 3 — Open your project folder in Claude Desktop** — the skill is auto-discovered.
+
+**Step 4 — Type a natural language prompt**:
+
+```
+Generate E2E tests for the login page at http://localhost:3000/login using Specwright
+```
+
+## Available MCP tools
+
+`@specwright/mcp` exposes 9 tools that Claude uses internally:
+
+| Tool | What it does |
+|---|---|
+| `e2e_automate` | Read `instructions.js` and return pipeline plan |
+| `e2e_setup` | Collect initial config |
+| `e2e_configure` | Read/write `instructions.js` entries |
+| `e2e_explore` | Spawn browser exploration agent |
+| `e2e_generate` | Spawn BDD + step generator agents |
+| `e2e_heal` | Spawn test healer agent |
+| `e2e_execute` | Run tests (seed or BDD mode) |
+| `e2e_plan` | Write seed + plan from structured input |
+| `e2e_status` | Check pipeline state |
+
+## Differences from CLI
+
+| | Plugin + CLI | Claude Desktop |
+|---|---|---|
+| Invoked by | `/e2e-automate` slash command | Natural language prompt |
+| Phase 6 approval | Text `yes` in Claude Code | Chat message reply |
+
+<DocsPrevNext />

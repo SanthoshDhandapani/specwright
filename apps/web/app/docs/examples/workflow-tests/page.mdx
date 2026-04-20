@@ -1,0 +1,68 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Workflow Tests
+
+Workflow tests represent user journeys that span multiple pages and share data between phases.
+
+## When to use workflows
+
+Use `category: '@Workflows'` when:
+- The test requires data created in a previous step
+- Steps must run in a specific order
+- Different test phases depend on each other's output
+
+Use `category: '@Modules'` for self-contained page tests that can run in parallel.
+
+## Config structure
+
+```js
+{
+  moduleName: '@BookingWorkflow',
+  category: '@Workflows',
+  subModuleName: ['@0-Precondition', '@1-FilterAndSearch', '@2-BulkActions'],
+  fileName: 'booking_workflow',
+  pageURL: 'http://localhost:3000/bookings',
+  instructions: [
+    '@0-Precondition (precondition @cross-feature-data): Capture first row Status and Priority. Save as predata scope "bookingworkflow".',
+    '@1-FilterAndSearch (workflow-consumer): Load predata. Filter by captured Status — verify only matching rows appear.',
+    '@2-BulkActions (workflow-consumer): Select 2 rows — verify toolbar shows "2 items selected".',
+  ],
+}
+```
+
+## Phase tags
+
+| Tag | Meaning |
+|---|---|
+| `precondition @cross-feature-data` | Produces data for consumers. Runs in `precondition` project. |
+| `workflow-consumer` | Reads predata. Runs in `workflow-consumers` project. |
+
+## Data persistence (3 layers)
+
+```
+page.testData          → scenario-scoped (current scenario only)
+featureDataCache       → feature-scoped (all scenarios in a feature)
+test-data/{scope}.json → file-backed (cross-worker, cross-phase)
+```
+
+### Saving predata (Phase 0)
+
+```gherkin
+Given I save "listName" as "listworkflow" predata
+```
+
+### Loading predata (Phase 1+)
+
+```gherkin
+Given I load predata from "listworkflow"
+```
+
+Reads `listworkflow.json` with 30s polling (in case Phase 0 is still running in a parallel worker).
+
+## Running workflow tests
+
+```bash
+npx bddgen && npx playwright test --project run-workflow --grep "@BookingWorkflow"
+```
+
+<DocsPrevNext />

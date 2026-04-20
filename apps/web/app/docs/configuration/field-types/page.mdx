@@ -1,0 +1,53 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Field Types
+
+Field types control how `processDataTable` in `stepHelpers.js` interacts with form fields.
+
+## Interaction types
+
+| Constant | String value | When to use |
+|---|---|---|
+| `FIELD_TYPES.FILL` | `"FILL"` | Plain text `<input>` or `<textarea>` |
+| `FIELD_TYPES.FILL_AND_ENTER` | `"FILL_AND_ENTER"` | Fill then press Enter (chips, tag inputs) |
+| `FIELD_TYPES.DROPDOWN` | `"DROPDOWN"` | Native `<select>` or ARIA combobox |
+| `FIELD_TYPES.CLICK` | `"CLICK"` | Button or toggle activated by click |
+| `FIELD_TYPES.CHECKBOX_TOGGLE` | `"CHECKBOX_TOGGLE"` | Checkbox located by label text |
+| `FIELD_TYPES.TOGGLE` | `"TOGGLE"` | Boolean toggle switch |
+| `FIELD_TYPES.CUSTOM` | `"CUSTOM"` | Unique interaction — requires `fieldHandlers` |
+
+## Validation types
+
+| Constant | When to use |
+|---|---|
+| `FIELD_TYPES.INPUT_VALUE` | Assert text input `.value` via `toHaveValue` |
+| `FIELD_TYPES.DROPDOWN_VALUE` | Assert selected dropdown option text |
+| `FIELD_TYPES.TEXT_VISIBLE` | Assert element text visible by testID |
+
+## Example
+
+```gherkin
+When I fill in the form
+  | Field      | Value           | Type            |
+  | First Name | <gen_test_data> | FILL            |
+  | Country    | United States   | DROPDOWN        |
+  | Subscribe  |                 | CHECKBOX_TOGGLE |
+  | Submit     |                 | CLICK           |
+```
+
+## Faker patterns for `<gen_test_data>`
+
+| Field name contains | Generated value |
+|---|---|
+| `email` | `faker.internet.email()` |
+| `phone` | `faker.phone.number()` |
+| `name` + `company` | `faker.company.name()` |
+| `name` | `faker.person.fullName()` |
+| `address` / `street` | `faker.location.streetAddress()` |
+| `city` | `faker.location.city()` |
+| `zip` / `postal` | `faker.location.zipCode()` |
+| `date` | ISO date string (future) |
+| `amount` / `price` | Random integer 1–1000 |
+| _(default)_ | `{word}_{6-digit-timestamp}` |
+
+<DocsPrevNext />

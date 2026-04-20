@@ -1,0 +1,87 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Quick Start
+
+Generate your first BDD test suite in under 10 minutes.
+
+**Before you start:** Plugin installed, your app is running locally, credentials set in `e2e-tests/.env.testing`.
+
+## Step 1 — Describe your test scenarios
+
+Edit `e2e-tests/instructions.js`:
+
+```js
+export default [
+  {
+    moduleName: '@LoginPage',
+    category: '@Modules',
+    fileName: 'login',
+    pageURL: 'http://localhost:3000/login',
+    instructions: [
+      'Verify login form shows email and password fields',
+      'Successful login with valid credentials redirects to /dashboard',
+      'Login with wrong password shows an error message',
+      'Empty form submission shows validation errors on both fields',
+    ],
+    explore: true,
+    runGeneratedCases: false,
+  },
+];
+```
+
+## Step 2 — Run the pipeline
+
+In Claude Code, run:
+
+```
+/e2e-automate
+```
+
+## Step 3 — Watch the browser explore
+
+During **Phase 4**, a browser window opens and navigates to your login page. The AI agent discovers `data-testid` attributes, ARIA roles, and writes validated selectors to `seed.spec.js`.
+
+## Step 4 — Approve the plan
+
+At **Phase 6**, the pipeline pauses:
+
+```
+📋 Test Plan Ready
+
+Module: @LoginPage
+Scenarios: 4 (happy-path × 1, negative × 3)
+
+Approve to generate BDD tests? (yes/no)
+```
+
+Type `yes` to proceed.
+
+## Step 5 — Tests are generated
+
+Phase 7 writes:
+
+```
+e2e-tests/features/playwright-bdd/@Modules/@LoginPage/login.feature
+e2e-tests/features/playwright-bdd/@Modules/@LoginPage/steps.js
+```
+
+## Step 6 — Final review
+
+```
+✅ Pipeline Complete — @LoginPage
+
+Exploration:  12 selectors discovered in 23s
+Plan:         4 scenarios approved
+Generation:   login.feature + steps.js (84 lines)
+Quality:      94/100 ⭐⭐⭐⭐⭐
+```
+
+> **Tip:** Set `runGeneratedCases: true` in your instructions to also run and auto-heal the generated tests as part of the same pipeline run.
+
+## Running the tests manually
+
+```bash
+npx bddgen && npx playwright test --project main-e2e --grep "@LoginPage"
+```
+
+<DocsPrevNext />

@@ -1,0 +1,88 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Installation
+
+## Plugin + CLI (recommended)
+
+**Step 1 — Run the init command** in your project root:
+
+```bash
+npx @specwright/plugin init
+```
+
+This scaffolds:
+- `e2e-tests/` — BDD features, step definitions, playwright config
+- `.claude/agents/` — 8 specialized AI agents
+- `.claude/skills/` — 7 pipeline skills (`/e2e-automate`, `/e2e-plan`, `/e2e-generate`, `/e2e-heal`, `/e2e-run`, `/e2e-validate`, `/e2e-desktop-automate`)
+- `.mcp.json` — Playwright MCP server config
+- `e2e-tests/.env.testing` — auth credentials template
+
+**Step 2 — Configure credentials** in `e2e-tests/.env.testing`:
+
+```bash
+# For email + password apps
+AUTH_STRATEGY=email-password
+TEST_USER_EMAIL=you@example.com
+TEST_USER_PASSWORD=yourpassword
+
+# For OAuth / localStorage injection
+AUTH_STRATEGY=oauth
+OAUTH_STORAGE_KEY=your-auth-token-key
+TEST_USER_EMAIL=you@example.com
+```
+
+**Step 3 — Install Playwright browsers**:
+
+```bash
+npx playwright install chromium
+```
+
+**Step 4 — Open your project in Claude Code** and run:
+
+```
+/e2e-automate
+```
+
+> **Tip:** If your app uses OAuth (Google, GitHub, etc.), set `AUTH_STRATEGY=oauth` and `OAUTH_STORAGE_KEY` to the localStorage key where your app stores the auth token. Specwright injects it directly — no browser OAuth popup needed during test runs.
+
+---
+
+## Desktop App
+
+Download Specwright Desktop for Mac or Windows from [specwright.dev/download](https://specwright.dev/download).
+
+The app auto-detects the plugin when you open a project folder — no additional install needed.
+
+---
+
+## Claude Desktop (MCP)
+
+**Step 1 — Install the plugin** (same as above — scaffolds the skill):
+
+```bash
+npx @specwright/plugin init
+```
+
+**Step 2 — Add `@specwright/mcp` to your Claude Desktop config** at `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "specwright": {
+      "command": "npx",
+      "args": ["-y", "@specwright/mcp"],
+      "env": { "PROJECT_PATH": "/path/to/your-project" }
+    }
+  }
+}
+```
+
+**Step 3 — Open your project in Claude Desktop** — the `e2e-desktop-automate` skill is auto-discovered from `.claude/skills/`.
+
+**Step 4 — Type a natural language prompt**:
+
+```
+Generate E2E tests for the login page at http://localhost:3000/login using Specwright
+```
+
+<DocsPrevNext />

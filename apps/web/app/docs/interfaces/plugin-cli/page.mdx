@@ -1,0 +1,80 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Plugin + CLI (Claude Code)
+
+The Plugin + CLI interface is the **primary way to use Specwright**. It installs as a project-local plugin and exposes 7 skills as slash commands inside Claude Code.
+
+## Setup
+
+```bash
+npx @specwright/plugin init
+```
+
+Then open your project in Claude Code.
+
+## Available skills
+
+| Command | What it does |
+|---|---|
+| `/e2e-automate` | Full 10-phase pipeline |
+| `/e2e-plan <url>` | Exploration + planning only (Phases 4–5) |
+| `/e2e-generate <plan>` | BDD generation only (Phase 7) |
+| `/e2e-heal @Module` | Run + heal tests (Phase 8) |
+| `/e2e-run` | Run existing tests without healing |
+| `/e2e-validate` | Validate generated feature files |
+
+## Typical workflow
+
+1. Edit `e2e-tests/instructions.js` with your module config
+2. Run `/e2e-automate` — pipeline runs until Phase 6
+3. Review the plan and type `yes` to approve
+4. Tests are generated and optionally healed
+5. Commit the generated `.feature` + `steps.js` files
+
+## Running specific phases
+
+```bash
+# Explore only — useful when iterating on selectors
+/e2e-plan http://localhost:3000/login
+
+# Generate from an existing plan
+/e2e-generate e2e-tests/plans/LoginPage-login-plan.md
+
+# Heal a specific module
+/e2e-heal @LoginPage
+```
+
+## CI integration
+
+Run tests in CI without Claude Code:
+
+```bash
+npx bddgen && npx playwright test --project main-e2e
+```
+
+> Specwright generates standard Playwright BDD tests — CI only needs Playwright, not Claude. The AI pipeline writes and maintains tests; it doesn't run them in production.
+
+## Project structure after install
+
+```
+your-project/
+├── .claude/
+│   ├── agents/          ← 8 AI agent definitions
+│   ├── skills/          ← 7 pipeline skills
+│   └── agent-memory/    ← persisted selectors + fix patterns
+├── .mcp.json            ← Playwright MCP server config
+└── e2e-tests/
+    ├── .env.testing     ← credentials (gitignored)
+    ├── features/playwright-bdd/
+    │   ├── shared/      ← globally-scoped steps
+    │   ├── @Modules/    ← generated module tests
+    │   └── @Workflows/  ← generated workflow tests
+    ├── playwright/
+    │   ├── fixtures.js  ← custom BDD fixtures
+    │   └── generated/seed.spec.js
+    └── utils/
+        ├── stepHelpers.js
+        └── testDataGenerator.js
+```
+
+<DocsPrevNext />

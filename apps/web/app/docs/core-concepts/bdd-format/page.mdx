@@ -1,0 +1,89 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# BDD Test Format
+
+Specwright uses **Gherkin BDD** via [playwright-bdd](https://github.com/vitalets/playwright-bdd). Tests are written in `.feature` files paired with `steps.js` Playwright implementations.
+
+## Feature file structure
+
+```gherkin
+@Modules @LoginPage
+Feature: Login Page
+
+  Background:
+    Given I navigate to the "Login" page
+
+  Scenario: Successful login redirects to dashboard
+    When I fill in the form
+      | Field    | Value           | Type |
+      | Email    | <gen_test_data> | FILL |
+      | Password | <gen_test_data> | FILL |
+    And I click the "Sign In" button
+    Then I should be on the "/dashboard" page
+
+  Scenario: Wrong password shows error
+    When I fill in the form
+      | Field    | Value         | Type |
+      | Email    | <gen_test_data> | FILL |
+      | Password | wrongpassword | FILL |
+    And I click the "Sign In" button
+    Then I should see "Invalid credentials"
+```
+
+## Data table markers
+
+| Marker | Behaviour |
+|---|---|
+| `<gen_test_data>` | Generates a realistic value via faker (cached for the scenario) |
+| `<from_test_data>` | Reads a previously generated value from the scenario cache |
+| Literal value | Used as-is (e.g. `wrongpassword`) |
+
+## Field types
+
+The `Type` column controls how `processDataTable` interacts with the field:
+
+| Type | What it does |
+|---|---|
+| `FILL` | `page.fill()` — plain text input |
+| `FILL_AND_ENTER` | Fill then press Enter (chips, tags) |
+| `DROPDOWN` | Native `<select>` or ARIA combobox |
+| `CLICK` | `page.click()` — button or toggle |
+| `CHECKBOX_TOGGLE` | Checkbox by label text |
+| `TOGGLE` | Boolean toggle switch |
+| `CUSTOM` | Unique interaction — requires `fieldHandlers` entry |
+
+## Tag conventions
+
+```gherkin
+@Workflows @BookingWorkflow   → setup + run-workflow projects
+@Modules @LoginPage           → setup + main-e2e projects
+@authentication               → auth-tests project
+@cross-feature-data           → marks a precondition phase
+```
+
+## File layout
+
+```
+e2e-tests/features/playwright-bdd/
+├── shared/                      ← globally-scoped step definitions
+│   ├── auth.steps.js
+│   ├── navigation.steps.js
+│   ├── common.steps.js
+│   └── global-hooks.js
+├── @Modules/
+│   └── @LoginPage/
+│       ├── login.feature
+│       └── steps.js
+└── @Workflows/
+    └── @BookingWorkflow/
+        ├── @0-Precondition/
+        │   ├── booking_workflow.feature
+        │   └── steps.js
+        └── @1-FilterAndSearch/
+            ├── booking_workflow.feature
+            └── steps.js
+```
+
+> Steps in `@`-prefixed directories are **AND-scoped** — they only apply to features that match all directory tags. Steps reusable across modules must live in `shared/`.
+
+<DocsPrevNext />

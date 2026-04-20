@@ -1,0 +1,64 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Show-Buff Demo
+
+Show-Buff is the official Specwright demo app — a TV show watchlist with lists, favourites, and search. It demonstrates OAuth authentication and a multi-phase workflow test.
+
+**Live app**: [specwright-show-buff.vercel.app](https://specwright-show-buff.vercel.app)
+
+## What the demo covers
+
+- OAuth auth strategy (Google sign-in bypassed via localStorage injection)
+- Multi-phase `@ListWorkflow` with 3 phases:
+  - `@0-CreateList` — creates a watchlist, saves name as predata
+  - `@1-AddShows` — loads predata, adds TV shows to the list
+  - `@2-VerifyList` — verifies list contents
+
+## Instructions config
+
+```js
+export default [
+  {
+    moduleName: '@ListWorkflow',
+    category: '@Workflows',
+    subModuleName: ['@0-CreateList', '@1-AddShows', '@2-VerifyList'],
+    fileName: 'list_workflow',
+    pageURL: 'https://specwright-show-buff.vercel.app/lists',
+    instructions: [
+      '@0-CreateList (precondition @cross-feature-data): Navigate to /lists. Click "Create List". Enter a list name with <gen_test_data>. Save as predata under scope "listworkflow".',
+      '@0-CreateList: Attempt to create a list with an empty name — verify validation error.',
+      '@1-AddShows (workflow-consumer): Load predata. Open the list. Search for "Breaking Bad" and add it.',
+      '@2-VerifyList (workflow-consumer): Load predata. Open the list. Verify "Breaking Bad" appears.',
+    ],
+    explore: true,
+    runGeneratedCases: false,
+  },
+];
+```
+
+## Auth configuration
+
+```bash
+AUTH_STRATEGY=oauth
+TEST_USER_EMAIL=your-google-email@gmail.com
+TEST_USER_NAME=Your Name
+OAUTH_STORAGE_KEY=specwright-show-user
+```
+
+## Running the demo
+
+```bash
+cd apps/examples/show-buff
+# Set credentials in e2e-tests/.env.testing
+npx playwright install chromium
+# Open in Claude Code:
+/e2e-automate
+```
+
+## Running the generated tests
+
+```bash
+npx bddgen && npx playwright test --project setup --project run-workflow --grep "@ListWorkflow"
+```
+
+<DocsPrevNext />

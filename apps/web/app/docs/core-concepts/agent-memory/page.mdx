@@ -1,0 +1,52 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Agent Memory
+
+Agent memory lets Specwright get faster and smarter over time. After exploring a page once, the planner remembers selectors so re-runs use **verification mode** (5 browser calls instead of 20).
+
+## Memory locations
+
+```
+.claude/agent-memory/
+├── playwright-test-planner/
+│   └── MEMORY.md        ← Discovered selectors per URL
+└── playwright-test-healer/
+    └── MEMORY.md        ← Fix patterns for recurring failures
+```
+
+## Planner memory
+
+After each successful exploration, the planner writes a `## Key Selectors` section:
+
+```markdown
+## Key Selectors: @LoginPage (http://localhost:3000/login)
+Last explored: 2026-04-20
+
+| Element         | Locator                              |
+|-----------------|--------------------------------------|
+| Email input     | page.getByTestId('login-email')      |
+| Password input  | page.getByTestId('login-password')   |
+| Sign In button  | page.getByTestId('login-submit')     |
+| Error message   | page.getByTestId('login-error')      |
+```
+
+On the next run for the same URL, the planner enters **verification mode** — navigates, takes one snapshot, confirms each selector still resolves, re-discovers only selectors that have drifted.
+
+## Healer memory
+
+After fixing a test failure, the healer records the pattern so similar failures in the future are resolved immediately.
+
+## When to clear memory
+
+Memory is never cleared automatically. Clear it manually when:
+
+- You've done a major redesign and selectors have changed completely
+- Memory from a stale URL is causing verification mode to skip real exploration
+
+```bash
+# Clear planner memory for a fresh exploration
+echo "# Playwright Test Planner — Agent Memory" > \
+  .claude/agent-memory/playwright-test-planner/MEMORY.md
+```
+
+<DocsPrevNext />

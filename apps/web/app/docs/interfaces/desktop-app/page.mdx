@@ -1,0 +1,39 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Desktop App
+
+Specwright Desktop is an Electron app that wraps the same 10-phase pipeline with a **visual, three-panel interface** — live agent streaming, phase-by-phase status, and a GUI for auth configuration.
+
+## Download
+
+Available for **Mac (Apple Silicon + Intel)** and **Windows** from [specwright.dev/download](https://specwright.dev/download).
+
+## Interface
+
+The app has three panels:
+
+- **Left panel** — project selector, auth config, environment variables editor
+- **Center panel** — live agent output (token-by-token streaming, phase markers)
+- **Right panel** — pipeline phase status, run controls, quality score
+
+## Setup
+
+1. **Open Specwright Desktop** and click **Open Project**
+2. **Select your project folder** — the app auto-detects the plugin installation
+3. **Configure auth** via the Settings panel (saved to `e2e-tests/.env.testing`)
+4. **Click "Run Pipeline"**
+
+## Phase 6 approval
+
+When the pipeline reaches Phase 6, the center panel shows the test plan and the run button changes to **Approve / Reject**.
+
+## Auth configuration
+
+| Auth strategy | Required fields |
+|---|---|
+| `email-password` | `TEST_USER_EMAIL`, `TEST_USER_PASSWORD` |
+| `oauth` | `OAUTH_STORAGE_KEY`, `TEST_USER_EMAIL` |
+
+All values are saved to `e2e-tests/.env.testing` — the same file used by the CLI.
+
+<DocsPrevNext />

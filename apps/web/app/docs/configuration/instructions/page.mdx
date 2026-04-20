@@ -1,0 +1,92 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# instructions.js Reference
+
+`e2e-tests/instructions.js` is the single source of truth for what Specwright tests. Each entry in the exported array describes one module or workflow.
+
+## Full example
+
+```js
+export default [
+  {
+    moduleName: '@LoginPage',
+    category: '@Modules',
+    subModuleName: [],
+    fileName: 'login',
+    pageURL: 'http://localhost:3000/login',
+    filePath: '',
+    inputs: { jira: { url: '' } },
+    instructions: [
+      'Verify login form shows email and password fields',
+      'Successful login redirects to /dashboard',
+      'Wrong password shows an error message',
+    ],
+    explore: true,
+    runExploredCases: false,
+    runGeneratedCases: false,
+  },
+];
+```
+
+## Field reference
+
+### `moduleName` — string, required
+
+The module identifier. Must start with `@`. Used as a Playwright `--grep` tag and as part of the output path.
+
+### `category` — `'@Modules' | '@Workflows'`, required
+
+| Value | Projects used |
+|---|---|
+| `@Modules` | `setup` + `main-e2e` |
+| `@Workflows` | `setup` + `run-workflow` |
+
+### `subModuleName` — string[]
+
+Phase names for multi-step workflows. Empty array for regular modules.
+
+```js
+subModuleName: ['@0-Precondition', '@1-FilterAndSearch', '@2-BulkActions']
+```
+
+### `fileName` — string, required
+
+Base filename for generated files (no extension, lowercase with underscores).
+
+### `pageURL` — string, required
+
+The URL the exploration agent navigates to first.
+
+### `filePath` — string, optional
+
+Path to a local file (PDF, DOCX) to use as the primary input source instead of `instructions[]`.
+
+### `inputs.jira.url` — string, optional
+
+When set, Jira becomes the primary input source. `instructions[]` is treated as supplementary guidance.
+
+### `instructions` — string[], required
+
+Plain-English descriptions of what to test. Each string maps to one or more Gherkin scenarios.
+
+```js
+instructions: [
+  'Verify the form has email and password fields',
+  '@0-CreateUser (precondition @cross-feature-data): Fill form → save as predata',
+  '@1-VerifyInList (workflow-consumer): Load predata, verify user in list',
+]
+```
+
+### `explore` — boolean
+
+Whether to run Phase 4 (browser exploration). Set `false` to skip to Phase 7 using an existing plan.
+
+### `runExploredCases` — boolean
+
+Whether to run Phase 5 (seed validation). Default: `false`.
+
+### `runGeneratedCases` — boolean
+
+Whether to run Phase 8 (test execution + auto-healing). Default: `false`.
+
+<DocsPrevNext />

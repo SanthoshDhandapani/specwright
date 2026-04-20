@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# nested .next dirs (e.g. stray trace files under public/)
+**/.next/
+
 # production
 /build
 

@@ -1,0 +1,80 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Publishing a Plugin
+
+## Package structure
+
+Add a `package.json` to your plugin directory before publishing:
+
+```
+my-org-e2e/
+├── specwright.plugin.json
+├── install.sh
+├── README.md
+├── package.json          ← required for npm
+└── overrides/
+    └── (your 1–7 files)
+```
+
+## package.json
+
+```json
+{
+  "name": "my-org-e2e",
+  "version": "1.0.0",
+  "description": "ACME Corp Specwright overlay",
+  "keywords": ["specwright-plugin"],
+  "license": "UNLICENSED",
+  "files": ["overrides/", "specwright.plugin.json", "install.sh", "README.md"]
+}
+```
+
+The `keywords: ["specwright-plugin"]` tag makes the plugin discoverable via `npm search specwright-plugin` and in Specwright Desktop's npm tab.
+
+The `files` array ensures only the necessary files are included in the published package — source control files, test fixtures, and local configs are excluded automatically.
+
+## Publishing to npm public registry
+
+```bash
+npm login
+npm publish --access public
+```
+
+Use `--access public` for scoped packages (e.g. `@my-org/plugin-myds`). Unscoped packages default to public.
+
+## Publishing to a private registry
+
+```bash
+# Add registry to .npmrc
+echo "@my-org:registry=https://npm.my-org.com" >> ~/.npmrc
+
+npm publish --registry https://npm.my-org.com
+```
+
+For GitHub Packages or Artifactory, follow your org's standard npm registry setup. The plugin install process is identical regardless of registry.
+
+## Installing from a private registry
+
+```bash
+npm install @my-org/plugin-myds --registry https://npm.my-org.com
+bash node_modules/@my-org/plugin-myds/install.sh .
+```
+
+In Specwright Desktop:
+```
+Settings → Plugin → Change → npm tab → enter package name + registry URL
+```
+
+## Versioning guidance
+
+Follow semver:
+
+| Change type | Version bump |
+|---|---|
+| Bug fix in an override file (wrong selector, broken step) | Patch (`1.0.0` → `1.0.1`) |
+| New `FIELD_TYPE` added to `stepHelpers.js` | Minor (`1.0.0` → `1.1.0`) |
+| New override file added | Minor |
+| Breaking change to `install.sh` contract or file structure | Major (`1.0.0` → `2.0.0`) |
+| Bumping `requiredBaseVersion` to a new minimum | Major |
+
+<DocsPrevNext />

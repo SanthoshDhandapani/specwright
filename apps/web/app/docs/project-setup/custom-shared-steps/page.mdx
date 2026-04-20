@@ -1,0 +1,127 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Custom Shared Steps
+
+Shared steps are Gherkin step definitions available to every feature file. Use them when an action or assertion appears in multiple modules and you don't want to duplicate the implementation.
+
+## Where shared steps live
+
+```
+e2e-tests/features/playwright-bdd/shared/
+├── auth.steps.js         — login/logout actions
+├── navigation.steps.js   — page navigation, link clicks
+├── common.steps.js       — headings, tabs, storage, page title
+└── global-hooks.js       — Before/After hooks, predata loading
+```
+
+Anything in `shared/` is automatically available in all features via playwright-bdd's directory scoping.
+
+## Writing a new shared step
+
+### 1. Choose the right file
+
+| Category | File |
+|---|---|
+| Auth actions (login, logout, session) | `auth.steps.js` |
+| Navigation (go to page, click nav link) | `navigation.steps.js` |
+| Common UI assertions (heading, title, tab) | `common.steps.js` |
+| Hooks or cross-feature data | `global-hooks.js` |
+| Completely new category | Create a new `{category}.steps.js` |
+
+### 2. Write the step definition
+
+```js
+// e2e-tests/features/playwright-bdd/shared/common.steps.js
+import { When, Then } from '../../../playwright/fixtures.js';
+
+Then('the toast message shows {string}', async ({ page }, message) => {
+  await expect(
+    page.getByRole('alert').filter({ hasText: message })
+  ).toBeVisible({ timeout: 5000 });
+});
+```
+
+**Import rule**: Always import `Given`, `When`, `Then` from `fixtures.js` — never from `playwright-bdd` or `@playwright/test` directly. The import path depth depends on where your file is:
+
+| File location | Import path |
+|---|---|
+| `shared/` | `../../playwright/fixtures.js` |
+
+### 3. Register it with the AI
+
+Add the step to your knowledge base or a project-specific rules file so the AI knows it exists and uses it instead of generating a duplicate:
+
+```markdown
+<!-- In .claude/rules/shared-steps.md or knowledge-base.md -->
+
+## Shared Steps Available
+
+### common.steps.js
+- `Then the toast message shows {string}` — checks role="alert" text
+```
+
+### 4. Reference it in the plan file
+
+When the bdd-generator agent creates the plan, it lists which shared steps to use. If your step isn't discovered automatically, add it to the `instructions` string so the agent includes it:
+
+```js
+instructions: [
+  'After saving, verify the toast message "Record saved successfully"',
+]
+```
+
+The agent will match this intent to `Then the toast message shows "Record saved successfully"`.
+
+## Step scoping rules
+
+playwright-bdd v8+ automatically scopes steps based on directory structure:
+
+| Directory | Scope |
+|---|---|
+| `shared/` | All features |
+| `@Modules/@LoginPage/steps.js` | Only features tagged `@Modules AND @LoginPage` |
+| `@Workflows/@BookingWorkflow/@0-Precondition/steps.js` | Only that specific phase |
+
+Steps defined inside `@`-prefixed directories are not visible to other modules. If a step is needed in multiple modules, it **must** live in `shared/`.
+
+## Example: custom navigation step
+
+Your app has a sidebar with module-specific links. Instead of adding navigation logic to every module's steps, add one shared step:
+
+```js
+// shared/navigation.steps.js
+When('I click the sidebar link {string}', async ({ page }, linkName) => {
+  await page.getByRole('navigation')
+    .getByRole('link', { name: linkName })
+    .click();
+  await page.waitForLoadState('networkidle');
+});
+```
+
+Now every module can use:
+```gherkin
+When I click the sidebar link "Reports"
+```
+
+## Example: cross-feature predata step
+
+The `global-hooks.js` file already contains `Given I load predata from "{scopeName}"`. If you need a variant that loads and also asserts count, add it to `common.steps.js`:
+
+```js
+Then('I see {int} items matching the predata criteria', async ({ page, testData }, count) => {
+  const items = await page.getByRole('row').count();
+  expect(items).toBe(count);
+});
+```
+
+## Checking for existing steps before adding
+
+Always check the existing shared files before writing a new step — the AI may have already generated something similar. Run a quick search:
+
+```bash
+grep -r "step pattern" e2e-tests/features/playwright-bdd/shared/
+```
+
+Duplicate step patterns cause playwright-bdd to throw a `Duplicate step` error at runtime.
+
+<DocsPrevNext />

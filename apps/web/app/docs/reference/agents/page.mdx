@@ -1,0 +1,188 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Agents Reference
+
+Agents are pure building blocks. Each agent uses tools directly — browser controls, file I/O, bash — but **agents never invoke each other**. Orchestration is handled entirely by skills, which pre-read files and pass content inline to the agents they spawn. This separation keeps agents stateless, testable, and independently replaceable.
+
+## Agent Summary
+
+| Agent | Phase | Role |
+|---|---|---|
+| `playwright-test-planner` | 4 | Browser exploration, test plan, seed file |
+| `bdd-generator` | 7a | Feature files from plan |
+| `code-generator` | 7b | `steps.js` implementation |
+| `execution-manager` | 5, 8 | Runs Playwright with correct projects |
+| `playwright-test-healer` | 9 | Diagnoses and fixes failing tests |
+| `bdd-quality-scorer` | 10 | Quality score 0–100 |
+| `input-processor` | 3 | Converts Jira/files/text to plan |
+| `browser-probe` | diagnostic | Verifies Playwright MCP connectivity |
+
+---
+
+## `@playwright-test-planner`
+
+**Invoked by:** `/e2e-plan`, `/e2e-automate` Phase 4
+
+The exploration agent. Opens a real Chromium browser via the Playwright MCP server, navigates your application, and produces validated selectors and a structured test plan.
+
+**MCP tools used:**
+
+| Tool | Purpose |
+|---|---|
+| `browser_navigate` | Load a URL |
+| `browser_snapshot` | Capture accessibility tree of page or element |
+| `browser_click` | Click an element by ref or selector |
+| `browser_type` | Type text into a focused input |
+| `browser_select_option` | Select a dropdown option |
+| `browser_evaluate` | Run JavaScript in browser context |
+
+**Inputs:**
+- `pageURL` from `instructions.js`
+- `.env.testing` — auth strategy, credentials, `HEADLESS` flag
+
+**Outputs:**
+- `seed.spec.js` — Playwright spec with browser-validated selectors
+- `{module}-plan.md` — structured test plan with scenarios and shared step references
+- `.claude/agent-memory/playwright-test-planner/MEMORY.md` — persisted selector map
+
+**Browser call budget:** 20 calls maximum. When a MEMORY.md already exists for the module, the agent enters verification mode and caps at 5 calls — it confirms existing selectors rather than re-exploring.
+
+**Memory:** `.claude/agent-memory/playwright-test-planner/MEMORY.md` persists selector bindings across sessions. Delete it to force a full re-exploration.
+
+---
+
+## `@bdd-generator`
+
+**Invoked by:** `/e2e-generate` Phase 7a
+
+Converts the approved test plan into Gherkin `.feature` files with 3-column data tables, plus a `steps.js` skeleton for the code-generator to fill in.
+
+**Inputs:**
+- Approved plan file (passed inline by the skill)
+- `stepHelpers.js` — `FIELD_TYPES` enum used in column headers
+- "Shared steps to reuse" section from the plan
+
+**Outputs:**
+- `.feature` file at the deterministic path: `e2e-tests/features/playwright-bdd/{Category}/@{Module}/{FileName}.feature`
+- `steps.js` skeleton with empty step implementations
+
+**Important:** The bdd-generator does **not** scan the `shared/` directory at runtime. It relies exclusively on the plan's "Shared steps to reuse" section to determine which shared steps are available. Keep this section accurate when editing plans manually.
+
+---
+
+## `@code-generator`
+
+**Invoked by:** `/e2e-generate` Phase 7b
+
+Takes the skeleton produced by bdd-generator and writes complete Playwright implementations using `processDataTable` and `validateExpectations` helpers.
+
+**Inputs:**
+- `steps.js` skeleton (output of bdd-generator)
+- `seed.spec.js` — source of truth for selectors
+- `stepHelpers.js` — helper utilities
+- `testDataGenerator.js` — test data factory functions
+
+**Outputs:**
+- Complete `steps.js` with all step implementations
+
+The code-generator reads `seed.spec.js` to extract real, browser-validated selectors. It **never** invents selectors or guesses attribute names. If a selector is missing from `seed.spec.js`, re-run Phase 4 to re-explore.
+
+---
+
+## `@execution-manager`
+
+**Invoked by:** `/e2e-validate` (Phase 5), `/e2e-heal` (Phase 8)
+
+Determines the correct Playwright project combination from the module category or tag, then runs `bddgen` followed by `playwright test`.
+
+**Project inference:**
+
+| Category / Tag | Projects |
+|---|---|
+| `@Workflows` | `--project setup --project precondition --project workflow-consumers` |
+| `@authentication` | `--project auth-tests` |
+| `@serial-execution` | `--project setup --project serial-execution` |
+| All other `@Modules` | `--project setup --project main-e2e` |
+
+**Always runs `npx bddgen` before `npx playwright test`.** Skipping bddgen is the most common cause of stale compiled specs. The execution-manager never calls `playwright test` directly without regenerating.
+
+---
+
+## `@playwright-test-healer`
+
+**Invoked by:** `/e2e-heal` Phase 9
+
+Diagnoses test failures, locates the root cause in source code or selectors, applies fixes to `steps.js`, and retries — up to 3 iterations.
+
+**Inputs:**
+- Playwright failure log (passed inline by the skill)
+- `seed.spec.js` — last known-good selectors
+- Source code grep results — searches for `data-testid` attributes in the application source
+
+**Outputs:**
+- Patched `steps.js` with corrected selectors or step logic
+
+**Max iterations:** 3. After each fix, the healer re-runs the failing test. If all tests pass before 3 iterations are exhausted, it stops early.
+
+**Memory:** `.claude/agent-memory/playwright-test-healer/MEMORY.md` records what fixes were applied and why, so repeat failures don't require re-diagnosis from scratch.
+
+---
+
+## `@bdd-quality-scorer`
+
+**Invoked by:** `/e2e-validate` Phase 10
+
+Evaluates the generated test suite across multiple dimensions and produces a score from 0 to 100.
+
+**Scoring:**
+- Per-phase breakdown — each phase contributes a weighted sub-score
+- **Adaptive weighting:** phases that were skipped are excluded from the denominator. Skipping Phase 8 (healing) does not penalise the final score — the weight is redistributed to the phases that ran.
+
+**Output:** Quality score card displayed in the Right Panel (Desktop) or printed to terminal output (CLI).
+
+---
+
+## `@input-processor`
+
+**Invoked by:** `/e2e-process`, `/e2e-automate` Phase 3
+
+Normalises heterogeneous input sources into a single structured plan markdown that the planner agent can consume.
+
+**Supported sources:**
+
+| Source | How it's specified |
+|---|---|
+| Plain text / inline instructions | `instructions[]` array in `instructions.js` |
+| PDF or DOCX files | `filePath` — processed via Markitdown MCP |
+| Jira tickets | `inputs.jira.url` — fetched via Atlassian MCP |
+
+**Output:** Structured plan markdown, passed directly to `@playwright-test-planner`.
+
+---
+
+## `@browser-probe`
+
+**Diagnostic only** — not part of the normal pipeline.
+
+A minimal agent that navigates to a URL, takes an accessibility tree snapshot, and reports what it sees. Use it whenever you suspect the Playwright MCP server is not connected or the browser is not responding.
+
+**Invoke via:** `/browser-probe` skill
+
+If browser-probe fails to navigate, check that `@playwright/mcp` is listed in `.mcp.json` and that the Claude Code session has restarted after the config was written.
+
+---
+
+## Customizing Agents
+
+Every agent definition lives in the base plugin. To override an agent for a specific project, create a file with the same name in the project's `.claude/agents/` directory:
+
+```
+your-project/
+  .claude/
+    agents/
+      playwright-test-planner.md   ← overrides base plugin version
+```
+
+The file with the matching name takes precedence. Use this to adjust budgets, add project-specific context, or change output paths without modifying the plugin itself.
+
+<DocsPrevNext />

@@ -6,6 +6,11 @@ import { PluginPickerModal } from "./PluginPickerModal";
 
 const ENVS = ["qat", "dev", "staging", "prod", "local"];
 
+// Strip @scope/ prefix for display — full name kept in title tooltip
+function shortName(name: string): string {
+  return name.replace(/^@[^/]+\//, "");
+}
+
 const SyncButtonIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
@@ -250,11 +255,28 @@ export default function ConfigPanel(): React.JSX.Element {
                       Installing…
                     </p>
                   ) : pluginInfo && pluginInfo.name !== "none" ? (
-                    <p className="text-slate-300 text-xs font-mono truncate mt-0.5" title={pluginInfo.name}>
-                      {pluginInfo.hasOverlay ? pluginInfo.overlayName : pluginInfo.name}
-                    </p>
+                    <div className="mt-0.5 min-w-0">
+                      <p
+                        className="text-slate-300 text-xs font-mono truncate"
+                        title={`${pluginInfo.name}${pluginInfo.version && pluginInfo.version !== "unknown" ? ` v${pluginInfo.version}` : ""}`}
+                      >
+                        {shortName(pluginInfo.name)}
+                        {pluginInfo.version && pluginInfo.version !== "unknown" && (
+                          <span className="text-slate-500 ml-1">v{pluginInfo.version}</span>
+                        )}
+                      </p>
+                      {pluginInfo.hasOverlay && pluginInfo.overlayName && (
+                        <p
+                          className="text-brand-400 text-xs font-mono truncate flex items-center gap-1 mt-0.5"
+                          title={pluginInfo.overlayName}
+                        >
+                          <span className="text-slate-500">↳</span>
+                          {shortName(pluginInfo.overlayName)}
+                        </p>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-slate-400 text-xs font-mono mt-0.5">@specwright/plugin</p>
+                    <p className="text-slate-400 text-xs font-mono mt-0.5">plugin</p>
                   )}
                 </div>
                 <button
@@ -272,13 +294,16 @@ export default function ConfigPanel(): React.JSX.Element {
                 <div className="min-w-0">
                   <p className="text-slate-500 text-xs uppercase tracking-wider font-medium">Plugin</p>
                   {pendingPlugin ? (
-                    <p className="text-brand-400 text-xs font-mono truncate mt-0.5">
+                    <p
+                      className="text-brand-400 text-xs font-mono truncate mt-0.5"
+                      title={pendingPlugin.type === "local" ? pendingPlugin.dirPath : pendingPlugin.packageName}
+                    >
                       {pendingPlugin.type === "local"
                         ? pendingPlugin.dirPath.split("/").pop()
-                        : pendingPlugin.packageName}
+                        : shortName(pendingPlugin.packageName)}
                     </p>
                   ) : (
-                    <p className="text-slate-400 text-xs font-mono mt-0.5">@specwright/plugin</p>
+                    <p className="text-slate-400 text-xs font-mono mt-0.5">plugin</p>
                   )}
                 </div>
                 <button

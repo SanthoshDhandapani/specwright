@@ -1,0 +1,115 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Knowledge Base
+
+The scaffold gives you a working framework, but it knows nothing about your app's specific components, selectors, or interaction quirks. This guide walks through six layers of customization — apply as many as your project needs.
+
+## Layer 1 — Agent Memory (automatic)
+
+The Planner agent writes discovered selectors to `.claude/agent-memory/playwright-test-planner/MEMORY.md` after every exploration run. On subsequent runs it enters verification mode (5 browser calls instead of 20) — it confirms existing selectors still work rather than re-discovering everything.
+
+You can edit this file manually to add selectors the planner missed or correct ones it got wrong.
+
+Each module gets a `## Key Selectors` section in the file:
+
+```
+## Key Selectors: @TodoList (/todos)
+Last explored: 2026-04-20
+```
+
+Followed by a table of element → locator pairs:
+
+| Element | Locator |
+|---|---|
+| Todo title input | `page.getByTestId('todo-title')` |
+| Priority select | `page.getByTestId('priority-select')` |
+| Create button | `page.getByTestId('create-todo-btn')` |
+
+---
+
+## Layer 2 — `authenticationData.js` — real login selectors
+
+Edit `e2e-tests/data/authenticationData.js` to replace the generic placeholders with your app's actual `data-testid` values. Without this, the setup project fails at login and no tests run.
+
+```js
+export const loginSelectors = {
+  emailInput:    'data-testid=login-email',
+  passwordInput: 'data-testid=login-password',
+  submitButton:  'data-testid=login-submit',
+  errorMessage:  'data-testid=login-error',
+};
+```
+
+---
+
+## Layer 3 — Custom `FIELD_TYPES` for your component library
+
+If your app uses non-standard components (MUI Select, Ant Design DatePicker, an internal design system), the built-in `FILL` and `DROPDOWN` types won't produce the correct interaction sequence.
+
+Add your custom types to `e2e-tests/utils/stepHelpers.js`:
+
+```js
+export const FIELD_TYPES = {
+  // ...existing built-in types...
+  MUI_SELECT: 'MUI_SELECT',
+  DS_COMBOBOX: 'DS_COMBOBOX',
+};
+```
+
+Then add the corresponding handler in the `processDataTable` switch statement. If you need these types across multiple projects, package them as an overlay plugin instead of duplicating the code.
+
+---
+
+## Layer 4 — `code-generator.md` — teach the AI about your components
+
+Place a file at `.claude/agents/playwright/code-generator.md` in your project. This overrides the base agent definition and lets you describe exactly how each custom component should be interacted with.
+
+```markdown
+## Custom Component Library
+
+### Combobox / Select
+- FIELD_TYPE: DS_COMBOBOX
+- Selector: [data-testid="{fieldName}-select"]
+- Interaction: Click trigger → wait for [role="listbox"] → click option by text
+
+### Date Picker
+- FIELD_TYPE: DATE_PICKER
+- Selector: [data-testid="{fieldName}-datepicker"]
+- Interaction: Click → type ISO date string into input
+```
+
+Project-level agent files take precedence over the base plugin's versions automatically — no additional config required.
+
+---
+
+## Layer 5 — `.claude/rules/dependencies.md` — project facts for all agents
+
+This file is read by every agent at the start of each run. Use it to document your tech stack so agents have correct context without relying on inference.
+
+```markdown
+## Component Library
+Material UI v5 (@mui/material). Key patterns:
+- Dropdowns: [role="combobox"] → wait [role="listbox"] → click option
+- Modals: wait for [role="dialog"] before interacting
+- Snackbars: [data-testid="snackbar-message"]
+
+## data-testid convention
+All inputs: data-testid="{fieldName}-input"
+All buttons: data-testid="{actionName}-btn"
+```
+
+---
+
+## Layer 6 — `generate-context.md` — performance optimization
+
+Run the extract script to generate a compact reference file that agents load during test generation:
+
+```bash
+node e2e-tests/scripts/extract-generate-context.js
+```
+
+This creates `e2e-tests/.knowledge/generate-context.md` — a ~2.5KB summary of all `FIELD_TYPES` and faker patterns. Loading this compact reference instead of the full `stepHelpers.js` reduces token cost by ~60% on repeat generation runs.
+
+Regenerate this file any time you add new `FIELD_TYPES` or faker helpers.
+
+<DocsPrevNext />

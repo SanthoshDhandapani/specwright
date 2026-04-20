@@ -43,9 +43,16 @@ When I fill in the form
 | `phone` | `faker.phone.number()` |
 | `name` + `company` | `faker.company.name()` |
 | `name` | `faker.person.fullName()` |
+| `catchphrase` | `faker.company.catchPhrase()` |
 | `address` / `street` | `faker.location.streetAddress()` |
 | `city` | `faker.location.city()` |
 | `zip` / `postal` | `faker.location.zipCode()` |
+| `country` | `faker.location.country()` |
+| `state` | `faker.location.state()` |
+| `website` / `url` | `faker.internet.url()` |
+| `description` / `comment` | `faker.lorem.sentence()` |
+| `id` / `number` / `code` | `faker.string.alphanumeric(8).toUpperCase()` |
+| `tag` | `faker.string.alphanumeric(6).toUpperCase()` |
 | `date` | ISO date string (future) |
 | `amount` / `price` | Random integer 1–1000 |
 | _(default)_ | `{word}_{6-digit-timestamp}` |

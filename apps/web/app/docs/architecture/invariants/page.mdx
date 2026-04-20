@@ -1,0 +1,99 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Architectural Invariants
+
+These rules must never be violated. They exist because past violations caused subtle, hard-to-debug failures. If you are customizing Specwright or building a plugin, read this page carefully.
+
+## 1. `stepHelpers.js` is the only source of `FIELD_TYPES`
+
+Every constant (`FILL`, `DROPDOWN`, `COMBO_BOX`, `FILL_AND_ENTER`, etc.) must be defined in `e2e-tests/utils/stepHelpers.js` and imported from there. Never hardcode type strings in step files.
+
+**Why:** The code generator reads `stepHelpers.js` to know what types exist. If you add a type elsewhere, the generator won't know about it and will fall back to incorrect patterns.
+
+## 2. `testDataGenerator.js` drives all `<gen_test_data>` values
+
+The faker patterns for every field type live in `e2e-tests/utils/testDataGenerator.js`. The code generator reads this file to ensure `FIELD_MAPPING` and `FIELD_CONFIG` entries match what will actually be generated at runtime.
+
+**Why:** If you add a custom faker pattern directly in a step file, it won't match the generated data table, causing `<from_test_data>` reads to fail.
+
+## 3. `fixtures.js` is the only valid import for step files
+
+Step files must import `Given`, `When`, `Then` from the project's `fixtures.js` — never from `playwright-bdd`, `@playwright/test`, or `@cucumber/cucumber` directly.
+
+```js
+// ✅ Correct
+import { Given, When, Then } from '../../../../playwright/fixtures.js';
+
+// ❌ Wrong — breaks fixture injection
+import { Given, When, Then } from 'playwright-bdd';
+```
+
+**Why:** Specwright's fixtures attach `testData`, `featureDataCache`, and other shared state. Bypassing `fixtures.js` means those fixtures are not injected.
+
+## 4. 3-column data table format is universal
+
+All interaction and validation tables must use exactly three columns:
+
+```
+| Field Name | Value | Type |
+```
+
+`processDataTable` expects this shape. Adding, removing, or reordering columns breaks parsing.
+
+## 5. Three-layer data persistence is non-negotiable
+
+- **`page.testData`** — scenario scope (in-memory, single worker)
+- **`featureDataCache`** — feature scope (in-memory, single worker)
+- **`test-data/{scope}.json`** — cross-phase scope (file-backed, cross-worker)
+
+Do not introduce a fourth layer (e.g., a database, a Redis cache, an env var). The file-backed layer already handles the cross-worker case.
+
+**Why:** Parallel workers cannot share in-memory state. The file layer exists for exactly this reason.
+
+## 6. `shared/` steps are globally scoped; `@`-prefixed dirs are AND-scoped
+
+Steps in `shared/` are visible to every feature. Steps in `@Modules/@LoginPage/steps.js` are ONLY visible to features tagged `@Modules AND @LoginPage`. This is playwright-bdd v8+ directory scoping.
+
+**Consequence:** If a step needs to be reusable across modules, it must go in `shared/`. Moving it to a module-specific file silently hides it from other modules — the runner throws `Step not found` at runtime rather than at import time.
+
+## 7. Skills own orchestration — agents are pure building blocks
+
+Skills (slash commands) chain agents together. Agents never invoke other agents or skills.
+
+```
+/e2e-automate skill
+    → invokes playwright-test-planner agent
+    → invokes bdd-generator agent
+    → invokes code-generator agent
+```
+
+If you add a skill that needs to invoke multiple agents, the skill file does the chaining. Never add agent-to-agent calls inside agent `.md` files.
+
+**Why:** Agent invocation from agent context creates nested forks whose output is hidden in the terminal. The skill layer is where orchestration visibility lives.
+
+## 8. Seed file = validated selectors from browser exploration
+
+The code generator reads `seed.spec.js` to extract real selectors that were validated by actually clicking elements in the running app. It must not invent selectors.
+
+**Why:** Invented selectors (`[data-testid="submit-button"]`) fail if the actual attribute is `[data-cy="submit"]` or `[aria-label="Submit"]`. Exploration produces the ground truth.
+
+## 9. Output paths are deterministic
+
+All generated file paths derive from plan fields alone — no directory scanning:
+
+```
+Feature: e2e-tests/features/playwright-bdd/{Category}/@{Module}/{FileName}.feature
+Steps:   e2e-tests/features/playwright-bdd/{Category}/@{Module}/steps.js
+Plan:    e2e-tests/plans/{Module}-{FileName}.md
+Seed:    e2e-tests/playwright/generated/seed.spec.js
+```
+
+**Why:** Directory scanning (via `ls` or `find`) in an agent causes 2+ minute hangs on large projects. The deterministic formula eliminates the need entirely.
+
+## 10. Plan file lists shared steps — agents don't scan `shared/`
+
+The plan file (written in Phase 3) includes a "Shared steps to reuse" section. The bdd-generator reads this section, not the full `shared/` directory.
+
+**Why:** Scanning all files in `shared/` is the same kind of directory scanning that causes Phase 7 hangs. The plan is the authority.
+
+<DocsPrevNext />

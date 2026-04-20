@@ -1,0 +1,120 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Test Data Persistence
+
+Specwright uses a **three-layer data system** to share test data across scenarios, phases, and parallel workers.
+
+## Why three layers?
+
+Playwright runs scenarios in parallel across multiple workers. Workers cannot share in-memory state — a variable set in Worker A is invisible to Worker B. Specwright solves this with layers that match the scope of the data.
+
+## The three layers
+
+### Layer 1 — `page.testData` (scenario scope)
+
+Values that only matter within a single scenario. Created with `<gen_test_data>` in a data table, accessed with `<from_test_data>` later in the same scenario.
+
+```gherkin
+Given I fill in the form with:
+  | Field | Value          | Type      |
+  | Name  | <gen_test_data>| FILL      |
+  | Email | <gen_test_data>| FILL      |
+Then the success card shows:
+  | Field | Value          | Type           |
+  | Name  | <from_test_data>| INPUT_VALUE   |
+  | Email | <from_test_data>| INPUT_VALUE   |
+```
+
+`page.testData` is populated by `processDataTable()` and read by `validateExpectations()`.
+
+### Layer 2 — `featureDataCache` (feature scope, in-memory)
+
+Values shared within a single `.feature` file across multiple scenarios. Stored in memory — fast, but lost when the worker finishes.
+
+Use this when multiple scenarios in the same feature need the same data but the data does not need to survive across worker boundaries.
+
+### Layer 3 — `test-data/{scope}.json` (cross-phase, file-backed)
+
+Values written to disk so they can be read by a different phase, a different worker, or a later test run. Used for **cross-feature data** in Workflow tests.
+
+```gherkin
+# Phase @0-CreateUser writes (step generated per-module in steps.js):
+Given I fill the booking form and save all values as predata under scope "booking"
+
+# Phase @1-FilterAndSearch reads (shared step from workflow.steps.js):
+Given I load predata from "booking"
+```
+
+The file is written to `e2e-tests/test-data/booking.json`. Any worker running Phase 1 can read it.
+
+> The **save** step is generated inside the module's own `steps.js` — it is not a shared step. The **load** step (`Given I load predata from {string}`) is the only workflow shared step, defined in `shared/workflow.steps.js`.
+
+## `<gen_test_data>` and `<from_test_data>`
+
+These placeholders appear in the **Value** column of 3-column data tables.
+
+| Placeholder | Meaning |
+|---|---|
+| `<gen_test_data>` | Generate a faker value based on the field name, cache it |
+| `<from_test_data>` | Read the cached value generated earlier in this scenario |
+
+The field name drives what faker generates:
+
+| Field name contains | Generated value |
+|---|---|
+| `email` | `faker.internet.email()` |
+| `name` | `faker.person.fullName()` |
+| `phone` | `faker.phone.number()` |
+| `company` | `faker.company.name()` |
+| `date` | ISO date string (future) |
+| `amount`, `price` | Random integer 1–1000 |
+| _(default)_ | `word_123456` (word + timestamp) |
+
+## Cross-feature data (Workflows)
+
+Workflows use `@cross-feature-data` to mark preconditions that produce data for later phases.
+
+```gherkin
+@Workflows @UserWorkflow @0-CreateUser @cross-feature-data
+Scenario: Create user and save for downstream phases
+  Given I navigate to the "Add User" page
+  And I fill in the form with:
+    | Field | Value           | Type |
+    | Name  | <gen_test_data> | FILL |
+  And I save all form values as predata under scope "userworkflow"
+```
+
+The generated step in the precondition's `steps.js` writes `e2e-tests/test-data/userworkflow.json`.
+
+Later phases load it via the shared step:
+
+```gherkin
+@Workflows @UserWorkflow @1-VerifyInList
+Scenario: Verify created user appears in list
+  Given I load predata from "userworkflow"
+  Then the user list shows the name from predata
+```
+
+The `I load predata from "{scopeName}"` step polls the JSON file with a 60-second timeout — this handles timing when the precondition worker is still running.
+
+## Polling and timing
+
+The file-backed layer uses polling because precondition phases may still be running when consumer phases start. The default timeout is **60 seconds** with **1-second intervals**.
+
+If the file does not appear within 60 seconds, the step logs a warning and continues with empty predata. Downstream assertions on missing predata values will then fail — the error will name the missing field rather than the timeout itself.
+
+## Data table format
+
+All 3-column data tables share the same structure:
+
+```
+| Field Name | Value | Type |
+```
+
+- **Field Name** — maps to the `data-testid` of the element (or a label)
+- **Value** — literal value, `<gen_test_data>`, or `<from_test_data>`
+- **Type** — `FILL`, `DROPDOWN`, `CHECKBOX_TOGGLE`, `TOGGLE`, `CLICK`, `CUSTOM` (for input); `INPUT_VALUE`, `TEXT_VISIBLE` (for validation)
+
+See [Field Types](/docs/configuration/field-types) for the complete type reference.
+
+<DocsPrevNext />

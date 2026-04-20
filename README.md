@@ -9,18 +9,18 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@specwright/plugin"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/plugin?label=plugin&color=blue"></a>
-  <a href="https://www.npmjs.com/package/@specwright/mcp-server"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/mcp-server?label=mcp-server&color=blue"></a>
+  <a href="https://www.npmjs.com/package/@specwright/plugin"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/plugin?label=%40specwright%2Fplugin&color=blue"></a>
+  <a href="https://www.npmjs.com/package/@specwright/mcp"><img alt="npm" src="https://img.shields.io/npm/v/@specwright/mcp?label=%40specwright%2Fmcp&color=blue"></a>
   <a href="https://github.com/SanthoshDhandapani/specwright/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/SanthoshDhandapani/specwright"></a>
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#three-ways-to-use-specwright">Usage</a> &bull;
+  <a href="#three-interfaces">Interfaces</a> &bull;
   <a href="#the-10-phase-pipeline">Pipeline</a> &bull;
   <a href="#showbuff-demo">Demo</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="#contributing">Contributing</a>
+  <a href="https://specwright.dev/docs">Documentation</a>
 </p>
 
 ---
@@ -31,71 +31,88 @@ Specwright turns **"here's my app URL"** into **"here are your E2E tests"** usin
 
 It explores your web app in a real browser, discovers UI elements and selectors, then generates production-grade [Playwright BDD](https://github.com/nicolo-ribaudo/playwright-bdd) tests (Gherkin `.feature` files + step definitions) — with self-healing when tests fail.
 
-**100% local.** Specwright runs entirely on your machine using your own Claude session. No data leaves your environment — no remote servers, no telemetry, no code capture. Your source code, credentials, and test data stay on your local filesystem.
+**100% local.** Specwright runs entirely on your machine using your own Claude session. No data leaves your environment — no remote servers, no telemetry, no code capture.
 
 <p align="center">
-  <img src="assets/images/read_instructions.png" alt="Specwright Desktop — Pipeline Running" width="100%">
+  <img src="assets/images/read_instructions.png" alt="Specwright Desktop — reading instructions and building the pipeline plan" width="100%">
   <br>
-  <em>Specwright Desktop: AI agent exploring your app, discovering selectors, and generating tests</em>
+  <em>Specwright Desktop: reading your instructions and building the test pipeline plan</em>
 </p>
 
 ---
 
 ## Quick Start
 
-### Install the plugin (30 seconds)
+### 1. Install the plugin
 
 ```bash
 npx @specwright/plugin init
 pnpm install && npx playwright install
 ```
 
-This installs the full E2E framework: 8 AI agents, 8 skills, shared step definitions, Playwright BDD config, and auto-configures the MCP server.
+This scaffolds the full E2E framework into your project: AI agents, skills, shared step definitions, Playwright BDD config, and `.mcp.json`.
 
-### Generate your first tests
+### 2. Configure your test
 
-```bash
-# With Claude Code CLI:
-claude
-> /e2e-automate
+Edit `e2e-tests/instructions.js`:
+
+```js
+export default [
+  {
+    moduleName: "@LoginPage",
+    category: "@Modules",
+    fileName: "login",
+    pageURL: "http://localhost:3000/login",
+    explore: true,
+    instructions: [
+      "Verify login form shows email and password fields",
+      "Valid credentials redirect to /dashboard",
+      "Invalid password shows error message",
+    ],
+  },
+];
 ```
 
-Or use the Desktop App for a visual interface.
+### 3. Run the pipeline
+
+```bash
+claude       # open Claude Code
+/e2e-automate
+```
+
+Full docs: **[specwright.dev/docs](https://specwright.dev/docs)**
 
 ---
 
-## Three Ways to Use Specwright
+## Three Interfaces
 
 ### 1. Plugin + Claude Code CLI
 
 Best for developers who live in the terminal.
 
 ```bash
-npx @specwright/plugin init              # Install into your project
-claude                                    # Open Claude Code
-> /e2e-automate                          # Full 10-phase pipeline
-> /e2e-plan http://localhost:5173/home   # Explore a single page
-> /e2e-generate plan.md                  # Generate BDD from plan
-> /e2e-heal                              # Auto-fix failing tests
-> /e2e-desktop-automate                  # MCP-powered exploration
+npx @specwright/plugin init      # Install into your project
+claude                            # Open Claude Code in your project
+> /e2e-automate                  # Full 10-phase pipeline
+> /e2e-plan http://localhost:3000/login   # Explore a single page
+> /e2e-generate plan.md          # Generate BDD from an existing plan
+> /e2e-run                       # Run tests
+> /e2e-heal                      # Auto-fix failing tests
 ```
 
-**Published on npm:**
-```bash
-npm install -g @specwright/plugin    # or use npx
-```
+### 2. Specwright Desktop App (Electron)
 
-### 2. Desktop App (Electron)
+Best for QA engineers and teams who prefer a visual interface.
 
-Best for QA engineers and teams who prefer visual tools.
+- **Left Panel** — Project picker, app URL, environment vars, auth config
+- **Center Panel** — Visual instructions editor + streaming agent output
+- **Right Panel** — Quick-start templates + collapsible terminal
 
-- **Left Panel** — Project picker, App URL, environment, credentials, test execution settings
-- **Center Panel** — Visual instructions editor + streaming agent chat output
-- **Right Panel** — Quick-start templates + collapsible terminal with color-coded logs
-- **Auto-Approve All** — Skip permission prompts for unattended runs
-- **Interrupt & Abort** — Pause or stop Claude mid-execution
-
-The desktop app uses code-driven browser exploration — Specwright's `PlaywrightMcpClient` navigates and captures page snapshots automatically when Phase 4 starts, then injects the real accessibility data into Claude's conversation.
+<p align="center">
+  <img src="assets/images/user_review&approval.png" alt="Specwright Desktop — Phase 6 user review and approval" width="100%">
+  <br>
+  <em>Phase 6: Review the generated test plan before BDD generation begins</em>
+</p>
 
 ```bash
 git clone https://github.com/SanthoshDhandapani/specwright.git
@@ -103,135 +120,75 @@ cd specwright && pnpm install
 cd apps/desktop && npx electron-vite dev
 ```
 
-### 3. MCP Server + Claude Desktop
+### 3. Claude Desktop (MCP)
 
-Best for Claude Desktop users who want MCP tool access.
+Best for Claude Desktop users who want to trigger the pipeline via natural language.
 
-**Install:** `npx @specwright/mcp-server` (published on npm as `@specwright/mcp-server`)
-
-**Add to Claude Desktop** (`claude_desktop_config.json`):
+Add `@specwright/mcp` to your Claude Desktop config (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "e2e-automation": {
+    "specwright": {
       "command": "npx",
-      "args": ["@specwright/mcp-server"],
-      "env": { "PROJECT_ROOT": "/path/to/your/project" }
-    },
-    "microsoft-playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "args": ["-y", "@specwright/mcp"],
+      "env": { "PROJECT_PATH": "/absolute/path/to/your-project" }
     }
   }
 }
 ```
 
-**Or with Claude Code** — the plugin auto-creates `.mcp.json`:
+Then open your project in Claude Desktop and type:
 
-```json
-{
-  "mcpServers": {
-    "e2e-automation": {
-      "command": "npx",
-      "args": ["@specwright/mcp-server"]
-    }
-  }
-}
 ```
-
-**5 MCP Tools available:**
-
-| Tool | Purpose |
-|------|---------|
-| `e2e_configure` | Init setup, read/add entries in `instructions.js` |
-| `e2e_explore` | Get exploration plan with auth status, known selectors |
-| `e2e_plan` | Generate `seed.spec.js` + test plan markdown |
-| `e2e_status` | Check pipeline state — config, seed, plans, test results |
-| `e2e_automate` | Read `instructions.js` and return full pipeline plan |
-
-Use with the `/e2e-desktop-automate` skill for a guided 5-phase workflow combining the MCP server with Playwright browser exploration.
+Generate E2E tests for the login page at http://localhost:3000/login using Specwright
+```
 
 ---
 
 ## The 10-Phase Pipeline
 
 ```
-Phase 1:  Read Config           instructions.js or desktop UI
-Phase 2:  Detect & Route        Jira / File / Text input
-Phase 3:  Process Input         Convert to parsed test plan
-Phase 4:  Explore App           Live browser exploration + selector discovery
-Phase 5:  Validate Seeds        Run discovered selectors (optional)
-Phase 6:  User Approval         Review plan before generation
-Phase 7:  Generate BDD          Create .feature + steps.js files
-Phase 8:  Execute & Heal        Run tests + auto-fix failures (optional)
-Phase 9:  Cleanup               Aggregate results
-Phase 10: Quality Review        Adaptive scoring + summary
+Phase 1:  Initialization      Read instructions.js → build pipeline plan
+Phase 2:  Input Detection     Jira ticket / local file / plain text
+Phase 3:  Input Processing    Convert to structured test scenarios
+Phase 4:  Browser Exploration Live browser exploration + selector discovery
+Phase 5:  Seed Validation     Run discovered selectors to confirm they work
+Phase 6:  User Approval       Review the plan before any files are generated
+Phase 7:  BDD Generation      Write .feature files + steps.js
+Phase 8:  Execution & Healing Run tests + auto-fix failures (up to 3 iterations)
+Phase 9:  Cleanup             Aggregate and archive results
+Phase 10: Final Review        Quality score + phase-by-phase summary
 ```
 
-<p align="center">
-  <img src="assets/images/user_review&approval.png" alt="Specwright — Phase 6 User Approval" width="100%">
-  <br>
-  <em>Phase 6: Review the test plan — 12 scenarios discovered, approve before BDD generation</em>
-</p>
-
-### What Gets Generated
+### What gets generated
 
 ```
 e2e-tests/features/playwright-bdd/
 ├── @Modules/
-│   ├── @HomePage/           homepage.feature + steps.js
-│   ├── @ShowDetail/         show_detail.feature + steps.js
-│   └── @Authentication/     authentication.feature + steps.js
+│   ├── @LoginPage/          login.feature + steps.js
+│   └── @HomePage/           homepage.feature + steps.js
 └── @Workflows/
-    ├── @UserJourney/        Precondition -> Favorites -> Watchlist -> Verify
-    └── @ListWorkflow/       Create lists -> Add shows -> Rename -> Delete
+    └── @UserJourney/
+        ├── @0-Precondition/ steps.js
+        └── @1-Verify/       steps.js
 ```
-
-### Key Framework Features
-
-- **Playwright BDD** — Gherkin `.feature` files compiled to Playwright specs
-- **8 AI Agents** — Explore apps, generate tests, fix failures, process Jira tickets
-- **8 Claude Code Skills** — `/e2e-automate`, `/e2e-desktop-automate`, `/e2e-plan`, `/e2e-generate`, `/e2e-heal`, `/e2e-validate`, `/e2e-process`, `/e2e-run`
-- **5 MCP Tools** — Configure, explore, plan, status, automate via `@specwright/mcp-server`
-- **3-Layer Data Persistence** — Scenario > in-memory cache > file-backed JSON
-- **Precondition/Consumer Pattern** — Cross-module workflows with shared test data
-- **processDataTable** — Declarative form filling with faker data generation
-- **Path-Based Tag Scoping** — Directory structure = step visibility rules
-- **Adaptive Quality Scoring** — Skipped phases don't penalize the score
 
 ---
 
 ## ShowBuff Demo
 
-**ShowBuff** (`apps/examples/show-buff/`) is a TV show discovery app built as the primary demo target.
+**ShowBuff** (`apps/examples/show-buff/`) is the primary demo app — a TV show discovery app with OAuth, custom Watchlists, and Favorites.
 
-**Try it live:** [specwright-show-buff.vercel.app](https://specwright-show-buff.vercel.app/)
-
-- Browse top TV shows by year (TVMaze API — free, no key needed)
-- Show detail pages with cast, images, synopsis
-- Google Sign-In (OAuth, mock fallback without client ID)
-- Custom Watchlists — full CRUD (Create, Rename, Delete lists, Add/Remove shows)
-- Favorites and Watchlist (protected routes)
-- All interactive elements have `data-testid` for reliable E2E testing
-
-### Run locally:
+**Live app:** [specwright-show-buff.vercel.app](https://specwright-show-buff.vercel.app/)
 
 ```bash
+# Run locally
 cd apps/examples/show-buff
 pnpm install && pnpm dev
 # Open http://localhost:5173
-```
 
-### Demo the pipeline:
-
-```bash
-# Option A: Desktop app
-cd apps/desktop && npx electron-vite dev
-# Select show-buff folder -> Insert "Quick Explore" template -> Save & Execute
-
-# Option B: Claude Code CLI
-cd apps/examples/show-buff
+# Run the pipeline against it
 claude
 > /e2e-automate
 ```
@@ -243,68 +200,51 @@ claude
 ```
 specwright/
 ├── apps/
-│   ├── desktop/                 Electron desktop app
-│   │   ├── src/main/            Main process (Agent SDK, IPC, PlaywrightMcpClient)
-│   │   ├── src/preload/         Context bridge
-│   │   └── src/renderer/        React UI (Config, Chat, Templates, Terminal)
-│   └── examples/
-│       └── show-buff/           ShowBuff demo app (TVMaze + Google OAuth)
+│   ├── desktop/          Electron desktop app (main / preload / renderer)
+│   ├── examples/
+│   │   └── show-buff/    ShowBuff demo app (TVMaze + OAuth)
+│   └── web/              Documentation site (Next.js)
 │
-├── packages/
-│   ├── agent-runner/            Claude Agent SDK wrapper + PlaywrightMcpClient
-│   ├── plugin/                  E2E framework plugin (npm: @specwright/plugin)
-│   └── mcp-server/              MCP server (npm: @specwright/mcp-server)
-│
-├── IMPLEMENTATION-PLAN.md       Detailed roadmap
-├── LICENSE                      MIT
-└── README.md
+└── packages/
+    ├── plugin/            @specwright/plugin — E2E framework scaffolded into your project
+    └── mcp/               @specwright/mcp — MCP server for Claude Desktop (optional)
 ```
 
-**Tech Stack:** Electron 33, React 18, Zustand, Tailwind CSS, `@anthropic-ai/claude-agent-sdk`, `@modelcontextprotocol/sdk`, `playwright-bdd`, `@playwright/mcp`
+**Tech stack:** Electron 33, React 18, Zustand, Tailwind CSS, `@anthropic-ai/claude-agent-sdk`, `playwright-bdd`, `@playwright/mcp`
 
 ---
 
 ## Configuration
 
-### Authentication (optional)
+### `e2e-tests/instructions.js`
 
-The plugin includes an auth module with login/logout tests. Skip with `--skip-auth`:
+The primary config file. Each entry defines one module or workflow:
+
+```js
+export default [
+  {
+    moduleName: "@LoginPage",    // becomes directory + tag
+    category: "@Modules",        // @Modules or @Workflows
+    fileName: "login",           // output file name
+    pageURL: "http://localhost:3000/login",
+    explore: true,               // true = browser exploration, false = scan src/
+    instructions: [/* ... */],
+    inputs: {},                  // optional: { jira: { url: "..." } } or { filePath: "..." }
+    runGeneratedCases: false,    // run tests after generation?
+  },
+];
+```
+
+Full field reference: [specwright.dev/docs/configuration/instructions](https://specwright.dev/docs/configuration/instructions)
+
+### `e2e-tests/.env.testing`
 
 ```bash
-npx @specwright/plugin init --skip-auth
-```
-
-If included, update `e2e-tests/data/authenticationData.js` to match your login form:
-
-```javascript
-locators: {
-  emailInput: { testId: 'your-email-input' },
-  emailSubmitButton: { testId: 'your-submit-button' },
-  passwordInput: { testId: 'your-password-input' },
-  loginSubmitButton: { testId: 'your-login-button' },
-}
-```
-
-### Routes
-
-Update `e2e-tests/data/testConfig.js`:
-
-```javascript
-routes: {
-  Home: '/',
-  Dashboard: '/dashboard',
-  SignIn: '/signin',
-}
-```
-
-### Environment
-
-```bash
-# e2e-tests/.env.testing
-BASE_URL=http://localhost:5173
-TEST_USER_EMAIL=your-email@example.com
+BASE_URL=http://localhost:3000
+AUTH_STRATEGY=email-password       # or: oauth, none
+TEST_USER_EMAIL=your@email.com
 TEST_USER_PASSWORD=your-password
-HEADLESS=false
+HEADLESS=true                      # set false to watch the browser
 ```
 
 ---
@@ -313,31 +253,39 @@ HEADLESS=false
 
 - **Node.js** 20+
 - **pnpm** 9+
-- **Claude Code CLI** — [Get it here](https://claude.ai/code)
-- **Playwright browsers** — `npx playwright install`
+- **Claude Code CLI** — [claude.ai/code](https://claude.ai/code)
+- **Playwright browsers** — `npx playwright install chromium`
+
+---
+
+## Documentation
+
+Full documentation at **[specwright.dev/docs](https://specwright.dev/docs)**
+
+- [Getting Started](https://specwright.dev/docs/getting-started/introduction)
+- [10-Phase Pipeline](https://specwright.dev/docs/core-concepts/pipeline)
+- [instructions.js reference](https://specwright.dev/docs/configuration/instructions)
+- [Auth Strategies](https://specwright.dev/docs/configuration/auth-strategies)
+- [Troubleshooting](https://specwright.dev/docs/troubleshooting/common-errors)
 
 ---
 
 ## Contributing
 
-Contributions are welcome! See the [Implementation Plan](IMPLEMENTATION-PLAN.md) for the current roadmap.
-
-### Development Setup
+Contributions are welcome.
 
 ```bash
 git clone https://github.com/SanthoshDhandapani/specwright.git
-cd specwright
-pnpm install
+cd specwright && pnpm install
 
 # Run the desktop app
 cd apps/desktop && npx electron-vite dev
 
-# Run ShowBuff demo
+# Run ShowBuff
 cd apps/examples/show-buff && pnpm dev
 
-# Build packages
-cd packages/agent-runner && pnpm build
-cd packages/mcp-server   # no build step (plain JS)
+# Run the docs site
+cd apps/web && pnpm dev
 ```
 
 ---
@@ -349,5 +297,5 @@ MIT
 ---
 
 <p align="center">
-  Made with ❤️ on <a href="https://playwright.dev">Playwright</a>
+  Built on <a href="https://playwright.dev">Playwright</a> · Powered by <a href="https://claude.ai/code">Claude Code</a>
 </p>

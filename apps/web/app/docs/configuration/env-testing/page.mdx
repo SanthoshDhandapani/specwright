@@ -1,0 +1,147 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# .env.testing Reference
+
+`e2e-tests/.env.testing` is the single source of truth for Specwright's runtime configuration. It is managed by the plugin, **gitignored by default**, and read by both the Playwright config and the pipeline agent at startup.
+
+## Template structure
+
+```bash
+# ── Core Application ─────────────────────────────────────────────────────────
+BASE_URL=http://localhost:5173
+BASE_ENV=qat
+# TEST_ENV=staging               # optional override
+NODE_ENV=test
+VITE_BUILD_ENVIRONMENT=testing
+# PIPELINE_TICKET_ID=ENG-1234    # required when org hooks enforce ticket IDs
+
+# ── Authentication ────────────────────────────────────────────────────────────
+AUTH_STRATEGY=email-password     # email-password | oauth | none
+
+# Email + password (AUTH_STRATEGY=email-password)
+TEST_USER_EMAIL=you@example.com
+TEST_USER_PASSWORD=yourpassword
+# TEST_2FA_CODE=123456           # remove this line if no 2FA
+
+# OAuth / localStorage injection (AUTH_STRATEGY=oauth)
+# TEST_USER_EMAIL=you@example.com
+# OAUTH_STORAGE_KEY=auth-token
+# TEST_USER_NAME=Test User
+# TEST_USER_PICTURE=https://example.com/avatar.png
+# OAUTH_SIGNIN_PATH=/auth/signin
+# OAUTH_BUTTON_TEST_ID=google-signin-btn
+# OAUTH_POST_LOGIN_URL=/dashboard
+
+# ── Browser ───────────────────────────────────────────────────────────────────
+HEADLESS=true
+BROWSER=chromium
+CHROME_ARGS=--disable-dev-shm-usage,--no-sandbox
+
+# ── Timing ────────────────────────────────────────────────────────────────────
+TEST_TIMEOUT=30000
+
+# ── Reporting & Artefacts ─────────────────────────────────────────────────────
+ENABLE_SCREENSHOTS=true
+ENABLE_VIDEO_RECORDING=false
+RETAIN_VIDEO_ON_SUCCESS=false
+ENABLE_TRACING=false
+CUCUMBER_REPORT_PATH=e2e-tests/reports/cucumber-report.json
+CODEGEN_OUTPUT_PATH=e2e-tests/playwright/generated
+```
+
+---
+
+## Core Application
+
+| Field | Default | Description |
+|---|---|---|
+| `BASE_URL` | `http://localhost:5173` | Application base URL. Used as the starting point for auth flows and relative navigation. |
+| `BASE_ENV` | `qat` | Environment label shown in reports (e.g. `qat`, `staging`, `prod`). |
+| `TEST_ENV` | — | Optional override for the environment label. When set, takes precedence over `BASE_ENV` in report output. |
+| `NODE_ENV` | `test` | Node environment. Affects framework-level behaviour (e.g. assertion verbosity). |
+| `VITE_BUILD_ENVIRONMENT` | `testing` | Injected into Vite apps via `import.meta.env`. Set to match your app's expected build environment string. |
+| `PIPELINE_TICKET_ID` | — | Jira or issue ticket ID (e.g. `ENG-1234`) prepended to pipeline run names. Required when org-level hooks enforce ticket IDs on all pipeline runs. |
+
+---
+
+## Authentication
+
+### `AUTH_STRATEGY`
+
+Controls which auth mechanism Specwright uses during the `setup` project to create `storageState`:
+
+| Value | Behaviour |
+|---|---|
+| `email-password` | Fills email + password form, submits, waits for redirect |
+| `oauth` | Injects auth token directly into localStorage — no browser OAuth popup |
+| `none` | Skips auth setup entirely; tests run without authentication |
+
+---
+
+### Email-password fields
+
+Used when `AUTH_STRATEGY=email-password`.
+
+| Field | Description |
+|---|---|
+| `TEST_USER_EMAIL` | Email address for the test account |
+| `TEST_USER_PASSWORD` | Password for the test account |
+| `TEST_2FA_CODE` | Static TOTP code for 2FA-protected accounts. **Remove this line entirely** if the account has no 2FA — leaving it blank causes the auth step to hang waiting for a code prompt. |
+
+---
+
+### OAuth fields
+
+Used when `AUTH_STRATEGY=oauth`. Specwright bypasses the OAuth popup entirely by injecting a token object directly into localStorage.
+
+| Field | Default | Description |
+|---|---|---|
+| `TEST_USER_EMAIL` | — | Email to store in the injected user object |
+| `OAUTH_STORAGE_KEY` | — | The localStorage key your app reads to check auth state (e.g. `auth-token`, `user`, `session`). When set, Specwright injects the token directly (fastest path). If not set, falls back to click-based OAuth via `OAUTH_BUTTON_TEST_ID`. |
+| `TEST_USER_NAME` | — | Display name stored in the injected user object |
+| `TEST_USER_PICTURE` | — | Avatar URL stored in the injected user object |
+| `OAUTH_SIGNIN_PATH` | — | Path the browser navigates to before injection (e.g. `/auth/signin`) |
+| `OAUTH_BUTTON_TEST_ID` | — | `data-testid` of the OAuth button (used in email-password fallback flows only) |
+| `OAUTH_POST_LOGIN_URL` | — | URL Specwright navigates to after injection to confirm auth is accepted (e.g. `/dashboard`) |
+
+> **How to find `OAUTH_STORAGE_KEY`:** Open your app in a browser, log in normally, then open DevTools → Application → Local Storage. Look for a key containing a JWT or user object. Common names: `auth-token`, `user`, `session`, `supabase.auth.token`. When set, this is the fastest auth path — no browser interaction needed. If your app has no localStorage token, omit this key and use `OAUTH_BUTTON_TEST_ID` instead.
+
+---
+
+## Browser Configuration
+
+| Field | Default | Description |
+|---|---|---|
+| `HEADLESS` | `true` | Run browser without a visible window. Set to `false` to watch tests execute in real time. |
+| `BROWSER` | `chromium` | Browser engine. Accepts `chromium`, `firefox`, or `webkit`. |
+| `CHROME_ARGS` | `--disable-dev-shm-usage,--no-sandbox` | Comma-separated Chrome launch flags. The defaults are **required for Linux CI environments** (Docker / GitHub Actions). Safe to leave unchanged on macOS. |
+
+---
+
+## Timing
+
+| Field | Default | Description |
+|---|---|---|
+| `TEST_TIMEOUT` | `30000` | Per-step timeout in milliseconds. Increase to `60000` or higher for slow apps, long form submissions, or multi-phase workflows with heavy data setup. |
+
+---
+
+## Reporting & Artefacts
+
+| Field | Default | Description |
+|---|---|---|
+| `ENABLE_SCREENSHOTS` | `true` | Capture a screenshot on every step failure. |
+| `ENABLE_VIDEO_RECORDING` | `false` | Record a video of each test run. |
+| `RETAIN_VIDEO_ON_SUCCESS` | `false` | Keep videos for passing tests. Only relevant when `ENABLE_VIDEO_RECORDING=true`. |
+| `ENABLE_TRACING` | `false` | Capture Playwright traces (network, DOM snapshots, action timeline). Viewable at [trace.playwright.dev](https://trace.playwright.dev). |
+| `CUCUMBER_REPORT_PATH` | `e2e-tests/reports/cucumber-report.json` | Output path for the Cucumber JSON report used by the HTML reporter. |
+| `CODEGEN_OUTPUT_PATH` | `e2e-tests/playwright/generated` | Directory where the pipeline writes intermediate seed files and generated specs before they are moved to their final paths. |
+
+---
+
+> **Notes:**
+> - Never commit `.env.testing` to source control. It contains credentials. The plugin's `.gitignore` excludes it automatically.
+> - OAuth fields are injected as a structured object into localStorage — the shape must exactly match what your app reads. If your app expects `{ email, name, picture }` under `user`, the injected object uses `TEST_USER_EMAIL`, `TEST_USER_NAME`, and `TEST_USER_PICTURE` for those fields.
+> - `PIPELINE_TICKET_ID` is read by the pipeline agent, not by Playwright directly. It does not affect test execution — only run naming and org hook validation.
+
+<DocsPrevNext />

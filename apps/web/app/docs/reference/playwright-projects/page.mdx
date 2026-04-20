@@ -1,0 +1,76 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Playwright Projects Reference
+
+`playwright.config.ts` defines 8 isolated execution lanes. Each has its own tag filter, worker count, auth state, and dependency chain. Understanding which project handles which test prevents the most common execution errors — particularly the `bddTestData not found` failure in workflows and the `$bddContext` leak caused by using the wrong project for multi-phase suites.
+
+## Projects
+
+| Project | Tag filter | Workers | `storageState` | Depends on |
+|---|---|---|---|---|
+| `setup` | `auth.setup.js` | 1 | — | — |
+| `auth-tests` | `@Authentication` | default | none (clean browser) | — |
+| `serial-execution` | `@serial-execution` | 1 | `user.json` | `setup` |
+| `precondition` | `@precondition` | default | `user.json` | `setup` |
+| `workflow-consumers` | `@workflow-consumer` | default (parallel) | `user.json` | `precondition` |
+| `run-workflow` | `@Workflows/**` | 1 | `user.json` | `setup` |
+| `chromium` | `generated/seed.spec.js` | default | none | — |
+| `main-e2e` | everything else | default (parallel) | `user.json` | `setup` |
+
+---
+
+## Execution Order During `pnpm test:bdd`
+
+```
+setup ──────────────────────────────────────────────┐
+                                                    ↓
+serial-execution   (@serial-execution modules)  ←──┘ after setup
+precondition       (workflow Phase 0)           ←──┘ after setup
+                                                    ↓
+workflow-consumers (workflow Phase 1+)          ←── after precondition
+main-e2e           (regular modules)            ←── after setup
+```
+
+The `chromium` and `run-workflow` projects are **never triggered by `pnpm test:bdd`**. They must be invoked explicitly with `--project chromium` or `--project run-workflow`. The `execution-manager` agent invokes `chromium` in Phase 5 to validate seed selectors.
+
+---
+
+## Tag Routing Rules
+
+These routing rules are enforced by Playwright's `grep`/`grepInvert` config per project. Specifying the wrong project is silent — Playwright will simply run 0 tests.
+
+| Tag | Correct project(s) |
+|---|---|
+| `@serial-execution` | `serial-execution` (NOT `main-e2e`) |
+| `@precondition` | `precondition` (NOT `main-e2e`) |
+| `@workflow-consumer` | `workflow-consumers` (NOT `main-e2e`) |
+| `@Authentication` | `auth-tests` — clean browser, no `storageState` |
+| Everything else | `main-e2e` |
+
+---
+
+## Common Mistake: Workflows with `--project run-workflow`
+
+Running a multi-phase workflow with `--project run-workflow` sets `workers: 1`, which reuses the same OS process for all spec files. The `$bddContext` fixture from the precondition phase leaks into the consumer phase, overwriting the consumer's own context. The result is `bddTestData not found` at runtime.
+
+**Never use `--project run-workflow` for workflows.** Always use the three-project sequence:
+
+```bash
+npx playwright test \
+  --project setup \
+  --project precondition \
+  --project workflow-consumers \
+  --grep @MyWorkflow
+```
+
+The `run-workflow` project exists for legacy compatibility only.
+
+---
+
+## The `chromium` Project
+
+`chromium` has a dedicated `testDir` that points at `seed.spec.js` only — it does not scan the BDD feature tree. There is no `storageState` because seed files inject their own auth directly via `page.evaluate()`.
+
+The `@execution-manager` agent uses `chromium` in Phase 5 to validate the selectors discovered during browser exploration before BDD generation begins. If seed tests fail here, re-run Phase 4 to refresh the selectors rather than editing `seed.spec.js` by hand.
+
+<DocsPrevNext />

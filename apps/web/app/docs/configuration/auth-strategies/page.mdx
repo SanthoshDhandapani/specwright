@@ -36,11 +36,11 @@ TEST_USER_PICTURE=                  # optional, SVG initials auto-generated if b
 After successful authentication, Playwright saves browser storage state (cookies + localStorage) to:
 
 ```
-e2e-tests/playwright/.auth/user.json
+e2e-tests/playwright/auth-storage/.auth/user.json
 ```
 
 This file is loaded by all non-setup test projects so they start authenticated without re-running the login flow.
 
-> `e2e-tests/.env.testing` and `e2e-tests/playwright/.auth/` are both gitignored. Never commit credentials or auth state files.
+> `e2e-tests/.env.testing` and `e2e-tests/playwright/auth-storage/.auth/` are both gitignored. Never commit credentials or auth state files.
 
 <DocsPrevNext />

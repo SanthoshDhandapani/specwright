@@ -1,0 +1,103 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Customization Tiers
+
+Specwright is designed to be extended at multiple levels. Choose the tier that matches your situation.
+
+## Tier 0 — No customization needed
+
+The base plugin (`@specwright/plugin`) works out of the box for most apps. If your app uses:
+
+- Standard HTML inputs, selects, checkboxes
+- Email/password auth or a standard OAuth flow
+- Common component patterns (forms, tables, modals)
+
+You don't need to customize anything. Run `npx @specwright/plugin init` and you're done.
+
+## Tier 1 — Project-level enrichment
+
+Customize within your project directory. No plugin creation needed.
+
+| What to change | Where |
+|---|---|
+| AI knowledge about your app | `.claude/rules/`, agent-memory files |
+| Custom component interaction | `e2e-tests/utils/stepHelpers.js` |
+| Auth-specific data | `e2e-tests/data/authenticationData.js` |
+| Extra shared steps | `e2e-tests/features/playwright-bdd/shared/` |
+| Faker patterns for new fields | `e2e-tests/utils/testDataGenerator.js` |
+
+This is the right tier when:
+- You're the only team using this codebase
+- The customizations are app-specific (not reusable across projects)
+
+See [Knowledge Base](/docs/project-setup/knowledge-base), [Custom Field Types](/docs/project-setup/custom-field-types), and [Custom Shared Steps](/docs/project-setup/custom-shared-steps).
+
+## Tier 2 — Overlay plugin
+
+Package your Tier 1 customizations as a reusable plugin that installs on top of the base plugin.
+
+```
+@specwright/plugin (base)
+     ↑ extends
+your-org/your-e2e-plugin (overlay)
+```
+
+An overlay plugin is a directory with:
+
+- `specwright.plugin.json` — manifest declaring which base files it overrides
+- `install.sh` — copies override files into the target project
+- `overrides/` — the 7 files that replace base plugin files 1:1
+
+The 7 overrideable slots:
+
+| File | Override when |
+|---|---|
+| `e2e-tests/utils/stepHelpers.js` | Custom component interaction types |
+| `e2e-tests/data/authenticationData.js` | Org-specific auth testIds |
+| `e2e-tests/playwright/auth-strategies/email-password.js` | Org-specific localStorage tokens |
+| `.claude/agents/playwright/code-generator.md` | Design system patterns for AI |
+| `.claude/rules/dependencies.md` | Org component library docs for AI |
+| `e2e-tests/features/playwright-bdd/shared/navigation.steps.js` | App-specific navigation quirks |
+| `e2e-tests/features/playwright-bdd/shared/common.steps.js` | Org-specific shared step patterns |
+
+This is the right tier when:
+- Multiple projects in your org use the same component library
+- Your auth strategy has org-specific tokens or flows
+- You want to ship a validated E2E setup to new projects instantly
+
+See [Plugin Creation](/docs/plugin-creation/overview) for how to build an overlay.
+
+## Tier 3 — Base plugin fork
+
+Fork `@specwright/plugin` and publish your own base plugin. Only needed if:
+
+- You need more than 7 override slots
+- You want to change `playwright.config.ts` (not an overrideable slot)
+- You're shipping Specwright to an isolated environment without npm access
+
+This is rare and comes with the cost of tracking upstream changes yourself.
+
+## Choosing the right tier
+
+```
+Single project, app-specific tweaks?
+  → Tier 1 (project-level enrichment)
+
+Multiple projects, shared design system or auth?
+  → Tier 2 (overlay plugin)
+
+Need to change playwright.config.ts or add new Playwright projects?
+  → Tier 3 (fork) — but reconsider; most cases are solved by Tier 2
+```
+
+## What cannot be customized
+
+- The 10-phase pipeline structure — phases always run in order
+- The 3-column data table format
+- The fixtures.js import contract
+- The 8 Playwright project names (changing them breaks the execution-manager)
+- The agent orchestration pattern (skills chain agents; agents don't chain agents)
+
+These are [Architectural Invariants](/docs/architecture/invariants) — they exist because they encode hard-won lessons about what breaks when you change them.
+
+<DocsPrevNext />

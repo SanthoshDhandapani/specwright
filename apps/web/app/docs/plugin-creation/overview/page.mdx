@@ -1,0 +1,75 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Plugin Overview
+
+## What is a plugin?
+
+A Specwright plugin is a directory that overlays specific files on top of `@specwright/plugin`. It follows a simple two-file contract:
+
+- **`specwright.plugin.json`** — manifest that identifies the plugin and lists which files it replaces
+- **`install.sh`** — script that copies override files into the target project
+
+Everything not explicitly overridden is inherited from the base plugin. You replace only what you need.
+
+## When to create one
+
+Create a plugin when:
+
+- **Your org uses a design system** with components not covered by standard `FIELD_TYPES` — MUI, Ant Design, Chakra UI, or an internal design system. The base plugin handles standard HTML inputs; custom component libraries need custom interaction handlers.
+- **Org-specific auth patterns** — 2FA flows, SSO with redirect chains, LDAP, API token injection, or any login sequence that differs from the base `email-password` or `oauth` strategies.
+- **You want to share customizations across multiple projects** without copying files. One install command applies your org's patterns consistently to any new project.
+- **You maintain internal tooling** and want a one-command setup for new projects. Ship the plugin as an npm package and any engineer can run `bash node_modules/my-org-e2e/install.sh .` to get your full E2E setup.
+
+## Base plugin vs overlay
+
+| | `@specwright/plugin` | Overlay plugin |
+|---|---|---|
+| Role | Open-source base | Org- or library-specific additions |
+| Auth | `email-password` + `oauth` | Customizable per overlay |
+| FIELD_TYPES | Standard HTML inputs | Extended for your component library |
+| Distribution | npm (public) | npm (public or private registry) |
+
+The published reference overlay is **`@specwright/plugin-mui`** ([npmjs.com/package/@specwright/plugin-mui](https://www.npmjs.com/package/@specwright/plugin-mui)), which adds MUI Select, Autocomplete, DatePicker, and chip input support.
+
+## The override contract
+
+Only these 7 files can be replaced. Everything else is locked to the base plugin.
+
+| Slot | File | Override when |
+|---|---|---|
+| 1 | `e2e-tests/utils/stepHelpers.js` | Adding `FIELD_TYPES` for your component library |
+| 2 | `e2e-tests/data/authenticationData.js` | Setting real login selectors |
+| 3 | `e2e-tests/playwright/auth-strategies/email-password.js` | Custom post-login token saving |
+| 4 | `.claude/agents/playwright/code-generator.md` | Teaching the code-generator your UI patterns |
+| 5 | `.claude/rules/dependencies.md` | Documenting your component library for agents |
+| 6 | `e2e-tests/features/playwright-bdd/shared/navigation.steps.js` | Navigation quirks (devtools overlays, banners) |
+| 7 | `e2e-tests/features/playwright-bdd/shared/common.steps.js` | Org-specific shared steps |
+
+> **Note:** `playwright.config.ts` is NOT overrideable. The base plugin already ships with all 8 test projects (setup, precondition, smoke, regression, workflow-consumers, etc.) configured correctly.
+
+## Plugin directory structure
+
+```
+my-org-e2e/
+├── specwright.plugin.json   ← manifest
+├── install.sh               ← copies overrides/ into the project
+├── README.md
+└── overrides/               ← 1–7 files, 1:1 path replacements
+    ├── e2e-tests/
+    │   ├── utils/stepHelpers.js
+    │   └── data/authenticationData.js
+    └── .claude/
+        ├── agents/playwright/code-generator.md
+        └── rules/dependencies.md
+```
+
+The `overrides/` tree mirrors the target project's directory structure exactly. `install.sh` copies it over with `cp -r overrides/. $TARGET/`.
+
+## Next steps
+
+- [Plugin Manifest](/docs/plugin-creation/plugin-manifest) — full `specwright.plugin.json` field reference
+- [install.sh](/docs/plugin-creation/install-sh) — standard template and key sections explained
+- [Example: plugin-mui](/docs/plugin-creation/example-plugin-mui) — walkthrough of the reference implementation
+- [Publishing](/docs/plugin-creation/publishing) — publish to npm public or private registry
+
+<DocsPrevNext />

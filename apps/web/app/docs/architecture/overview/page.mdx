@@ -1,0 +1,115 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Architecture Overview
+
+Specwright is a three-layer system: a Playwright BDD runtime at the bottom, an AI agent pipeline in the middle, and a Desktop app (optional) at the top.
+
+## Three layers
+
+```
+Layer 1: Playwright BDD Runtime (@specwright/plugin)
+         playwright-bdd, 8 projects, fixtures, shared steps
+              ↑ AI pipeline generates tests for this layer
+Layer 2: AI Agent Pipeline (Claude Code)
+         10-phase pipeline — 8 agents, 7 skills, agent memory
+              ↑ Desktop app is an optional UI wrapper
+Layer 3: Specwright Desktop (Electron)
+         Visual wrapper — three-panel UI, IPC bridge, streaming
+```
+
+All three layers are present in every project. Layer 3 is optional — the pipeline runs identically from the CLI.
+
+## Layer 1 — Playwright BDD runtime
+
+Installed by `@specwright/plugin` into your project. Contains:
+
+- **`playwright.config.ts`** — 8 Playwright projects (setup, auth-tests, main-e2e, serial-execution, precondition, workflow-consumers, run-workflow, chromium)
+- **`fixtures.js`** — custom test fixtures; the only valid import source for step files
+- **`shared/`** — globally-scoped step definitions (auth, navigation, common, global-hooks)
+- **`utils/stepHelpers.js`** — `processDataTable`, `validateExpectations`, `FIELD_TYPES`
+- **`utils/testDataGenerator.js`** — faker-based value generation for `<gen_test_data>`
+
+This layer runs `pnpm test:bdd` entirely independently of the AI pipeline.
+
+## Layer 2 — AI agent pipeline
+
+The 10-phase pipeline that generates and heals tests. Orchestrated by the `/e2e-automate` skill.
+
+**8 agents** (pure building blocks — never invoke each other):
+
+| Agent | Role |
+|---|---|
+| `playwright-test-planner` | Browser exploration, seed file, test plan |
+| `bdd-generator` | `.feature` files from plan |
+| `code-generator` | `steps.js` files from plan + selectors |
+| `test-validator` | Syntax and import validation |
+| `execution-manager` | Runs Playwright, captures failures |
+| `healer` | Fixes broken selectors from failure output |
+| `review-manager` | Phase 6 plan review UI |
+| `process-manager` | Input processing (Jira, PDF, DOCX) |
+
+**7 skills** (slash commands that chain agents):
+
+| Skill | What it does |
+|---|---|
+| `/e2e-automate` | Full 10-phase pipeline |
+| `/e2e-plan` | Phases 1–5 only (explore + plan) |
+| `/e2e-generate` | Phases 6–7 only (generate from plan) |
+| `/e2e-process` | Phase 2 only (process Jira/PDF input) |
+| `/e2e-heal` | Phase 8 only (run + auto-heal) |
+| `/e2e-validate` | Phase 9 only (validate generated files) |
+| `/e2e-run` | Phase 10 only (run final suite) |
+
+**Agent memory** persists selectors and patterns across sessions in `.claude/agent-memory/`.
+
+## Layer 3 — Specwright Desktop
+
+An Electron app (macOS/Windows) that:
+
+1. **Bootstraps the plugin** — runs `npx @specwright/plugin init` on first open
+2. **Manages env vars** — GUI for `.env.testing` (auth fields, env settings)
+3. **Runs the pipeline** — spawns the Agent SDK and streams tokens via IPC
+4. **Shows phase status** — three-panel UI (Left: config, Center: output, Right: phase tracker)
+5. **Handles Phase 6** — approval/rejection dialog in the Center panel
+
+The Desktop app communicates with the plugin layer via the same files the CLI uses — there is no Desktop-specific protocol.
+
+## Two-tier plugin architecture
+
+```
+@specwright/plugin (base — open source, npm)
+     ↑ extended by
+your-org/your-e2e-plugin (overlay — org-specific, private)
+```
+
+An overlay plugin replaces specific files from the base plugin via `install.sh`. This allows org-specific patterns (custom auth, design system, custom field types) without forking the base plugin.
+
+See [Customization Tiers](/docs/architecture/customization) for when to use each tier.
+
+## Data flow
+
+```
+instructions.js
+    ↓
+Phase 2: process input (Jira/PDF/raw)
+    ↓
+Phase 3: write test plan (.md)
+    ↓
+Phase 4: browser exploration → seed.spec.js
+    ↓
+Phase 5: seed validation (optional)
+    ↓
+Phase 6: user approval
+    ↓
+Phase 7: generate .feature + steps.js
+    ↓
+Phase 8: run tests + auto-heal (optional)
+    ↓
+Phase 9: validate output
+    ↓
+Phase 10: final run + quality score
+```
+
+Each phase writes files that later phases read. The plan file (Phase 3) is the central artifact — it drives Phases 7–10.
+
+<DocsPrevNext />

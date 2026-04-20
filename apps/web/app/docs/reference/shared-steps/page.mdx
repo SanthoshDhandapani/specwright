@@ -1,0 +1,105 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Shared Steps Reference
+
+Steps defined in `shared/` are visible to **all** feature files in the project. Steps defined inside an `@`-prefixed directory (e.g. `@LoginPage/steps.js`) are scoped to feature files under that directory only — they are invisible to all other modules.
+
+Add a step to `shared/` whenever it is used — or could be used — across more than one module. The `@bdd-generator` agent checks the plan's "Shared steps to reuse" section before writing a new step; keeping that section accurate prevents duplicate step definitions from accumulating.
+
+---
+
+## `auth.steps.js`
+
+Login form interactions and authentication assertions. Used by the `@Authentication` module and any feature that needs to exercise the login flow directly (rather than relying on `storageState`).
+
+| Step | Description |
+|---|---|
+| `Given I am logged in` | Asserts auth `storageState` is active — the `setup` project handles actual login before the suite runs |
+| `Given I am on the sign-in page` | Navigates to the configured sign-in URL |
+| `When I enter email {string}` | Types the given email address into the email input |
+| `When I enter valid email` | Types `TEST_USER_EMAIL` from `.env.testing` into the email input |
+| `When I click the email submit button` | Clicks the continue/submit button after entering email |
+| `When I enter password {string}` | Types the given password into the password input |
+| `When I enter valid password` | Types `TEST_USER_PASSWORD` from `.env.testing` into the password input |
+| `When I click the login submit button` | Clicks the final sign-in button |
+| `When I handle 2FA if prompted` | Completes 2FA if the prompt appears; no-ops if absent |
+| `Then I should be redirected to {string}` | Asserts the current URL contains the given path |
+
+---
+
+## `navigation.steps.js`
+
+Page navigation and element visibility checks.
+
+| Step | Description |
+|---|---|
+| `Given I am on the {string} page` | Navigates to the route registered under that name in `testConfig` |
+| `When I navigate to {string}` | Navigates directly to the given URL path |
+| `When I click the link {string}` | Clicks a link by its visible text |
+| `When I click the button {string}` | Clicks a button by its visible text |
+| `Then the URL should contain {string}` | Asserts the current URL contains the given string |
+| `Then I should see the text {string}` | Asserts the given text is visible on the page |
+| `Then the element with test ID {string} should be visible` | Asserts a `data-testid` element is visible |
+| `Then the element with test ID {string} should be disabled` | Asserts a `data-testid` element is disabled |
+| `Then the element with test ID {string} should be enabled` | Asserts a `data-testid` element is enabled |
+
+---
+
+## `common.steps.js`
+
+General-purpose UI assertions used across all modules.
+
+| Step | Description |
+|---|---|
+| `Then I should see the heading {string}` | Asserts a heading with the given text is visible |
+| `Then I should see a tab {string} that is active` | Asserts the named tab has an active/selected state |
+| `When I click the tab {string}` | Clicks a tab by its visible label |
+| `When I click the tab with test ID {string}` | Clicks a tab by its `data-testid` |
+| `Then the tab with test ID {string} should be active` | Asserts the tab element with the given `data-testid` is active |
+| `Given I clear browser storage` | Clears `localStorage` and `sessionStorage` |
+| `Then the page should have title containing {string}` | Asserts `document.title` contains the given string |
+
+---
+
+## `workflow.steps.js`
+
+Cross-phase data loading for workflow tests. Used exclusively in `(workflow-consumer)` phases.
+
+| Step | Description |
+|---|---|
+| `Given I load predata from {string}` | Reads `e2e-tests/test-data/{scope}.json`, polling every 1 second with a **60-second timeout** — handles timing when the precondition worker is still writing |
+
+---
+
+## `global-hooks.js`
+
+Lifecycle hooks that run automatically for every scenario. **Never import this file manually** — it is auto-loaded by the Playwright config glob. Importing it a second time causes duplicate hooks and unpredictable test ordering.
+
+| Hook | Trigger | What it does |
+|---|---|---|
+| `Before` | Before each scenario | Resets `page.testData` to `{}`, derives the `featureKey` from the feature file path, and hydrates the in-memory `featureDataCache` from the file-backed store if not already loaded |
+| `After` | After each scenario | Takes a screenshot on failure when `ENABLE_SCREENSHOTS=true` is set in `.env.testing` |
+
+---
+
+## Adding Custom Shared Steps
+
+Create a new file in `shared/` and use the standard import from `fixtures.js`:
+
+```js
+// e2e-tests/features/playwright-bdd/shared/my-org.steps.js
+import { Given, When, Then } from '../../../playwright/fixtures.js';
+
+When('I dismiss the cookie banner', async ({ page }) => {
+  await page.getByTestId('cookie-dismiss').click();
+});
+```
+
+Then update the "Shared steps to reuse" section in any relevant test plan file so the `@bdd-generator` agent knows to reference it rather than generating a duplicate step.
+
+```md
+## Shared steps to reuse
+- `When I dismiss the cookie banner` — from my-org.steps.js
+```
+
+<DocsPrevNext />

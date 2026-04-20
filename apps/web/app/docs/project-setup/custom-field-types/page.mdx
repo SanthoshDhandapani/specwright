@@ -1,0 +1,135 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Custom Field Types
+
+If your app uses a custom component library (e.g., a design system, React Select, or a bespoke multi-select widget), you can add custom `FIELD_TYPES` to `stepHelpers.js` so the AI code generator knows how to interact with those components.
+
+## Why this is needed
+
+Specwright's code generator reads `stepHelpers.js` to understand what interaction types exist in your project. When it sees `COMBO_BOX` in the FIELD_TYPES constant, it knows to emit `selectDropDownByTestId()` instead of a plain `fill()`. Without this knowledge, it falls back to generic patterns that may not work with custom components.
+
+## Adding a custom field type
+
+### 1. Add the constant to `FIELD_TYPES`
+
+Open `e2e-tests/utils/stepHelpers.js` and add your constant:
+
+```js
+export const FIELD_TYPES = {
+  // Built-in types
+  FILL: "FILL",
+  FILL_AND_ENTER: "FILL_AND_ENTER",
+  DROPDOWN: "DROPDOWN",
+  CLICK: "CLICK",
+  CHECKBOX_TOGGLE: "CHECKBOX_TOGGLE",
+  TOGGLE: "TOGGLE",
+  CUSTOM: "CUSTOM",
+
+  // Validation types
+  INPUT_VALUE: "INPUT_VALUE",
+  DROPDOWN_VALUE: "DROPDOWN_VALUE",
+  TEXT_VISIBLE: "TEXT_VISIBLE",
+
+  // --- Your custom types ---
+  COMBO_BOX: "COMBO_BOX",
+  MULTI_SELECT_TAG: "MULTI_SELECT_TAG",
+  DATE_PICKER: "DATE_PICKER",
+};
+```
+
+### 2. Handle the type in `processDataTable`
+
+Find the `processDataTable` function and add a `case` for your type:
+
+```js
+case FIELD_TYPES.COMBO_BOX:
+  await selectDropDownByTestId(page, testId, value);
+  break;
+
+case FIELD_TYPES.MULTI_SELECT_TAG:
+  await addTagByTestId(page, testId, value);
+  break;
+
+case FIELD_TYPES.DATE_PICKER:
+  await selectDateByTestId(page, testId, value);
+  break;
+```
+
+### 3. Implement the helper function
+
+Add the helper alongside existing helpers like `selectDropDownByTestId`:
+
+```js
+// Example: React Select COMBO_BOX
+export async function selectDropDownByTestId(page, testId, value) {
+  const select = page.getByTestId(testId);
+  await select.click();
+  await page.getByRole('option', { name: value }).click();
+}
+
+// Example: chip-style multi-select
+export async function addTagByTestId(page, testId, value) {
+  const input = page.getByTestId(`${testId}-input`);
+  await input.fill(value);
+  await input.press('Enter');
+}
+```
+
+### 4. Document the pattern for the AI
+
+Add a note to `.claude/agents/playwright/code-generator.md` (or create a project-specific rule file) so the AI generates the correct type when it sees this component:
+
+```markdown
+## Custom Field Types
+
+### COMBO_BOX
+Use when: the element is a React Select component (`.react-select__control` CSS class,
+or `role="combobox"` with a custom dropdown menu).
+Generated step: `| Field Label | value | COMBO_BOX |`
+Implementation: `selectDropDownByTestId(page, testId, value)`
+
+### MULTI_SELECT_TAG
+Use when: multiple values can be selected as chips/tags (data-testid ends in `-tags` or `-multi`).
+Generated step: `| Tag Field | value | MULTI_SELECT_TAG |`
+Implementation: `addTagByTestId(page, testId, value)`
+```
+
+## Example: React Select
+
+`@specwright/plugin-mui` ships with React Select support as a custom field type. See [Example: plugin-mui](/docs/plugin-creation/example-plugin-mui) for the full implementation.
+
+The key pattern:
+
+```js
+// FIELD_TYPES addition
+DROPDOWN_SINGLE_VALUE: "DROPDOWN_SINGLE_VALUE",
+
+// processDataTable case
+case FIELD_TYPES.DROPDOWN_SINGLE_VALUE:
+  await selectDropDownByTestId(page, testId, value);
+  break;
+
+// Validation case
+case FIELD_TYPES.DROPDOWN_VALUE:
+  const selected = await page.getByTestId(testId)
+    .locator('.react-select__single-value')
+    .textContent();
+  expect(selected?.trim()).toBe(value);
+  break;
+```
+
+## Updating `generate-context.md`
+
+After modifying `stepHelpers.js`, regenerate the AI context file so the code generator picks up your new types immediately:
+
+```bash
+node e2e-tests/scripts/extract-generate-context.js
+```
+
+This updates `e2e-tests/.knowledge/generate-context.md` with your new FIELD_TYPES table and faker patterns.
+
+## Custom design system (overlay plugin)
+
+If your org uses a design system (e.g., Elemental, MUI, Ant Design) across multiple projects, package the custom field types as an **overlay plugin** instead of adding them per-project. See [Plugin Creation Overview](/docs/plugin-creation/overview) for how to structure an overlay.
+
+<DocsPrevNext />

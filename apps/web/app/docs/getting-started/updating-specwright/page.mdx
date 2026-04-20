@@ -1,0 +1,63 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Updating Specwright
+
+How to update `@specwright/plugin` to the latest version without losing your project customizations.
+
+## What the plugin owns vs what you own
+
+| File/Directory | Owner | Safe to modify? |
+|---|---|---|
+| `e2e-tests/utils/stepHelpers.js` | Plugin (base) | Add org-specific types via overlay |
+| `e2e-tests/features/playwright-bdd/@*/` | You | Yes — never touched by updates |
+| `e2e-tests/features/playwright-bdd/shared/` | Plugin (base) | Add custom steps, don't edit existing |
+| `.claude/agents/playwright/*.md` | Plugin (base) | Override via project `.claude/agents/` |
+| `.claude/skills/*/SKILL.md` | Plugin (base) | Override via project `.claude/skills/` |
+| `.claude/agent-memory/` | You | Yes — auto-written by agents |
+| `e2e-tests/instructions.js` | You | Yes |
+| `e2e-tests/.env.testing` | You | Yes |
+
+## Check current version
+
+```bash
+cat node_modules/@specwright/plugin/package.json | grep '"version"'
+```
+
+## Update process (CLI)
+
+```bash
+npm install @specwright/plugin@latest
+# or
+pnpm update @specwright/plugin
+
+# Re-run init to apply new scaffold files
+npx @specwright/plugin init --update
+```
+
+The `--update` flag re-copies only plugin-owned files. It does **not** overwrite generated tests, `instructions.js`, `.env.testing`, `agent-memory`, or project-level `.claude/` overrides.
+
+## If using an overlay plugin
+
+Re-run the overlay installer after updating the base plugin. The overlay must always be applied on top of the current base:
+
+```bash
+bash /path/to/overlay/install.sh .
+# or for npm overlays:
+bash node_modules/@specwright/plugin-mui/install.sh .
+```
+
+## Update via Desktop App
+
+Navigate to **Settings → Plugin → Check for updates → Update**. The Desktop App handles the base-then-overlay sequence automatically — you don't need to run the CLI commands manually.
+
+## What changes between versions
+
+Check the changelog before applying a major version bump:
+
+```bash
+cat node_modules/@specwright/plugin/CHANGELOG.md | head -50
+```
+
+Breaking changes follow semver-major versioning. Patch updates (`0.3.x`) are safe to apply without review. Minor updates (`0.x.0`) may add new scaffold files — run `init --update` after those.
+
+<DocsPrevNext />

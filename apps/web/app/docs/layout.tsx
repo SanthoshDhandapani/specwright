@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { DocsSidebar } from "@/components/docs/docs-sidebar";
 import { DocsMobileNav } from "@/components/docs/docs-mobile-nav";
+import { DocsSearch } from "@/components/docs/docs-search";
+import { SpecwrightLogo } from "@/components/ui/specwright-logo";
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,13 +11,15 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-6">
           <Link href="/" className="flex items-center gap-2 shrink-0">
+            <SpecwrightLogo className="h-5 w-auto" />
             <span className="font-bold tracking-widest uppercase bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-transparent">
-              ⚡ Specwright
+              Specwright
             </span>
             <span className="text-slate-600 text-sm hidden sm:block">/</span>
             <span className="text-slate-400 text-sm hidden sm:block">Docs</span>
           </Link>
           <div className="flex items-center gap-4 text-sm">
+            <DocsSearch />
             <Link href="/docs/getting-started/introduction" className="text-slate-400 hover:text-slate-200 transition-colors hidden md:block">
               Getting Started
             </Link>

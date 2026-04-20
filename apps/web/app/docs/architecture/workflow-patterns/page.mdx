@@ -1,0 +1,145 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Workflow Patterns (Architecture)
+
+This page covers the technical implementation of workflow patterns in the Playwright BDD runtime layer. For the instructions-level guide, see [Workflow Patterns (Core Concepts)](/docs/core-concepts/workflow-patterns).
+
+## Multi-project execution
+
+Specwright uses Playwright's built-in project dependency feature to enforce phase order:
+
+```typescript
+// playwright.config.ts
+{
+  name: 'precondition',
+  grep: /@cross-feature-data/,
+  // No dependencies — runs first
+},
+{
+  name: 'workflow-consumers',
+  grep: /@Workflows/,
+  grepInvert: /@cross-feature-data/,
+  dependencies: ['precondition'],  // Waits for precondition
+},
+{
+  name: 'run-workflow',
+  grep: /@Workflows/,
+  dependencies: ['workflow-consumers'],  // Waits for consumers
+},
+```
+
+Playwright will not start `workflow-consumers` until all `precondition` tests finish. This is the enforcement mechanism for phase ordering.
+
+## File-backed predata
+
+Cross-phase data flows through `e2e-tests/test-data/{scope}.json`:
+
+```
+Phase @0 (precondition worker)          Phase @1 (consumer worker)
+─────────────────────────────           ─────────────────────────────
+1. Fill form with gen_test_data
+2. Submit form
+3. Read generated values from
+   page.testData
+4. Write to test-data/booking.json      5. Poll test-data/booking.json
+                                           (30s timeout, 500ms interval)
+                                        6. Load values into testData fixture
+                                        7. Use values in assertions
+```
+
+The poll handles the timing gap between precondition completion and consumer start.
+
+## Feature-level page reuse
+
+Within a single feature file, the same browser page instance is reused across all scenarios via the `featureDataCache`:
+
+```js
+// global-hooks.js
+BeforeAll(async ({ browser }) => {
+  featurePage = await browser.newPage();
+});
+
+AfterAll(async () => {
+  await featurePage?.close();
+});
+```
+
+This eliminates the per-scenario browser launch overhead. All scenarios in a feature share one page — their state accumulates unless a scenario explicitly resets.
+
+**Implication:** Scenario order within a feature matters if later scenarios depend on state from earlier ones. Write scenarios to be independent unless they are explicitly phase-tagged as part of a workflow.
+
+## The one-time guard pattern
+
+Precondition scenarios use a guard to prevent re-running when data already exists:
+
+```js
+// common.steps.js or global-hooks.js
+Given('predata does not exist for scope {string}', async ({}, scopeName) => {
+  const file = path.join('e2e-tests/test-data', `${scopeName}.json`);
+  if (fs.existsSync(file)) {
+    test.skip(true, `Predata already exists for scope "${scopeName}"`);
+  }
+});
+```
+
+When this step runs, it skips the remaining scenario if the file already exists. This means re-running the test suite doesn't re-create the fixture data — it reads the existing data.
+
+To force re-creation, delete the scope file:
+
+```bash
+rm e2e-tests/test-data/booking.json
+```
+
+## localStorage snapshot pattern
+
+For auth-dependent workflows, Phase 0 authenticates and saves `storageState` to a file. Later phases restore it:
+
+```js
+// Phase @0-Auth step
+await page.context().storageState({ path: 'e2e-tests/test-data/workflow-auth.json' });
+
+// Phase @1 fixture setup (playwright.config.ts)
+{
+  name: 'workflow-consumers',
+  use: {
+    storageState: 'e2e-tests/test-data/workflow-auth.json',
+  },
+}
+```
+
+The `storageState` file captures all cookies and localStorage, making the authenticated session available to all consumer phases without re-logging in.
+
+## Scoped data naming conventions
+
+Scope names must be unique across all workflows in a project. Use the workflow module name as the prefix:
+
+| Workflow | Scope |
+|---|---|
+| `@BookingWorkflow` | `"bookingworkflow"` |
+| `@UserWorkflow` | `"userworkflow"` |
+| `@OnboardingFlow` | `"onboardingflow"` |
+
+The JSON file becomes `e2e-tests/test-data/{scope}.json`.
+
+## Parallel consumer execution
+
+Multiple consumer phases can run in parallel when they don't depend on each other:
+
+```typescript
+// playwright.config.ts
+{
+  name: 'workflow-consumers',
+  grep: /@Workflows/,
+  grepInvert: /@cross-feature-data|@serial-execution/,
+  fullyParallel: true,
+},
+{
+  name: 'serial-execution',
+  grep: /@serial-execution/,
+  fullyParallel: false,  // One at a time
+},
+```
+
+Tag a phase `@serial-execution` when it has side effects that would conflict with parallel runs (e.g., deleting a shared record that other tests rely on).
+
+<DocsPrevNext />

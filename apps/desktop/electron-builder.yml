@@ -2,8 +2,12 @@ appId: com.specwright.desktop
 productName: Specwright
 copyright: Copyright (c) 2026 Specwright
 
-# Releases are created via softprops/action-gh-release in CI, not electron-builder publish
-publish: null
+# Provides repo info for auto-update config. Actual publishing is handled by
+# softprops/action-gh-release — electron-builder uses --publish never in CI.
+publish:
+  provider: github
+  owner: SanthoshDhandapani
+  repo: specwright
 
 # electron-vite outputs to out/
 directories:

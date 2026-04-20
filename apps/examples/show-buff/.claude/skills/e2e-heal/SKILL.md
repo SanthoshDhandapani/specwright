@@ -3,17 +3,6 @@ name: e2e-heal
 description: Run tests, diagnose failures, investigate source code, apply direct fixes, and auto-heal remaining issues with up to 3 healing iterations. Generates review plan for unresolved failures.
 argument-hint: <test-file-or-tag>
 context: fork
-hooks:
-  PostToolUse:
-    - matcher: Bash
-      module: "@specwright/hooks/capture-test-results"
-      config:
-        injectContext: true
-  PreToolUse:
-    - matcher: Bash
-      module: "@specwright/hooks/validate-bash"
-      config:
-        blockDestructive: true
 ---
 
 # Test Healing
@@ -31,6 +20,8 @@ Run tests, triage failures, investigate source code, apply direct fixes, and aut
 ## Steps
 
 ### Step 1: Run Tests & Triage
+
+**DO NOT output `### Phase 1:` or `### Phase 2:` headers.** The module and category are already known from $ARGUMENTS — no initialization or routing is needed. Begin output directly at `### Phase 8: Test Execution & Healing`.
 
 Invoke `@agent-execution-manager` in **bdd mode** with any filters from $ARGUMENTS.
 

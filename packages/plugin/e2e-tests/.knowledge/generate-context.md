@@ -1,22 +1,21 @@
 # Framework Generation Context
 <!-- Regenerate: node e2e-tests/scripts/extract-generate-context.js -->
-<!-- Last updated: 2026-04-12 -->
+<!-- Last updated: 2026-04-19 -->
 
 ## FIELD_TYPES Constants
 
-Import: `import { FIELD_TYPES, processDataTable, validateExpectations } from '../../utils/stepHelpers.js';`
+Import paths are depth-dependent — see **Import Path Depth Reference** table below.
 
 ### Interaction Types (processDataTable fieldConfig)
 
 | Constant | Value | When to Use | Config Shape |
 |---|---|---|---|
 | `FIELD_TYPES.FILL` | `"FILL"` | Plain text input | `{ testID? / selector? / placeholder? }` |
-| `FIELD_TYPES.FILL_AND_ENTER` | `"FILL_AND_ENTER"` | Fill then press Enter (tags, chips) | `{ name: string \| RegExp, role?: string }` |
-| `FIELD_TYPES.DROPDOWN` | `"DROPDOWN"` | React Select dropdown | `{ testID }` — control scoped, menu on page |
-| `FIELD_TYPES.COMBO_BOX` | `"COMBO_BOX"` | Creatable select (new option) | `{ testID? / selector? / placeholder? }` |
+| `FIELD_TYPES.FILL_AND_ENTER` | `"FILL_AND_ENTER"` | Fill then press Enter (tags, chips) | `{ name: string, role?: string }` |
+| `FIELD_TYPES.DROPDOWN` | `"DROPDOWN"` | Native `<select>` or ARIA combobox | `{ testID? }` |
 | `FIELD_TYPES.CLICK` | `"CLICK"` | Button / toggle via click | `{ testID? / selector? / role? / name? }` |
-| `FIELD_TYPES.CHECKBOX_TOGGLE` | `"CHECKBOX_TOGGLE"` | Checkbox by label text | `{ testID? / selector? }` |
-| `FIELD_TYPES.TOGGLE` | `"TOGGLE"` | Boolean toggle switch | `{ testID? / selector? }` |
+| `FIELD_TYPES.CHECKBOX_TOGGLE` | `"CHECKBOX_TOGGLE"` | Checkbox by label text | `{ testID? }` |
+| `FIELD_TYPES.TOGGLE` | `"TOGGLE"` | Boolean toggle switch (role="switch") | `{ testID? / selector? }` |
 | `FIELD_TYPES.CUSTOM` | `"CUSTOM"` | Unique interaction — requires fieldHandlers entry | write a fieldHandler |
 
 ### Validation Types (validateExpectations validationConfig)
@@ -24,9 +23,8 @@ Import: `import { FIELD_TYPES, processDataTable, validateExpectations } from '..
 | Constant | When to Use | Config Shape |
 |---|---|---|
 | `FIELD_TYPES.INPUT_VALUE` | Assert text input .value (toHaveValue) | `{ testID? / selector? }` |
+| `FIELD_TYPES.DROPDOWN_VALUE` | Assert selected dropdown option text | `{ testID? }` |
 | `FIELD_TYPES.TEXT_VISIBLE` | Assert element text visible by testID | `{ testID }` |
-| `FIELD_TYPES.MULTI_SELECT_TAG` | Multi-value chip visible by text | (none needed) |
-| `FIELD_TYPES.DROPDOWN_SINGLE_VALUE` | Single-value contains text | `{ testID? / selector? }` |
 
 ---
 
@@ -82,9 +80,11 @@ await validateExpectations(page, dataTable, {
 
 ## Import Path Depth Reference
 
+Count directory levels from `features/playwright-bdd/` root.
+
 | Steps file location | fixtures.js import | stepHelpers.js import |
 |---|---|---|
-| `shared/steps.js` | `../../playwright/fixtures.js` | `../../utils/stepHelpers.js` |
+| `shared/steps.js` | `../../../playwright/fixtures.js` | `../../../utils/stepHelpers.js` |
 | `@Modules/@Mod/steps.js` | `../../../../playwright/fixtures.js` | `../../../../utils/stepHelpers.js` |
 | `@Modules/@Mod/@Sub/steps.js` | `../../../../../playwright/fixtures.js` | `../../../../../utils/stepHelpers.js` |
 | `@Workflows/@Flow/@0-Pre/steps.js` | `../../../../../playwright/fixtures.js` | `../../../../../utils/stepHelpers.js` |
@@ -93,7 +93,10 @@ await validateExpectations(page, dataTable, {
 
 ## Complete steps.js Pattern
 
+Use the Import Path Depth Reference table above to determine the correct `../` depth for the file's location.
+
 ```javascript
+// Example: @Modules/@Mod/steps.js → depth ../../../../
 import { Given, When, Then, expect } from '../../../../playwright/fixtures.js';
 import { FIELD_TYPES, processDataTable, validateExpectations } from '../../../../utils/stepHelpers.js';
 

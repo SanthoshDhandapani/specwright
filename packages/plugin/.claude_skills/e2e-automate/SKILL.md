@@ -1,15 +1,6 @@
 ---
 name: e2e-automate
 description: Run the full 10-phase test automation pipeline — chains /e2e-process, /e2e-plan, /e2e-validate, /e2e-generate, /e2e-heal skills sequentially.
-context: fork
-hooks:
-  PreToolUse:
-    - matcher: Bash
-      module: "@specwright/hooks/validate-bash"
-      config:
-        blockDestructive: true
-  Stop:
-    - module: "@specwright/hooks/generation-summary"
 ---
 
 # Test Automation Pipeline
@@ -35,6 +26,8 @@ Phase 10:  Final Review — quality score + formatted summary
 
 ### Phase 1: Initialization
 
+Run `date +%s` and note the returned epoch value as PIPELINE_START (used in Phase 10 to compute total duration).
+
 Read `/e2e-tests/instructions.js` and validate configuration.
 
 ### Phase 2: Detection & Routing
@@ -59,15 +52,32 @@ Invoke `/e2e-process` with the appropriate input for each config entry:
 ### Phase 4: Exploration & Planning (`/e2e-plan`)
 
 **If `explore: false`** — skip browser exploration entirely. Instead:
-- If `pageURL` is localhost: grep `src/` for `data-testid` attributes and read relevant component files to infer selectors and UI structure. Use agent memory (`.claude/agent-memory/playwright-test-planner/MEMORY.md`) for any previously discovered selectors for this module.
+- If `pageURL` is localhost: grep `src/` for `data-testid` attributes and read relevant component files to infer selectors and UI structure. Use agent memory (`.claude/agent-memory/playwright-test-planner/MEMORY.md`) for any previously discovered selectors for this module — combine with source-code selectors for a richer set.
 - If `pageURL` is an external URL: write test cases based on Playwright best practices, using the parsed plan from Phase 3 as the only input. Skip `seed.spec.js` generation.
 - Proceed directly to Phase 6 (User Approval).
 
-**If `explore: true`** — invoke `/e2e-plan` with the `pageURL` from each config entry.
+**If `explore: true`** — run the following pre-cleanup FIRST, then invoke `/e2e-plan`:
 
-- Explores the app via MCP browser tools, discovers selectors, writes `seed.spec.js`
+⛔ **Pre-cleanup (MANDATORY before exploration):** Restore templates so exploration starts clean — no stale selectors to shortcut from:
+
+```bash
+# Detect auth strategy and copy the matching seed template
+AUTH=$(grep -E '^AUTH_STRATEGY=' e2e-tests/.env.testing | cut -d= -f2 | tr -d '[:space:]')
+AUTH=${AUTH:-none}
+cp "e2e-tests/templates/seed/seed.${AUTH}.template.js" e2e-tests/playwright/generated/seed.spec.js
+
+# Restore agent memory template
+cp e2e-tests/templates/memory/MEMORY.template.md .claude/agent-memory/playwright-test-planner/MEMORY.md
+```
+
+Templates live in `e2e-tests/templates/` — customizable per project, versioned alongside the project. The seed file is overwritten by live exploration — never modify `seed.spec.js` directly.
+
+After cleanup, invoke `@explorer` agent with the `pageURL` from each config entry.
+
+⛔ **Do NOT read agent memory in this phase.** Memory was just reset to the template — it has no selector data. The live browser session is the only valid source.
+
+- The `@explorer` agent explores the app via live browser, discovers selectors, writes `seed.spec.js`
 - Saves test plan to `e2e-tests/plans/{moduleName}-{fileName}-plan.md`
-- **After exploration**: update `.claude/agent-memory/playwright-test-planner/MEMORY.md` with ALL discovered selectors, navigation paths, and patterns. Read the file first, then Edit to add new entries.
 
 ### Phase 5: Exploration Validation (`/e2e-validate`, Optional)
 
@@ -110,7 +120,6 @@ Creates complete `.feature` + `steps.js` files.
 **Performance:** Proceed DIRECTLY — do NOT read agent definition files, do NOT spawn Explore sub-agents.
 The plan file and seed file already contain all context needed. `/e2e-generate` handles the full chain internally.
 
-
 ### Phase 8: Test Execution & Healing (`/e2e-heal`, Optional)
 
 **Skip entirely if no config has `runGeneratedCases: true`.**
@@ -135,9 +144,9 @@ rm -f e2e-tests/plans/*.md
 
 ### Phase 10: Final Review
 
-Calculate a quality score from the aggregated pipeline data and display a formatted summary.
+Calculate a quality score from aggregated pipeline data and display a formatted summary.
 
-**Quality Score Formula (adaptive weights — skipped phases are excluded):**
+**Score calculation — internal only. Do NOT output the formula, weights, or per-component values in the review unless score < 80:**
 
 ```
 Components (only include phases that actually ran):
@@ -146,17 +155,17 @@ Components (only include phases that actually ran):
   testExecutionScore     = (passed tests / total tests) × 100            [if runGeneratedCases: true]
   healingSuccessScore    = (auto-fixed / total failures) × 100           [if healing ran]
 
-Weights are redistributed among ACTIVE components only:
+Weights redistributed among active components only:
   - Generation only (explore + no execution): input=0.40, selectors=0.60
   - Generation + execution (no healing needed): input=0.25, selectors=0.25, execution=0.50
   - Full pipeline (all phases ran): input=0.20, selectors=0.20, execution=0.35, healing=0.25
-
-This ensures a perfect generation-only run scores 100/100, not 76.5.
 ```
 
 **Rating:** 95-100 Excellent ⭐⭐⭐⭐⭐ | 85-94 Very Good ⭐⭐⭐⭐ | 75-84 Good ⭐⭐⭐ | 60-74 Fair ⭐⭐ | 0-59 Poor ⭐
 
 **Status:** score>=95 → "READY FOR PRODUCTION" | >=85 → "READY WITH MINOR FIXES" | >=75 → "REQUIRES ATTENTION" | >=60 → "NEEDS IMPROVEMENT" | else → "SIGNIFICANT ISSUES"
+
+Run `date +%s` and subtract the PIPELINE_START value noted at Phase 1 to compute total duration. Format as `{M}m {S}s`.
 
 **Display format (use markdown sections — NOT ASCII box art):**
 
@@ -167,7 +176,15 @@ This ensures a perfect generation-only run scores 100/100, not 76.5.
 ---
 
 ## 📊 Quality Score: {score}/100 {stars}
-**{status}**
+**{status}** | ⏱ {Xm Ys} (Phase 1 → Phase 10)
+
+{ONLY if score < 80 — show as diagnosis, not as standard output:}
+| Component | Score | Weight |
+|---|---|---|
+| Input Processing | {score} | {weight} |
+| Selector Discovery | {score} | {weight} |  ← only if ran
+| Test Execution | {score} | {weight} |      ← only if ran
+| Healing | {score} | {weight} |             ← only if ran
 
 ---
 
@@ -176,7 +193,6 @@ This ensures a perfect generation-only run scores 100/100, not 76.5.
 - **Feature Files:** {count} created
 - **Step Definitions:** {count} files ({totalSteps} steps)
 - **Scenarios:** {count} total
-- **Duration:** {total pipeline time from Phase 1 start to Phase 10 end}
 
 ---
 
@@ -258,6 +274,14 @@ Full sequence for every phase transition:
 ### Phase 3: Input Processing
 
 <phase 3 content here>
+
+### Phase 4: Exploration & Planning
+
+<phase 4 content here>
+
+── Phase 4 Progress ──────────────────────────────────
+  {log content if any}
+──────────────────────────────────────────────────────
 ```
 
 All 10 phase headers:

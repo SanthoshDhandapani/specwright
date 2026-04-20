@@ -5,6 +5,41 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.4.0] — 2026-04-20
+
+### Changed
+
+- **`.specwright/` directory now ships as part of the plugin install.** Added `.specwright/.gitkeep` to the plugin source tree and updated `install.sh` to copy it into every fresh project install. The directory always pre-exists after `npx @specwright/plugin init`, so Phase 1 of the pipeline no longer needs to create it at runtime.
+
+- **`e2e-automate/SKILL.md` — removed redundant `mkdir -p .specwright` from Phase 1.** The Phase 1 bash command previously ran `mkdir -p .specwright && date +%s > ...` on every pipeline run. Since the directory is now guaranteed to exist after install, the `mkdir -p` guard is no longer needed. The command is now simply `date +%s > .specwright/pipeline_start && cat .specwright/pipeline_start`.
+
+- **`.gitignore.snippet` — refined `.specwright/` ignore rule.** Changed from `.specwright/` (ignores everything including `.gitkeep`) to `.specwright/*` + `!.specwright/.gitkeep`, so the sentinel file is tracked by git while runtime files (`pipeline_start`) remain ignored.
+
+---
+
+## [0.3.9] — 2026-04-20
+
+### Fixed
+
+- **`bdd-generator.md` — form consolidation rule.** Added mandatory rule: ALL form fields that belong to the same form MUST be consolidated into a single 3-column data table step (`When I fill the form with:`), regardless of whether values are static or generated. Previous behaviour allowed agents to split static fields (Priority, Category) into separate individual steps — bypassing `processDataTable` entirely and producing non-standard step definitions. The rule now covers all interaction types (`FILL`, `DROPDOWN`, `CLICK`, `CHECKBOX_TOGGLE`, or any overlay-provided FIELD_TYPE). Added correct-vs-wrong Gherkin examples to reinforce the pattern.
+
+- **`code-generator.md` — base plugin FIELD_TYPES scoping.** Removed MUI-specific types (`MUI_SELECT`, `MUI_AUTOCOMPLETE`) from the base plugin's `processDataTable` guidance. The base plugin only documents generic FIELD_TYPES (`FILL`, `FILL_AND_ENTER`, `DROPDOWN`, `CLICK`, `CHECKBOX_TOGGLE`, `TOGGLE`). Overlay plugins (e.g. `@specwright/plugin-mui`) provide additional types via their own `code-generator.md` override — base plugin agents must not reference overlay-specific constants.
+
+---
+
+## [0.3.8] — 2026-04-20
+
+### Fixed
+
+- **`install.sh` — `e2e-tests/templates/` not copied on install.** The `templates/` directory (`templates/memory/`, `templates/seed/`) was present in the published package but never included in the install script's copy step. Projects installed from 0.3.7 or earlier were missing it. Added `cp -r "$PLUGIN_DIR/e2e-tests/templates" "$TARGET_DIR/e2e-tests/"` after the other directory setup.
+- **`.gitignore.snippet` — `.specwright/` added.** The `.specwright/` directory is now used by the pipeline to store runtime data (pipeline start timestamp for accurate duration calculation). Added to the gitignore snippet so it is not committed.
+
+### Changed
+
+- **`e2e-automate/SKILL.md` — accurate wall-clock duration.** Phase 1 now writes the start epoch to `.specwright/pipeline_start` via a Bash command. Phase 10 reads it and computes the diff in a single shell expression. Replaces the previous approach of asking the agent to "note" the value in context — which was unreliable under context compression and produced inaccurate durations.
+
+---
+
 ## [0.3.7] — 2026-04-20
 
 ### Fixed

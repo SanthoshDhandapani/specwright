@@ -26,7 +26,10 @@ Phase 10:  Final Review — quality score + formatted summary
 
 ### Phase 1: Initialization
 
-Run `date +%s` and note the returned epoch value as PIPELINE_START (used in Phase 10 to compute total duration).
+Run the following command to record pipeline start time:
+```bash
+date +%s > .specwright/pipeline_start && cat .specwright/pipeline_start
+```
 
 Read `/e2e-tests/instructions.js` and validate configuration.
 
@@ -165,7 +168,11 @@ Weights redistributed among active components only:
 
 **Status:** score>=95 → "READY FOR PRODUCTION" | >=85 → "READY WITH MINOR FIXES" | >=75 → "REQUIRES ATTENTION" | >=60 → "NEEDS IMPROVEMENT" | else → "SIGNIFICANT ISSUES"
 
-Run `date +%s` and subtract the PIPELINE_START value noted at Phase 1 to compute total duration. Format as `{M}m {S}s`.
+Run the following command to compute the actual wall-clock duration:
+```bash
+START=$(cat .specwright/pipeline_start 2>/dev/null || echo 0); NOW=$(date +%s); ELAPSED=$((NOW - START)); echo "$((ELAPSED / 60))m $((ELAPSED % 60))s"
+```
+Use the output as the duration value.
 
 **Display format (use markdown sections — NOT ASCII box art):**
 

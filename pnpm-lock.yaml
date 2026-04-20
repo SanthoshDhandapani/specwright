@@ -162,10 +162,10 @@ importers:
   apps/examples/todo-app:
     dependencies:
       '@emotion/react':
-        specifier: ^11.13.0
+        specifier: ^11.14.0
         version: 11.14.0(@types/react@18.3.28)(react@18.3.1)
       '@emotion/styled':
-        specifier: ^11.13.0
+        specifier: ^11.14.1
         version: 11.14.1(@emotion/react@11.14.0(@types/react@18.3.28)(react@18.3.1))(@types/react@18.3.28)(react@18.3.1)
       '@mui/icons-material':
         specifier: ^6.1.0

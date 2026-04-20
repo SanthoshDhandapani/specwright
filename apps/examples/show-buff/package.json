@@ -28,7 +28,7 @@
     "test:clean": "rm -rf reports .features-gen test-results e2e-tests/playwright/test-data/*.json"
   },
   "dependencies": {
-    "@react-oauth/google": "^0.12.1",
+    "@react-oauth/google": "^0.13.5",
     "jwt-decode": "^4.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

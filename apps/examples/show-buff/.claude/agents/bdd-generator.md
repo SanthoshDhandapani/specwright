@@ -402,8 +402,34 @@ shared/                                →  ../../../         (depth 1 → 3 lev
 
 #### When to Use processDataTable Pattern
 
-**Use processDataTable when:** 2+ fields need coordinated input with generated/dynamic data, special type handling (dropdowns, multi-selects).
-**Use direct field interaction when:** Single field operation, simple one-off interactions.
+**🔴 MANDATORY RULE — Form consolidation:**
+
+All fields that belong to the same form interaction (text inputs, dropdowns, selects, date pickers, checkboxes, autocompletes) MUST go into a SINGLE 3-column data table step — regardless of whether their values are static or dynamic, and regardless of their interaction type (FILL, DROPDOWN, CLICK, CHECKBOX_TOGGLE, or any overlay-provided FIELD_TYPE).
+
+**NEVER split a multi-field form into individual steps.** Individual steps like `And I set the priority to "High"` or `And I select category "Work"` bypass processDataTable entirely — the code-generator then generates `page.click()` / `getByRole()` calls instead, and the FIELD_TYPES system is never used.
+
+**Use processDataTable when:** 2+ fields belong to the same form (any combination of text inputs, selects, dropdowns, autocompletes, date pickers).
+
+**Use direct interaction when:** Single-field operations that are explicitly separate from a form (standalone search box, single toggle, single button click) OR non-form actions (submit, navigate, assert).
+
+**Correct pattern (ALL form fields in one table):**
+
+```gherkin
+When I fill the form with:
+  | Field Name | Value           | Type            |
+  | Title      | <gen_test_data> | SharedGenerated |
+  | Priority   | High            | Static          |
+  | Category   | Work            | Static          |
+  | Due Date   | 12/31/2026      | Static          |
+```
+
+**Wrong pattern (fields split into individual steps):**
+
+```gherkin
+When I fill in the title with "<gen_test_data>"  ← ❌ WRONG
+And I set the priority to "High"                  ← ❌ WRONG — skips FIELD_TYPES
+And I select category "Work"                      ← ❌ WRONG — skips FIELD_TYPES
+```
 
 ```javascript
 import { FIELD_TYPES, processDataTable } from '../../../utils/stepHelpers.js';
@@ -478,6 +504,8 @@ Before generating steps:
 1. Use the plan file's "Shared steps to reuse" section for shared step patterns — do NOT scan `shared/`
 2. If a `steps.js` already exists in the target module directory (overwrite scenario), read ONLY that file
 3. New module (no existing steps.js) → no pre-read needed
+
+🔴 **NEVER read other existing modules or workflows as pattern references.** All patterns (workflow phase structure, tags, data sharing, localStorage snapshot) are fully documented in this agent definition and in `.claude/rules/workflow-patterns.md`. Reading any other module's feature or steps files before generating adds 30–90 seconds of unnecessary I/O to Phase 7. Trust the documentation — it is the authoritative source.
 
 #### Duplication Patterns to Avoid
 

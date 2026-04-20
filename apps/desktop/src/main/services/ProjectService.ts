@@ -222,6 +222,11 @@ export class ProjectService {
         } else {
           onLog?.(`[bootstrap] WARNING: overlay install.sh not found at ${overlayDir}`);
         }
+        // Clean up tmp dir used to download npm overlay package
+        const tmpDir = path.join(projectPath, ".specwright-overlay-tmp");
+        if (fs.existsSync(tmpDir)) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
       }
 
       // Step 3: Install dependencies — runs always (overlay uses --skip-install so Desktop owns this).
@@ -522,11 +527,13 @@ export class ProjectService {
         const validation = this.validateLocalPlugin(overlayDir);
         if (!validation.valid) {
           console.warn(`[bootstrap] npm overlay validation failed: ${validation.error}`);
+          fs.rmSync(tmpDir, { recursive: true, force: true });
           return null;
         }
         return overlayDir;
       } catch (err) {
         console.warn(`[bootstrap] npm overlay install failed: ${String(err)}`);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
         return null;
       }
     }

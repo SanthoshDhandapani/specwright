@@ -1,405 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useConfigStore } from "@renderer/store/config.store";
+import { AuthSettingsModal, EMPTY_AUTH, isOAuthConfigured, isEmailPasswordConfigured } from "./AuthSettingsModal";
+import type { AuthFields } from "./AuthSettingsModal";
+import { PluginPickerModal } from "./PluginPickerModal";
 
 const ENVS = ["qat", "dev", "staging", "prod", "local"];
-
-// ── Auth Settings Modal ────────────────────────────────────────────────────
-
-interface AuthFields {
-  userEmail: string;
-  userName: string;
-  userPicture: string;
-  storageKey: string;
-  signinPath: string;
-  buttonTestId: string;
-  postLoginUrl: string;
-  password: string;
-}
-
-function isOAuthConfigured(f: AuthFields): boolean {
-  return !!f.userEmail && !!(f.storageKey || f.buttonTestId);
-}
-
-function isEmailPasswordConfigured(f: AuthFields): boolean {
-  return !!f.userEmail && !!f.password;
-}
-
-function AuthSettingsModal({
-  strategy,
-  initial,
-  onSave,
-  onClose,
-}: {
-  strategy: string;
-  initial: AuthFields;
-  onSave: (fields: AuthFields) => void;
-  onClose: () => void;
-}): React.JSX.Element {
-  const [fields, setFields] = useState<AuthFields>(initial);
-  const set = (k: keyof AuthFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setFields((p) => ({ ...p, [k]: e.target.value }));
-
-  const isOAuth = strategy === "oauth";
-  const canSave = isOAuth ? isOAuthConfigured(fields) : isEmailPasswordConfigured(fields);
-
-  const inputCls = (required: boolean, val: string) =>
-    `w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border focus:outline-none focus:border-brand-500 placeholder-slate-600 ${
-      required && !val ? "border-red-500/60" : "border-slate-600"
-    }`;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-[360px] max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="text-slate-200 text-sm font-semibold">
-            {isOAuth ? "OAuth" : "Email + Password"} Settings
-          </h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-sm">✕</button>
-        </div>
-
-        <div className="px-4 py-3 space-y-4">
-
-          {/* User Identity */}
-          <div className="space-y-2">
-            <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">User Identity</p>
-
-            <div>
-              <label className="block text-slate-400 text-xs mb-1">
-                Email <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={fields.userEmail}
-                onChange={set("userEmail")}
-                placeholder="user@example.com"
-                className={inputCls(true, fields.userEmail)}
-              />
-            </div>
-
-            {isOAuth && (
-              <>
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">
-                    Display Name <span className="text-slate-600">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={fields.userName}
-                    onChange={set("userName")}
-                    placeholder="Derived from email if blank"
-                    className={inputCls(false, fields.userName)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">
-                    Picture URL <span className="text-slate-600">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={fields.userPicture}
-                    onChange={set("userPicture")}
-                    placeholder="SVG initials auto-generated if blank"
-                    className={inputCls(false, fields.userPicture)}
-                  />
-                </div>
-              </>
-            )}
-
-            {!isOAuth && (
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">
-                  Password <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={fields.password}
-                  onChange={set("password")}
-                  placeholder="••••••••"
-                  className={inputCls(true, fields.password)}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Auth Mechanism (OAuth only) */}
-          {isOAuth && (
-            <div className="space-y-2">
-              <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
-                Auth Mechanism <span className="text-slate-600 normal-case">(one required)</span>
-              </p>
-
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">
-                  Storage Key
-                  {!fields.buttonTestId && <span className="text-red-400"> *</span>}
-                </label>
-                <input
-                  type="text"
-                  value={fields.storageKey}
-                  onChange={set("storageKey")}
-                  placeholder="localStorage key (e.g. app-auth-user)"
-                  className={inputCls(!fields.buttonTestId, fields.storageKey)}
-                />
-                <p className="text-slate-600 text-xs mt-0.5">Inject auth directly — no popup needed</p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <hr className="flex-1 border-slate-700" />
-                <span className="text-slate-600 text-xs">or</span>
-                <hr className="flex-1 border-slate-700" />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">
-                  Sign-in Button Test ID
-                  {!fields.storageKey && <span className="text-red-400"> *</span>}
-                </label>
-                <input
-                  type="text"
-                  value={fields.buttonTestId}
-                  onChange={set("buttonTestId")}
-                  placeholder="google-signin-button"
-                  className={inputCls(!fields.storageKey, fields.buttonTestId)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">
-                  Sign-in Path <span className="text-slate-600">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={fields.signinPath}
-                  onChange={set("signinPath")}
-                  placeholder="/signin"
-                  className={inputCls(false, fields.signinPath)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">
-                  Post-login URL <span className="text-slate-600">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={fields.postLoginUrl}
-                  onChange={set("postLoginUrl")}
-                  placeholder="**/"
-                  className={inputCls(false, fields.postLoginUrl)}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Required field note */}
-          {!canSave && (
-            <p className="text-red-400/80 text-xs">
-              {isOAuth
-                ? "Email and at least one auth mechanism (Storage Key or Button Test ID) are required."
-                : "Email and password are required."}
-            </p>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-700">
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 text-xs px-3 py-1.5 rounded transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => canSave && onSave(fields)}
-            disabled={!canSave}
-            className="text-xs px-4 py-1.5 rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-brand-600 hover:bg-brand-500 text-white"
-          >
-            Save Settings
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Plugin Picker Modal ────────────────────────────────────────────────────
-
-type PluginTab = "local" | "npm";
-
-interface PluginPickerModalProps {
-  onClose: () => void;
-  onApply: (source: PluginSource) => void;
-  onReset: () => void;
-}
-
-function PluginPickerModal({ onClose, onApply, onReset }: PluginPickerModalProps): React.JSX.Element {
-  const [tab, setTab] = useState<PluginTab>("local");
-  const [localPath, setLocalPath] = useState("");
-  const [localValidation, setLocalValidation] = useState<{ valid: boolean; pluginName?: string; error?: string } | null>(null);
-  const [npmPackage, setNpmPackage] = useState("specwright-plugin-");
-  const [npmRegistry, setNpmRegistry] = useState("");
-  const [validating, setValidating] = useState(false);
-  const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const inputCls = "w-full bg-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 border border-slate-600 focus:outline-none focus:border-brand-500 placeholder-slate-600";
-
-  const handleBrowseLocal = async (): Promise<void> => {
-    const picked = await window.specwright.project.pickFolder();
-    if (picked) {
-      setLocalPath(picked);
-      setLocalValidation(null);
-      validateDir(picked);
-    }
-  };
-
-  const validateDir = (dirPath: string): void => {
-    if (!dirPath.trim()) { setLocalValidation(null); return; }
-    if (validationTimeoutRef.current) clearTimeout(validationTimeoutRef.current);
-    setValidating(true);
-    validationTimeoutRef.current = setTimeout(async () => {
-      const result = await window.specwright.project.validatePlugin(dirPath);
-      setLocalValidation(result);
-      setValidating(false);
-    }, 400);
-  };
-
-  const canApply =
-    (tab === "local" && localValidation?.valid) ||
-    (tab === "npm" && npmPackage.trim().length > 3 && npmPackage.trim() !== "specwright-plugin-");
-
-  const handleApply = (): void => {
-    if (!canApply) return;
-    if (tab === "local") {
-      onApply({ type: "local", dirPath: localPath });
-    } else {
-      onApply({ type: "npm", packageName: npmPackage.trim(), registry: npmRegistry.trim() || undefined });
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-[380px]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <div>
-            <h2 className="text-slate-200 text-sm font-semibold">Select Plugin</h2>
-            <p className="text-slate-500 text-xs mt-0.5">Plugins configure your test framework for your app</p>
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-sm">✕</button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-slate-700">
-          {(["local", "npm"] as PluginTab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 text-xs py-2 transition-colors ${tab === t ? "text-brand-400 border-b-2 border-brand-400" : "text-slate-500 hover:text-slate-300"}`}
-            >
-              {t === "local" ? "Local" : "npm"}
-            </button>
-          ))}
-        </div>
-
-        <div className="px-4 py-3 space-y-3">
-          {tab === "local" && (
-            <>
-              <p className="text-slate-500 text-xs">Browse to your org's plugin directory. It must contain a <span className="font-mono text-slate-400">specwright.plugin.json</span> file.</p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={localPath}
-                  onChange={(e) => { setLocalPath(e.target.value); validateDir(e.target.value); }}
-                  placeholder="/path/to/plugin-directory"
-                  className={`${inputCls} flex-1`}
-                />
-                <button
-                  onClick={handleBrowseLocal}
-                  className="text-xs px-3 py-1.5 rounded bg-slate-700 border border-slate-600 hover:border-brand-500 text-slate-300 hover:text-brand-400 transition-colors flex-shrink-0"
-                >
-                  Browse
-                </button>
-              </div>
-              {validating && <p className="text-slate-500 text-xs">Validating…</p>}
-              {!validating && localValidation && (
-                localValidation.valid ? (
-                  <p className="text-green-400 text-xs">✓ <span className="font-mono">{localValidation.pluginName}</span></p>
-                ) : (
-                  <p className="text-red-400 text-xs">{localValidation.error}</p>
-                )
-              )}
-            </>
-          )}
-
-          {tab === "npm" && (
-            <>
-              <p className="text-slate-500 text-xs">Install a plugin from npm. Use your org's private registry if the plugin is not public.</p>
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">Package name</label>
-                <input
-                  type="text"
-                  value={npmPackage}
-                  onChange={(e) => setNpmPackage(e.target.value)}
-                  placeholder="specwright-plugin-acme-corp"
-                  className={inputCls}
-                />
-                <p className="text-slate-600 text-xs mt-0.5">Convention: <span className="font-mono">specwright-plugin-*</span></p>
-              </div>
-              <div>
-                <label className="block text-slate-400 text-xs mb-1">Registry <span className="text-slate-600">(optional)</span></label>
-                <input
-                  type="text"
-                  value={npmRegistry}
-                  onChange={(e) => setNpmRegistry(e.target.value)}
-                  placeholder="https://npm.your-org.com"
-                  className={inputCls}
-                />
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700">
-          <button
-            onClick={() => { onReset(); onClose(); }}
-            className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
-          >
-            Use default
-          </button>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-200 text-xs px-3 py-1.5 rounded transition-colors">
-              Cancel
-            </button>
-            <button
-              onClick={handleApply}
-              disabled={!canApply}
-              className="text-xs px-4 py-1.5 rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-brand-600 hover:bg-brand-500 text-white"
-            >
-              Select
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── ConfigPanel ────────────────────────────────────────────────────────────
-
-const EMPTY_AUTH: AuthFields = {
-  userEmail: "", userName: "", userPicture: "",
-  storageKey: "", signinPath: "", buttonTestId: "", postLoginUrl: "",
-  password: "",
-};
 
 const SyncButtonIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -430,13 +35,11 @@ export default function ConfigPanel(): React.JSX.Element {
   const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
   const authRequired = authStrategy !== "none";
 
-  // Load plugin info when project is ready
   useEffect(() => {
     if (!projectPath || !loaded) return;
     window.specwright.project.detectPlugin(projectPath).then(setPluginInfo).catch(() => null);
   }, [projectPath, loaded]);
 
-  // Load auth config from .env.testing when project is ready
   useEffect(() => {
     if (!projectPath || !loaded) return;
     setAuthFields({
@@ -451,7 +54,6 @@ export default function ConfigPanel(): React.JSX.Element {
     });
   }, [projectPath, loaded, envVars]);
 
-  // Compute configured state
   const isConfigured = authRequired
     ? authStrategy === "oauth"
       ? isOAuthConfigured(authFields)
@@ -460,13 +62,11 @@ export default function ConfigPanel(): React.JSX.Element {
 
   const handleAuthToggle = (checked: boolean): void => {
     if (!checked) {
-      // Only change the strategy — preserve all credentials so they restore when re-enabled
       setEnvVar("AUTH_STRATEGY", "none");
       saveEnv();
     } else {
       setEnvVar("AUTH_STRATEGY", "oauth");
       saveEnv();
-      // Only open modal if no fields are configured yet
       if (!isOAuthConfigured(authFields) && !isEmailPasswordConfigured(authFields)) {
         setShowAuthModal(true);
       }
@@ -476,11 +76,10 @@ export default function ConfigPanel(): React.JSX.Element {
   const handleAuthStrategyChange = (strategy: string): void => {
     setEnvVar("AUTH_STRATEGY", strategy);
     saveEnv();
-    setShowAuthModal(true); // auto-open when strategy changes
+    setShowAuthModal(true);
   };
 
   const handleSaveAuth = (fields: AuthFields): void => {
-    // All auth config lives in .env.testing — no .specwright.json writes
     const set = (k: string, v: string): void => { if (v) setEnvVar(k, v); else removeEnvVar(k); };
     set("TEST_USER_EMAIL",      fields.userEmail);
     set("TEST_USER_PASSWORD",   fields.password);
@@ -498,11 +97,9 @@ export default function ConfigPanel(): React.JSX.Element {
   const handleApplyPlugin = async (source: PluginSource): Promise<void> => {
     setShowPluginModal(false);
     if (!isReady) {
-      // Pre-create: store in the global store so the center panel's create button picks it up
       setPendingPlugin(source);
       return;
     }
-    // Post-create: re-run bootstrap with the plugin on the existing project
     setApplyingPlugin(true);
     try {
       await window.specwright.project.bootstrap(projectPath, { overlay: source });
@@ -569,7 +166,6 @@ export default function ConfigPanel(): React.JSX.Element {
 
       <div className="flex flex-col h-full px-4 py-3 gap-4 overflow-y-auto scrollable">
 
-        {/* Header */}
         <div>
           <h1 className="text-brand-400 font-semibold text-base tracking-tight">Specwright</h1>
           <p className="text-slate-500 text-xs mt-0.5">AI Test Generation</p>
@@ -583,7 +179,6 @@ export default function ConfigPanel(): React.JSX.Element {
 
           {isReady ? (
             <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 space-y-2">
-              {/* Project path */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <p className="text-green-400 text-xs font-medium flex items-center gap-1.5 flex-shrink-0">
@@ -646,7 +241,6 @@ export default function ConfigPanel(): React.JSX.Element {
                 {projectPath}
               </p>
 
-              {/* Plugin row */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
                 <div className="min-w-0">
                   <p className="text-slate-500 text-xs uppercase tracking-wider font-medium">Plugin</p>
@@ -673,7 +267,6 @@ export default function ConfigPanel(): React.JSX.Element {
               </div>
             </div>
           ) : (
-            /* Pre-create: plugin selector only — create button lives in the center panel */
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2.5">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
@@ -707,7 +300,6 @@ export default function ConfigPanel(): React.JSX.Element {
             <section className="space-y-3">
               <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Settings</p>
 
-              {/* App URL */}
               <div>
                 <label className="block text-slate-300 text-xs mb-1">App URL</label>
                 <input
@@ -720,7 +312,6 @@ export default function ConfigPanel(): React.JSX.Element {
                 />
               </div>
 
-              {/* Environment */}
               {envVars.TEST_ENV && (
                 <div>
                   <label className="block text-slate-300 text-xs mb-1">Environment</label>
@@ -752,7 +343,6 @@ export default function ConfigPanel(): React.JSX.Element {
 
                 {authRequired && (
                   <div className="space-y-2 pl-5">
-                    {/* Strategy + gear */}
                     <div>
                       <label className="block text-slate-400 text-xs mb-1">Strategy</label>
                       <div className="flex items-center gap-2">
@@ -765,7 +355,6 @@ export default function ConfigPanel(): React.JSX.Element {
                           <option value="email-password">Email + Password</option>
                         </select>
 
-                        {/* Gear button with status dot */}
                         <button
                           onClick={() => setShowAuthModal(true)}
                           title="Configure auth settings"
@@ -781,7 +370,6 @@ export default function ConfigPanel(): React.JSX.Element {
                       </div>
                     </div>
 
-                    {/* Status line */}
                     {isConfigured ? (
                       <p className="text-slate-500 text-xs">
                         ● Configured as <span className="text-slate-300">{authFields.userEmail}</span>

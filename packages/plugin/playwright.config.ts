@@ -135,15 +135,19 @@ export default defineConfig({
     },
 
     // Precondition — workflow setup features tagged @precondition.
-    // Runs serial (1 worker) to ensure all preconditions complete before consumers start.
-    // Filesystem ordering via @0-Precondition/ directory prefix guarantees correct sequence.
+    // fullyParallel: false ensures scenarios within each Phase 0 spec file run sequentially
+    // (correct intra-workflow ordering). No workers cap — each workflow's Phase 0 spec runs
+    // in its own worker. workers:1 is NOT needed here: fullyParallel:false already enforces
+    // within-file sequencing, and capping workers forces multiple workflows' Phase 0 specs
+    // into one OS process, causing playwright-bdd's $bddContext worker fixture to leak its
+    // line cursor across files ("bddTestData not found"). Inter-workflow ordering is enforced
+    // by workflow-consumers.dependencies: ['precondition'].
     {
       name: 'precondition',
       testMatch: '**/*.spec.js',
       testIgnore: '**/@Authentication/*.spec.js',
       grep: /@precondition/,
       fullyParallel: false,
-      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,

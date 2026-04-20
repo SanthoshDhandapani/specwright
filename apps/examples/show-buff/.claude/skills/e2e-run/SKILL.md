@@ -23,7 +23,7 @@ Run BDD tests quickly with optional filtering. Accepts a package.json script nam
 /e2e-run test:bdd:auth            # Named package.json script
 /e2e-run test:bdd:bookings        # Named package.json script (workflow)
 /e2e-run @authentication          # Tag shorthand — infers projects automatically
-/e2e-run @bookingworkflow         # Tag shorthand — workflow tag → run-workflow project
+/e2e-run @bookingworkflow         # Tag shorthand — workflow tag → precondition + workflow-consumers
 /e2e-run --grep "@smoke"          # Raw Playwright flags (you pick the projects)
 /e2e-run --project main-e2e       # Raw Playwright project flag
 ```
@@ -76,8 +76,7 @@ PLAYWRIGHT_HTML_OPEN=never pnpm <matching-script>
 | `@authentication` or auth-related | `--project auth-tests` | No `setup` needed — auth-tests uses clean state to test the login form |
 | `@precondition` | `--project setup --project precondition` | |
 | `@workflow-consumer` | `--project setup --project precondition --project workflow-consumers` | Consumers depend on precondition data |
-| `@*workflow*` (2-phase: one `@0-` producer + terminal `@N-` consumers) | `--project setup --project precondition --project workflow-consumers` | Each phase runs in its own worker pool — avoids `$bddContext` contamination between @0-Precondition and @1-Consumer |
-| `@*workflow*` (3+ phases with an intermediate producer) | `--project setup --project run-workflow --grep "<tag>"` | When a workflow has `@0-Create → @1-Mutate (intermediate) → @2-Verify`, `workflow-consumers` (`fullyParallel: true`) has no inter-file ordering — Phase 2 could start before Phase 1 finishes. `run-workflow` uses `workers: 1 + fullyParallel: true` so files run sequentially via `@0-`/`@1-` filesystem order AND each gets a fresh worker. Detection: check the workflow dir for 3+ numbered phase directories where any non-`@0-` phase has both "I load predata from" AND a scoped-data save step/hook. |
+| `@*workflow*` (any number of phases) | `--project setup --project precondition --project workflow-consumers` | Applies to both 2-phase and 3+ phase workflows. Inter-phase ordering for 3+ phases is handled via separate scope keys (`{scope}-complete`) — Phase N+1 polls for the scope file written by Phase N. Do NOT use `--project run-workflow` — workers:1 reuses the OS process across spec files, causing `$bddContext` leakage and `bddTestData not found` errors. |
 | `@serial-execution` | `--project setup --project serial-execution` | Config already greps for this tag — adding `--grep` is redundant but harmless |
 | Any other `@tag` | `--project setup --project main-e2e` | |
 
@@ -86,7 +85,7 @@ Then run:
 PLAYWRIGHT_HTML_OPEN=never npx bddgen && PLAYWRIGHT_HTML_OPEN=never npx playwright test --project <resolved-projects> --grep "$ARGUMENTS"
 ```
 
-**Why projects matter:** Workflow tests need the `precondition` project (runs `@precondition @cross-feature-data` tests with `workers: 1` in a fresh worker) AND `workflow-consumers` (runs `@workflow-consumer` tests in parallel in its own worker pool) — `setup` provides the auth session. Running them as separate projects avoids the `$bddContext` leakage that happens when a single worker reuses process state between phase files (surfaces as `bddTestData not found`). The `run-workflow` project still exists for users who explicitly want single-worker serial execution but is no longer the default.
+**Why projects matter:** Workflow tests need the `precondition` project (runs `@precondition @cross-feature-data` tests with `fullyParallel: false` — each workflow's Phase 0 spec gets its own fresh worker) AND `workflow-consumers` (runs `@workflow-consumer` tests in parallel, each spec file in its own fresh worker pool) — `setup` provides the auth session. Running them as separate projects avoids `$bddContext` leakage that happens when a single worker reuses process state between phase files (surfaces as `bddTestData not found`). For 3+ phase workflows, inter-phase ordering is handled by the `{scope}-complete` separate scope naming convention — Phase N+1 polls for the file written by Phase N via 60-second polling in `workflow.steps.js`.
 
 ---
 

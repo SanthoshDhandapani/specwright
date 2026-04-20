@@ -773,10 +773,24 @@ export class ProjectService {
             }
           }
 
+          // Also inline agents from .claude/agents/ so @agent-name references work inline.
+          const agentsDir = path.join(projectPath, ".claude/agents");
+          if (fs.existsSync(agentsDir)) {
+            const agentEntries = fs.readdirSync(agentsDir, { withFileTypes: true });
+            for (const entry of agentEntries) {
+              if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+              const agentPath = path.join(agentsDir, entry.name);
+              const agentRaw = fs.readFileSync(agentPath, "utf-8");
+              const agentBody = agentRaw.replace(/^---[\s\S]*?---\n?/, "").trim();
+              const agentName = entry.name.replace(".md", "");
+              inlinedSubSkills.push(`### @${agentName}\n\n${agentBody}`);
+            }
+          }
+
           const subSkillSection = inlinedSubSkills.length > 0
-            ? `\n\n---\n\n## Sub-Skill Reference (Inline)\n\n` +
-              `When pipeline phases instruct you to invoke a sub-skill (/e2e-process, /e2e-plan, etc.), ` +
-              `execute the matching instructions below directly — do NOT use the Skill tool for sub-skills in this environment.\n\n` +
+            ? `\n\n---\n\n## Sub-Skill & Agent Reference (Inline)\n\n` +
+              `When pipeline phases instruct you to invoke a sub-skill (/e2e-process, /e2e-plan, etc.) or an agent (@explorer, etc.), ` +
+              `execute the matching instructions below directly — do NOT use the Skill or Agent tool in this environment.\n\n` +
               inlinedSubSkills.join("\n\n---\n\n")
             : "";
 

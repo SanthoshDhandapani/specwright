@@ -140,10 +140,16 @@ Three execution modes:
       — no manual waits needed.
    → **ORDERING CAVEAT**: Phase 1 (intermediate) and Phase 2+ (terminal consumers) both tagged
       `@workflow-consumer` land in the `workflow-consumers` Playwright project which runs
-      `fullyParallel: true` — Phase 2 can start before Phase 1 finishes. For 3+ phase workflows
-      with an intermediate producer, recommend running via `--project setup --project run-workflow
-      --grep "@{workflow}"` which preserves filesystem ordering (`@0-`, `@1-`, `@2-`) via
-      `workers: 1 + fullyParallel: true`. See `.claude/rules/workflow-patterns.md`.
+      `fullyParallel: true` — Phase 2 can start before Phase 1 finishes.
+      **Do NOT use `--project run-workflow`** — it uses `workers: 1` which reuses the same OS
+      process for all phase files, causing playwright-bdd's `$bddContext` worker fixture to leak
+      from Phase 0 into Phase 1 and produce `bddTestData not found` errors.
+      **Correct solution — separate scope key:** Phase 1 writes its merged output to a DIFFERENT
+      scope (e.g. `listworkflow-complete`) instead of overwriting Phase 0's scope (`listworkflow`).
+      Phase 2's Background uses `Given I load predata from "listworkflow-complete"` — the
+      60 s polling in `workflow.steps.js` blocks Phase 2 until Phase 1 creates that file.
+      Always use the `{scope}-complete` naming convention for intermediate producer output.
+      See `.claude/rules/workflow-patterns.md` for the full pattern.
 ```
 
 **Data Table Placeholders:**

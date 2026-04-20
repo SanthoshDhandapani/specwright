@@ -182,7 +182,7 @@ e2e-tests/features/playwright-bdd/
 
 **ShowBuff** (`apps/examples/show-buff/`) is the primary demo app — a TV show discovery app with OAuth, custom Watchlists, and Favorites.
 
-**Live app:** [ShowBuff on Vercel](https://specwright-show-buff.vercel.app/)
+**Live app:** [ShowBuff TV Shows](https://specwright-show-buff.vercel.app/)
 
 ```bash
 # Run locally

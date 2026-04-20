@@ -48,8 +48,6 @@ jobs:
 
       - name: Build desktop distributables
         run: pnpm --filter @specwright/desktop dist:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -89,8 +87,6 @@ jobs:
 
       - name: Build desktop distributables
         run: pnpm --filter @specwright/desktop dist:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

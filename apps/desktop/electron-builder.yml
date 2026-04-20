@@ -2,6 +2,9 @@ appId: com.specwright.desktop
 productName: Specwright
 copyright: Copyright (c) 2026 Specwright
 
+# Releases are created via softprops/action-gh-release in CI, not electron-builder publish
+publish: null
+
 # electron-vite outputs to out/
 directories:
   buildResources: build

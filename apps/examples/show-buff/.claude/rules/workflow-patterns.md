@@ -15,14 +15,24 @@ npx playwright test --project setup --project precondition --project workflow-co
 
 The project chain is:
 - `setup` — creates auth session (runs once, all projects consume it via storageState)
-- `precondition` — runs `@precondition @cross-feature-data` tests, `workers: 1`, fresh worker
-- `workflow-consumers` — runs `@workflow-consumer` tests in parallel, separate worker pool
+- `precondition` — runs `@precondition @cross-feature-data` tests, `fullyParallel: false` (sequential within each Phase 0 file), each workflow's Phase 0 spec gets its own fresh worker
+- `workflow-consumers` — runs `@workflow-consumer` tests, `fullyParallel: true`, each file gets its own worker
 
 **Reasoning:** Each Playwright project runs in its own worker pool. Moving across projects guarantees a clean process — no `$bddContext` leakage between `@0-*` and `@1-*` spec files.
 
-**Do NOT use:** `--project run-workflow` as the default for workflow tests. `run-workflow` is a single-project shortcut that forces all phases through one worker — useful only when you explicitly want single-worker serial execution, not as the general path.
+**Do NOT use:** `--project run-workflow` for any workflow, including 3+ phase workflows with intermediate producers. `run-workflow` uses `workers: 1` which reuses the same OS process across all phase spec files — this causes playwright-bdd's `$bddContext` worker fixture to leak from Phase 0 into Phase 1, producing `bddTestData not found` errors. The `workflow-consumers` project avoids this because `fullyParallel: true` (without a workers cap) gives each spec file its own fresh process.
 
-**EXCEPTION — 3+ phase workflows with an intermediate producer:** When a workflow has a phase that both consumes predata AND produces new state for a successor (e.g. `@0-Create → @1-Mutate (intermediate) → @2-Verify`), the default `precondition + workflow-consumers` routing causes a race: Phase 1 and Phase 2 both land in `workflow-consumers` (`fullyParallel: true`, no inter-file ordering), so Phase 2 can start before Phase 1 finishes. Use `--project setup --project run-workflow --grep "@MyWorkflow"` for these workflows — `run-workflow` preserves filesystem ordering (`@0-`, `@1-`, `@2-`) with `workers: 1 + fullyParallel: true` (fresh worker per file, no `$bddContext` leak).
+**3+ phase workflows with an intermediate producer** (e.g. `@0-Create → @1-Mutate → @2-Verify`): Phase 1 and Phase 2 both land in `workflow-consumers` and start concurrently. Handle the ordering with the **separate scope** pattern:
+
+- Phase 1 writes its output to a DIFFERENT scope key (e.g. `listworkflow-complete`) instead of overwriting the Phase 0 scope (`listworkflow`)
+- Phase 2 polls for `listworkflow-complete` via `Given I load predata from "listworkflow-complete"` — `workflow.steps.js` polls up to 60 s for the file to appear, so Phase 2 blocks until Phase 1 finishes writing it
+- The Phase 0 scope file (`listworkflow.json`) already exists when Phase 2 starts; if Phase 2 loaded that file it would see Phase 0's stale data (before Phase 1's mutations)
+
+**Scope naming convention:**
+```
+{workflowname}           ← Phase 0 writes here
+{workflowname}-complete  ← Phase 1 (intermediate) writes here; Phase 2 loads from here
+```
 
 ---
 
@@ -33,9 +43,13 @@ The project chain is:
 
 **Fix:** Snapshot localStorage explicitly at end of precondition via the 3-layer file-backed persistence (`saveScopedTestData`), then restore it in the consumer's `Before` hook using `page.addInitScript()` BEFORE the page script runs.
 
+**MANDATORY — snapshot localStorage when the phase creates client-side state:** If a phase creates objects in any localStorage-backed store (Zustand, Redux Persist, custom persistence, etc.), those objects only exist in that browser context. A consumer phase starts with a fresh browser — it will see an empty store unless you snapshot and restore the relevant localStorage keys. Always include them in `saveScopedTestData`.
+
 ---
 
 #### Pattern: First-phase snapshot (`@0-Precondition/steps.js`, tagged `@precondition`)
+
+Snapshot localStorage at the end of the precondition step (or in a dedicated save step). **Include all localStorage keys the app mutated** — consumer phases need the full store state restored, not just scalar IDs.
 
 ```javascript
 import { After } from '<path>/fixtures.js';
@@ -45,17 +59,26 @@ import { saveScopedTestData } from '<path>/fixtures.js';
 // Saves into e2e-tests/playwright/test-data/{scope}.json (cross-worker safe).
 After({ tags: '@precondition' }, async ({ page }, scenario) => {
   if (scenario.result?.status !== 'passed') return;
+  // Capture every localStorage key the app mutated during this phase.
+  // Without this, consumer phases start with an empty store and cannot see created objects.
   const snapshot = await page.evaluate(() => ({
-    myFeatureData: JSON.parse(localStorage.getItem('my-feature-data') || 'null'),
-    // ...any other app-owned keys the precondition mutates
+    'app-store-key': JSON.parse(localStorage.getItem('app-store-key') || 'null'),
+    // ...any other keys the precondition mutated
   }));
-  saveScopedTestData('<workflow-scope>', { localStorage: snapshot });
+  saveScopedTestData('<workflow-scope>', {
+    // Scalar predata (IDs, names) for use in steps
+    createdId: /* captured from URL or UI */,
+    // Full localStorage snapshot for consumer restore
+    localStorage: snapshot,
+  });
 });
 ```
 
 #### Pattern: Intermediate-phase snapshot (`@N-Phase/steps.js`, tagged `@workflow-consumer @cross-feature-data`)
 
-Intermediate phases (load predata AND save for a successor) are NOT tagged `@precondition` — that would route them into the serial `precondition` project and cause `$bddContext` leaks. Instead the hook matches on `@workflow-consumer`; path-based scoping restricts it to this phase's scenarios:
+Intermediate phases (load predata AND save for a successor) are NOT tagged `@precondition` — that would route them into the serial `precondition` project and cause `$bddContext` leaks. Instead the hook matches on `@workflow-consumer`; path-based scoping restricts it to this phase's scenarios.
+
+**Write to a DIFFERENT scope key** than Phase 0 used. This lets Phase N+1 poll for the new scope file specifically — if Phase N overwrote Phase 0's scope, Phase N+1 would race to read the file before Phase N finishes.
 
 ```javascript
 import { After } from '<path>/fixtures.js';
@@ -64,40 +87,45 @@ import { saveScopedTestData, loadScopedTestData } from '<path>/fixtures.js';
 After({ tags: '@workflow-consumer' }, async ({ page }, scenario) => {
   if (scenario.result?.status !== 'passed') return;
   const snapshot = await page.evaluate(() => ({
-    myFeatureData: JSON.parse(localStorage.getItem('my-feature-data') || 'null'),
+    'app-store-key': JSON.parse(localStorage.getItem('app-store-key') || 'null'),
   }));
-  // Merge with predata already on disk so successor phases see both the predecessor's and our updates.
+  // Merge with Phase 0 predata so successor sees both predecessor's and this phase's data.
   const existing = loadScopedTestData('<workflow-scope>') || {};
-  saveScopedTestData('<workflow-scope>', {
+  // Write to a DIFFERENT scope key — successor polls for this file specifically.
+  saveScopedTestData('<workflow-scope>-complete', {
     ...existing,
     localStorage: { ...(existing.localStorage || {}), ...snapshot },
   });
 });
 ```
 
-#### Pattern: Consumer restore (`@1-Consumer/steps.js`)
+#### Pattern: Consumer restore (`shared/workflow.steps.js`)
+
+The restore is handled automatically by `workflow.steps.js` `Given I load predata from "{scope}"`. It reads the scoped JSON and calls `page.addInitScript()` with a **one-time guard** so the restore only fires on the FIRST page navigation.
+
+**Why the one-time guard matters for intermediate phases:** `addInitScript` fires on every `page.goto()` call. Without the guard, an intermediate phase that navigates multiple times (e.g. navigate to page A → mutate store → navigate to page B → mutate store again) would have its localStorage reset on each navigation back to the Phase 0 snapshot — wiping out mutations from the previous step. The guard (`__specwright_workflow_restored` marker in localStorage) prevents this: once set on the first navigation, subsequent navigations skip the restore and the store accumulates mutations correctly.
 
 ```javascript
-import { Before } from '<path>/fixtures.js';
-import { loadScopedTestData } from '<path>/fixtures.js';
-
-// BEFORE the scenario navigates anywhere, inject the precondition's localStorage
-// via addInitScript so the app sees the restored state on its first read.
-Before({ tags: '@workflow-consumer' }, async ({ page }) => {
-  const data = loadScopedTestData('<workflow-scope>');
-  if (!data?.localStorage) return;
-  await page.addInitScript((snap) => {
+// From workflow.steps.js (already implemented — shown for reference)
+await page.addInitScript(({ snap, marker }) => {
+  if (localStorage.getItem(marker)) return; // ← one-time guard
+  try {
     for (const [key, value] of Object.entries(snap)) {
-      if (value !== null) localStorage.setItem(key, JSON.stringify(value));
+      if (value !== null && value !== undefined) {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
     }
-  }, data.localStorage);
-});
+    localStorage.setItem(marker, '1');
+  } catch (err) {
+    console.log('[workflow] addInitScript restore failed:', err);
+  }
+}, { snap: data.localStorage, marker: '__specwright_workflow_restored' });
 ```
 
 #### When to apply
 
 ✅ Apply when:
-- The precondition scenario writes to `localStorage` (creates/toggles/saves state)
+- The precondition scenario writes to `localStorage` (creates/toggles/saves client-side state)
 - A consumer scenario reads or asserts on that state
 
 ❌ Skip when:

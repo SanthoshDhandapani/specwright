@@ -5,11 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "@specwright/hooks#build": {
-      "dependsOn": [],
-      "outputs": ["dist/**"]
-    },
-    "dev": {
+"dev": {
       "dependsOn": ["^build"],
       "persistent": true,
       "cache": false

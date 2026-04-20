@@ -5,6 +5,29 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.3.7] — 2026-04-20
+
+### Fixed
+
+#### Config: `playwright.config.ts` — `precondition` project
+
+- **Removed `workers: 1` from the `precondition` project.** `fullyParallel: false` alone is sufficient to guarantee sequential execution of scenarios within each Phase 0 spec file. `workers: 1` was not needed for within-file ordering and is actively harmful in projects with multiple workflows: it forces all Phase 0 spec files into one OS process, causing playwright-bdd's `$bddContext` worker fixture to leak its `>=` line cursor across files — the lookup for the second workflow's test (e.g. `pwTestLine: 11`) fails when the cursor has already advanced past it (e.g. `19`) from the first workflow's spec → `bddTestData not found`.
+
+  **Root cause detail:** `$bddContext` is a worker-scoped fixture whose `>=` line cursor does not reset between spec files within the same worker. With `workers: 1` and two Phase 0 files (FavoritesWorkflow at lines 11, 19 and ListWorkflow at line 11), the cursor sits at 19 after the first file; `11 >= 19` is false → error. Single-workflow projects appear to work by coincidental line-number alignment and would break as soon as a second workflow is added.
+
+  **Correct invariant:** use only `fullyParallel: false` on `precondition`. Each workflow's Phase 0 spec runs in its own fresh worker; inter-workflow ordering is enforced by `workflow-consumers.dependencies: ['precondition']`.
+
+#### Skill: `e2e-run/SKILL.md`
+
+- **Corrected Case 3 workflow tag usage example** — Changed `# Tag shorthand — workflow tag → run-workflow project` to `# Tag shorthand — workflow tag → precondition + workflow-consumers`. The `run-workflow` project must never be used for regular workflow test runs.
+- **Updated "Why projects matter" explanation** — Removed stale `workers: 1` reference from the `precondition` project description. Now correctly states: "`precondition` runs `@precondition @cross-feature-data` tests with `fullyParallel: false` — each workflow's Phase 0 spec gets its own fresh worker."
+
+#### Skills: `e2e-automate/SKILL.md`, `e2e-generate/SKILL.md`, `e2e-heal/SKILL.md`
+
+- **Removed `hooks:` blocks** — All three skills previously declared `@specwright/hooks` modules in their frontmatter (`generation-summary`, `track-generated-files`, `capture-test-results`). These hooks are Desktop-app instrumentation only: they require callback wiring inside the agent-runner SDK to do anything useful, and all three return `{ continue: true }` without callbacks. Claude Code CLI ignores `hooks:` frontmatter entirely — a non-native extension. Removing them makes the plugin skills self-contained for public distribution without requiring `@specwright/hooks` (a private monorepo package). The Desktop app injects hooks via the agent-runner SDK directly, not via skill frontmatter.
+
+---
+
 ## [0.3.6] — 2026-04-14
 
 ### Skill: `e2e-automate/SKILL.md`

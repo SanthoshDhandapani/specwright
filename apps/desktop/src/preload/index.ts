@@ -122,4 +122,13 @@ contextBridge.exposeInMainWorld("specwright", {
   shell: {
     openUrl: (url: string) => ipcRenderer.invoke("shell:open-url", url) as Promise<void>,
   },
+
+  report: {
+    checkAvailable: (projectPath: string) =>
+      ipcRenderer.invoke("report:check-available", projectPath) as Promise<{ playwright: boolean; bdd: boolean }>,
+    openPlaywright: (projectPath: string) =>
+      ipcRenderer.invoke("report:open-playwright", projectPath) as Promise<void>,
+    openBdd: (projectPath: string) =>
+      ipcRenderer.invoke("report:open-bdd", projectPath) as Promise<void>,
+  },
 });

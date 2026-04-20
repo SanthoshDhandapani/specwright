@@ -123,12 +123,30 @@ When('I see a message containing {string}', async ({ page }, message) => {
 
   Follow the canonical patterns in `.claude/rules/workflow-patterns.md` — "Cross-Phase localStorage Persistence" and "Workflow Feature-Flag / Cookie State". The rule covers:
   - **First phase** (`@0-*`, tagged `@precondition`) — `After({ tags: '@precondition' })` → snapshot with `page.evaluate` → `saveScopedTestData(scope, { localStorage: snap })`
-  - **Intermediate phase** (`@N-*` that both consumes and produces, tagged `@workflow-consumer @cross-feature-data`) — `After({ tags: '@workflow-consumer' })` in the phase's own `steps.js` → snapshot → `saveScopedTestData`. Path-based scoping restricts the hook to this phase's scenarios only, so `@workflow-consumer` on an After hook is safe even though other phases share that tag.
+  - **Intermediate phase** (`@N-*` that both consumes and produces, tagged `@workflow-consumer @cross-feature-data`) — `After({ tags: '@workflow-consumer' })` in the phase's own `steps.js`. **MUST merge with existing predata** — call `loadScopedTestData` first, then snapshot, then merge + save:
+    ```javascript
+    After({ tags: '@workflow-consumer' }, async ({ page }, scenario) => {
+      if (scenario.result?.status !== 'passed') return;
+      const snapshot = await page.evaluate(() => ({
+        // localStorage keys this phase mutates
+      }));
+      const existing = loadScopedTestData('<scope>') || {};
+      saveScopedTestData('<scope>', {
+        ...existing,
+        localStorage: { ...(existing.localStorage || {}), ...snapshot },
+      });
+    });
+    ```
+    Path-based scoping restricts this hook to this phase's scenarios only. **Do NOT call `saveScopedTestData` without merging** — overwriting `existing` destroys phase 0's predata and causes `bddTestData not found` in successor phases.
   - **Consumer hydration** (any phase that loads predata) — `Before({ tags: '@workflow-consumer' })` → `loadScopedTestData(scope)` → inject via `page.addInitScript()` (NOT `evaluate` — init scripts run before page scripts). This Before hook belongs in `shared/workflow.steps.js`, NOT in a phase-scoped steps.js.
 
   **When to apply:** A phase writes client state AND a later phase reads/asserts on it. Skip when the producer only mutates server state via API calls.
 
   **Do NOT use `After({ tags: '@precondition' })` in an intermediate phase** — the phase is not tagged `@precondition`, so the hook would never fire. Use `@workflow-consumer` (matches the phase's own tag; path-scope limits it to this phase).
+
+  **MANDATORY — snapshot localStorage in ALL phases that create client-side state:** If a phase creates any objects in a localStorage-backed store, the consumer phase starts with an empty store (fresh browser context). You MUST snapshot the relevant localStorage keys and include them in `saveScopedTestData`. Saving only scalar IDs/names is not enough — consumer phases need the full store state restored to interact with those objects.
+
+  **Scope naming for intermediate producers:** Write to a DIFFERENT scope key than Phase 0 used (e.g. `listworkflow-complete` instead of `listworkflow`). Phase N+1 loads from that specific scope, which doesn't exist until Phase N writes it — this prevents Phase N+1 from racing to read Phase 0's stale file. See `.claude/rules/workflow-patterns.md` for the `{scope}-complete` naming convention.
 
 **Structure:**
 

@@ -1,10 +1,16 @@
 name: Desktop Release
 
-# Triggered by pushing a tag like "desktop-v0.1.0"
+# Triggered by pushing a tag like "desktop-v0.1.0", or manually via workflow_dispatch
 on:
   push:
     tags:
       - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
 
 jobs:
   build:
@@ -80,10 +86,11 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Specwright Desktop ${{ github.ref_name }}"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('desktop-v{0}', github.event.inputs.version) }}
+          name: "Specwright Desktop ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('desktop-v{0}', github.event.inputs.version) }}"
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.event.inputs.version, '-beta') || contains(github.ref_name, '-alpha') || contains(github.event.inputs.version, '-alpha') }}
           files: release-artifacts/**/*
           body: |
             ## Installation

@@ -1,0 +1,136 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Modules vs Workflows
+
+`@Modules` and `@Workflows` are the two categories in Specwright. They have fundamentally different execution models and exist for different testing scenarios. Choosing the wrong one is the most common source of pipeline failures.
+
+---
+
+## Modules
+
+A **Module** tests a single page or self-contained feature. Scenarios are fully independent — each one gets a fresh browser context and can run in any order.
+
+```js
+// instructions.js — Module example
+export default [
+  {
+    moduleName: '@ListsPage',
+    category: '@Modules',
+    subModuleName: [],
+    fileName: 'lists',
+    pageURL: 'https://specwright-show-buff.vercel.app/lists',
+    instructions: [
+      'Verify the Lists page shows a "Create List" button',
+      'Clicking "Create List" opens a form with a name input field',
+      'Submitting an empty name shows a validation error',
+    ],
+    explore: true,
+    runExploredCases: false,
+    runGeneratedCases: false,
+  },
+];
+```
+
+**Execution model:**
+
+- Runs under the `main-e2e` Playwright project
+- Each scenario gets a fresh browser context (parallel-safe)
+- Auth is handled by the `setup` project (storageState injection)
+- No data flows between scenarios
+
+**When to use Modules:**
+
+- Testing a single page or UI component
+- Scenarios have no dependencies on each other
+- Tests need to run fast and in parallel
+- Verifying form validation, button states, error messages, page content
+
+---
+
+## Workflows
+
+A **Workflow** tests a multi-step user journey across pages. Data created in one phase is consumed by the next — scenarios are explicitly ordered and share persistent state via JSON files.
+
+```js
+// instructions.js — Workflow example (3 phases)
+export default [
+  {
+    moduleName: '@ListWorkflow',
+    category: '@Workflows',
+    subModuleName: ['@0-Precondition', '@1-VerifyInSearch', '@2-DeleteAndConfirm'],
+    fileName: 'list_workflow',
+    pageURL: 'https://specwright-show-buff.vercel.app/lists',
+    instructions: [
+      '@0-CreateList (precondition @cross-feature-data): Create a new list named "Automation Test List", save name and ID as predata',
+      '@1-VerifyInSearch (workflow-consumer): Load predata, search for the list by name, verify it appears in results',
+      '@2-DeleteAndConfirm (workflow-consumer): Load predata, delete the list, verify it no longer appears',
+    ],
+    explore: true,
+    runExploredCases: false,
+    runGeneratedCases: false,
+  },
+];
+```
+
+**Execution model:**
+
+- Phase 0 runs under the `precondition` Playwright project — creates data, writes it to a JSON file in `e2e-tests/playwright/test-data/`
+- Phases 1+ run under `workflow-consumers` — read the JSON file to get IDs, names, or tokens from Phase 0
+- Phases run in strict order (`precondition` completes before `workflow-consumers` starts)
+- `workers: 1` is enforced to prevent context leaks between phases
+
+**When to use Workflows:**
+
+- A later step needs an ID, name, or token created by an earlier step
+- Testing a full create → read → update → delete journey
+- Verifying something created on Page A appears correctly on Page B
+- Any scenario where "Phase B needs data from Phase A"
+
+---
+
+## Quick decision table
+
+| Situation | Use |
+|---|---|
+| Testing a single page or feature | @Modules |
+| Testing a multi-page user journey | @Workflows |
+| Phase B needs data from Phase A | @Workflows |
+| Tests can run in any order | @Modules |
+| Create something → verify elsewhere | @Workflows |
+| Tests are fully independent | @Modules |
+
+---
+
+## Phase tag reference
+
+Tags embedded in `instructions[]` strings control which Playwright project each phase runs under:
+
+| Tag | Playwright project | Purpose |
+|---|---|---|
+| (none) | `main-e2e` | Regular module scenario |
+| `(precondition @cross-feature-data)` | `precondition` | Phase 0 — creates shared data, writes JSON |
+| `(workflow-consumer)` | `workflow-consumers` | Phases 1+ — reads shared data from JSON |
+
+The tag text is parsed by the pipeline agent and embedded as Gherkin tags in the generated `.feature` file. `@cross-feature-data` is required on the precondition phase — it signals to the step runtime to write the localStorage snapshot and test data file.
+
+---
+
+## Common mistake
+
+Using `@Modules` for a journey that needs data from another page. When the consumer step tries to load predata (e.g. a list ID created in the previous step), it finds nothing — the JSON file was never written. The step fails immediately with a "predata not found" or similar error.
+
+**If your scenario includes a phrase like "load the item created earlier" or "verify the record from step 1," it belongs in `@Workflows`.**
+
+---
+
+## Run commands
+
+```bash
+# Module — runs under setup + main-e2e
+pnpm bddgen && npx playwright test --project setup --project main-e2e --grep "@ListsPage"
+
+# Workflow — must run all three projects in correct order
+pnpm bddgen && npx playwright test --project setup --project precondition --project workflow-consumers --grep "@ListWorkflow"
+```
+
+<DocsPrevNext />

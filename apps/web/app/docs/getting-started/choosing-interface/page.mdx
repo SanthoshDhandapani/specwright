@@ -1,0 +1,70 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Choosing an Interface
+
+Specwright ships three interfaces that all drive the same 10-phase pipeline. Pick the one that fits your workflow — or use more than one.
+
+## Three interfaces overview
+
+| Interface | Best for | Requires |
+|---|---|---|
+| Plugin + CLI | Terminal users, CI/CD | Claude Code CLI |
+| Desktop App | Visual workflow, team demos | Mac or Windows |
+| Claude Desktop (MCP) | Natural language, already using Claude Desktop | Claude Desktop app |
+
+## Plugin + CLI
+
+**When to choose this:**
+- Running tests in CI pipelines (GitHub Actions, GitLab CI, etc.)
+- You prefer the terminal and want full control over when each phase runs
+- You want to chain commands in scripts or Makefiles
+
+**How it works:** Slash commands in Claude Code (`/e2e-automate`, `/e2e-plan`, `/e2e-run`, etc.) invoke specialized agents directly. Each command maps to one or more pipeline phases.
+
+**Quick start:**
+```bash
+# Inside your project with @specwright/plugin installed
+claude
+/e2e-automate
+```
+
+## Desktop App
+
+**When to choose this:**
+- You want to see all 10 phases displayed visually as they execute
+- You are demoing test automation to a team or stakeholder
+- Non-terminal users on the team need to trigger or review test runs
+
+**How it works:** A three-panel Electron UI shows the phase grid on the left, live agent output in the center, and a final review panel on the right. An Approve button gates the generate phase so you can inspect the plan before tests are written.
+
+See the [Desktop App docs](/docs/interfaces/desktop-app) for installation and usage.
+
+## Claude Desktop (MCP)
+
+**When to choose this:**
+- You already use Claude Desktop daily and prefer natural language over slash commands
+- You want to trigger runs by describing what to test in plain English
+- You don't want to switch to a terminal or separate app
+
+**How it works:** The `@specwright/mcp` server exposes pipeline tools that Claude Desktop calls automatically. The `e2e-desktop-automate` skill orchestrates the full pipeline by sending tool calls to each phase in order. Each phase runs a subagent inside your project.
+
+**Setup requirement:** Install `@specwright/plugin` in your project first, then add the MCP server config to Claude Desktop's `claude_desktop_config.json`. See the [Claude Desktop docs](/docs/interfaces/claude-desktop) for the exact config block.
+
+## Can I use multiple interfaces?
+
+Yes. All three interfaces read from the same `instructions.js` and `.env.testing` files in your project. There is no per-interface state. Switch freely between terminal, Desktop App, and Claude Desktop — the pipeline behavior is identical.
+
+## Quick pick flowchart
+
+```
+Are you in the terminal?
+  └── Yes → Plugin + CLI (/e2e-automate)
+
+Do you want to see phases visually?
+  └── Yes → Desktop App
+
+Do you already use Claude Desktop daily?
+  └── Yes → Claude Desktop (MCP)
+```
+
+<DocsPrevNext />

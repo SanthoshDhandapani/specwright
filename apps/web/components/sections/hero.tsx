@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Spotlight } from "../ui/spotlight";
 import { BackgroundBeams } from "../ui/background-beams";
+import { SpecwrightLogo } from "../ui/specwright-logo";
 
 const TAGLINES = [
   "Written for you.",
@@ -36,8 +37,11 @@ export function HeroSection() {
           transition={{ duration: 0.5 }}
           className="mb-6"
         >
-          <span className="text-2xl md:text-3xl font-bold tracking-widest uppercase bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-transparent">
-            ⚡ Specwright
+          <span className="inline-flex items-center gap-3">
+            <SpecwrightLogo className="h-7 md:h-9 w-auto" />
+            <span className="text-2xl md:text-3xl font-bold tracking-widest uppercase bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-transparent">
+              Specwright
+            </span>
           </span>
         </motion.div>
 

@@ -1,0 +1,140 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Selector Failures
+
+Selector failures are the most common test failure type. They happen when a Playwright locator can't find the element it expects.
+
+## Reading the failure output
+
+```
+TimeoutError: page.getByTestId('submit-btn').click() — waiting for element
+  locator: getByTestId('submit-btn')
+  element not found after 30000ms
+```
+
+The failure tells you: the selector (`submit-btn`), the action (`click`), and the timeout.
+
+## Common causes and fixes
+
+### 1. The `data-testid` attribute was renamed
+
+The app code changed `data-testid="submit-btn"` to `data-testid="form-submit"` and the test was not updated.
+
+**Fix:** Re-run `/e2e-heal` to automatically detect and fix mismatched selectors. The healer reads the failure, navigates to the page, and finds the correct selector.
+
+```bash
+/e2e-heal @ModuleName
+```
+
+### 2. The element is inside a shadow DOM or iframe
+
+Playwright cannot cross shadow DOM boundaries with `getByTestId` by default.
+
+**Fix:** Add `{ strict: false }` to the locator or pierce the shadow root:
+
+```js
+await page.locator('css=my-component >> css=[data-testid="input"]').fill(value);
+```
+
+Document this pattern in your knowledge base so the AI generates it correctly next time.
+
+### 3. The element is not visible (hidden behind another element)
+
+The element exists in the DOM but is not visible (e.g., in a collapsed accordion or behind a modal overlay).
+
+**Fix:** Add a step to expand/open the container before interacting:
+
+```gherkin
+When I expand the "Advanced Settings" accordion
+And I fill in the "Timeout" field with "30"
+```
+
+### 4. The element appears after a network request
+
+The element renders after an API call completes. The test clicks too early.
+
+**Fix:** Add explicit wait:
+
+```js
+await page.waitForLoadState('networkidle');
+// or
+await expect(page.getByTestId('results-table')).toBeVisible();
+```
+
+The `navigation.steps.js` shared step `When I navigate to "{pageName}"` already calls `waitForLoadState('networkidle')` — use it instead of custom navigation.
+
+### 5. The element selector is too specific
+
+The locator matches correctly in development but breaks in staging because the element's position or sibling count changed.
+
+**Fix:** Prefer `getByTestId` over complex CSS selectors. If `data-testid` attributes are missing, add them to the app:
+
+```tsx
+<button data-testid="save-booking-btn">Save</button>
+```
+
+### 6. React Select dropdown options not found
+
+React Select renders options in a portal outside the component's container. A plain `getByTestId` on the option won't work.
+
+**Fix:** Use the `selectDropDownByTestId` helper (available if your project has the React Select field type):
+
+```js
+await selectDropDownByTestId(page, 'status-select', 'Active');
+```
+
+Or if using the MUI plugin:
+
+```gherkin
+| Status | Active | COMBO_BOX |
+```
+
+### 7. Element found but wrong value asserted
+
+The assertion locates the element but the value doesn't match.
+
+```
+Expected: "John Doe"
+Received: "john doe"
+```
+
+**Fix:** Check if the app applies text transforms. Update the expected value or use case-insensitive matching:
+
+```js
+await expect(page.getByTestId('user-name')).toHaveText(/john doe/i);
+```
+
+## Using `/e2e-heal` for automatic repair
+
+The healer agent handles the most common selector failures automatically. It:
+
+1. Reads the Playwright failure output
+2. Navigates to the failing page in a browser
+3. Takes a snapshot to find the current selector
+4. Updates the step file with the corrected locator
+5. Re-runs the test (up to 3 iterations)
+
+```bash
+/e2e-heal @ModuleName
+# or heal all failing tests:
+/e2e-heal
+```
+
+The healer works best when:
+- The element still exists but its selector changed
+- The element was renamed (`data-testid` value changed)
+- The selector strategy changed (from CSS to testId)
+
+The healer cannot fix:
+- Missing elements (the feature was removed from the app)
+- Logic errors (the wrong element is being asserted)
+- Timing issues (requires adding explicit waits)
+
+## Preventing selector failures
+
+1. **Add `data-testid` to all interactive elements** — don't rely on text content or position
+2. **Use semantic selectors** — `getByRole('button', { name: 'Save' })` is more stable than `nth(2)`
+3. **Keep the exploration fresh** — re-run `/e2e-plan` after significant UI changes
+4. **Clear and re-generate after major refactors** — it's faster than healing 20 broken selectors
+
+<DocsPrevNext />

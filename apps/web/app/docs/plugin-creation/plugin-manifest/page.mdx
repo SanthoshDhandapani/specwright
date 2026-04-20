@@ -1,0 +1,61 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Plugin Manifest
+
+## Overview
+
+`specwright.plugin.json` lives at the plugin root. It is the detection signal — any directory without a valid manifest is rejected immediately by Specwright Desktop's 3-level validation before install even starts.
+
+## Full example
+
+```json
+{
+  "name": "@specwright/plugin-mui",
+  "version": "0.1.0",
+  "extends": "@specwright/plugin",
+  "requiredBaseVersion": ">=0.3.8",
+  "description": "Material UI overlay — MUI Select, Autocomplete, DatePicker, Dialog, Snackbar",
+  "authStrategy": "email-password",
+  "overrides": [
+    "e2e-tests/utils/stepHelpers.js",
+    "e2e-tests/playwright/auth-strategies/email-password.js",
+    ".claude/agents/playwright/code-generator.md",
+    ".claude/rules/dependencies.md"
+  ]
+}
+```
+
+## Field reference
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Plugin package name. Use `@scope/plugin-*` convention for npm packages. |
+| `version` | string | Yes | Semver version of the plugin. |
+| `extends` | string | Yes | Always `"@specwright/plugin"`. Only one base is supported. |
+| `requiredBaseVersion` | string | Yes | Minimum base plugin version required (semver range, e.g. `">=0.3.8"`). |
+| `description` | string | No | Human-readable description shown in Specwright Desktop's plugin picker. |
+| `authStrategy` | string | No | Default auth strategy this plugin configures. Valid values: `email-password`, `oauth`, `none`. |
+| `overrides` | string[] | Yes | Files this plugin replaces. Paths are relative to the **project root** being installed into, not relative to the plugin directory. |
+
+## 3-level validation
+
+Specwright Desktop and the `bootstrap()` function both run this sequence before installing any plugin:
+
+| Level | Check | Failure behavior |
+|---|---|---|
+| 1 | `specwright.plugin.json` present, valid JSON, has `name` + `version` fields | Rejected with "Invalid plugin manifest" |
+| 2 | `install.sh` present and executable (`chmod +x`) | Rejected with "Missing or non-executable install.sh" |
+| 3 | Every path listed in `overrides[]` exists inside the plugin's `overrides/` directory | Rejected with the specific missing path listed |
+
+All three levels must pass before the plugin is applied.
+
+## Naming convention
+
+For community and org plugins, follow these conventions to maximize discoverability:
+
+- **Package name**: `specwright-plugin-*` (unscoped) or `@scope/plugin-*` (scoped)
+- **package.json keywords**: `["specwright-plugin"]`
+
+This makes the plugin appear in `npm search specwright-plugin` results and in Specwright Desktop's npm tab browser.
+
+<DocsPrevNext />

@@ -6,18 +6,18 @@ The Specwright pipeline runs sequentially through 10 phases. Each phase has a cl
 
 ## Overview
 
-```
-Phase 1   Initialization        Read instructions.js → build pipeline plan
-Phase 2   Detection & Routing   Detect input sources (Jira / file / text)
-Phase 3   Input Processing      Fetch Jira / convert file / normalise text → parsed plan
-Phase 4   Exploration           Browser agent explores live app → seed file + plan
-Phase 5   Seed Validation       (optional) Run seed.spec.js to verify selectors
-Phase 6   ⛔ User Approval       Present plan — wait for explicit yes before proceeding
-Phase 7   BDD Generation        bdd-generator + code-generator → .feature + steps.js
-Phase 8   Test & Heal           (optional) Run tests, auto-fix failures up to 3 iterations
-Phase 9   Cleanup               Remove intermediate plan/seed files
-Phase 10  Final Review          Quality score + phase-by-phase summary
-```
+| Phase | Name | What happens |
+|---|---|---|
+| 1 | Initialization | Read `instructions.js` → build pipeline plan |
+| 2 | Detection & Routing | Detect input sources (Jira / file / text) |
+| 3 | Input Processing | Fetch Jira / convert file / normalise text → parsed plan |
+| 4 | Exploration | Browser agent explores live app → seed file + plan |
+| 5 | Seed Validation | _(optional)_ Run `seed.spec.js` to verify selectors |
+| 6 | ⛔ User Approval | Present plan — wait for explicit yes before proceeding |
+| 7 | BDD Generation | `bdd-generator` + `code-generator` → `.feature` + `steps.js` |
+| 8 | Test & Heal | _(optional)_ Run tests, auto-fix failures up to 3 iterations |
+| 9 | Cleanup | Remove intermediate plan/seed files |
+| 10 | Final Review | Quality score + phase-by-phase summary |
 
 ## Phase 1 — Initialization
 

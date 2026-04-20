@@ -1,0 +1,132 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# MCP Tools Reference
+
+Specwright uses several MCP servers depending on your interface and inputs.
+
+## MCP Servers
+
+| Server | Package | Required? | Used by |
+|---|---|---|---|
+| `playwright-test` | `@playwright/mcp` | Always | `@playwright-test-planner` agent (browser automation) |
+| `markitdown` | `markitdown-mcp-npx` | When using `filePath` input | `@process-manager` agent (PDF/DOCX conversion) |
+| `atlassian` | Atlassian-hosted MCP | When using `inputs.jira.url` | `@process-manager` agent (Jira ticket fetching) |
+| `specwright` | `@specwright/mcp` | Claude Desktop only | Pipeline control via natural language |
+
+---
+
+## Playwright MCP Tools
+
+These tools are used internally by the `@playwright-test-planner` agent. **You do not call them directly.** They are listed here for reference when reading agent logs or debugging Phase 4 failures.
+
+| Tool | Description |
+|---|---|
+| `browser_navigate` | Navigate to a URL |
+| `browser_snapshot` | Capture accessibility tree snapshot of page or element |
+| `browser_click` | Click an element by ref or selector |
+| `browser_type` | Type text into a focused element |
+| `browser_select_option` | Select a dropdown option |
+| `browser_evaluate` | Run JavaScript in browser context |
+| `browser_close` | Close the browser |
+
+The planner agent uses `browser_snapshot` extensively — it produces the accessibility tree that the agent reads to discover selectors, without requiring screenshots. This is faster and more token-efficient than image-based exploration.
+
+---
+
+## Specwright MCP Tools
+
+> **Claude Desktop only.** `@specwright/mcp` is not required for the Plugin + CLI or Desktop App interfaces. Only install it if you use Claude Desktop to run the pipeline.
+
+These tools give Claude Desktop the ability to drive the full pipeline through natural language without a terminal.
+
+| Tool | Description | When used |
+|---|---|---|
+| `start_pipeline` | Start the full 10-phase pipeline | Natural language trigger |
+| `approve_plan` | Approve the Phase 6 test plan | After reviewing the generated plan |
+| `reject_plan` | Reject Phase 6 plan with a reason | To refine the plan before generation |
+| `get_pipeline_status` | Check which phase is currently active | Progress check mid-run |
+| `get_generated_files` | Read generated `.feature` and `steps.js` | After Phase 7 completes |
+
+Each tool spawns a subagent in the client project. The MCP server itself is stateless — `get_pipeline_status` reads from the filesystem, not from an in-memory process.
+
+---
+
+## Markitdown MCP
+
+Used by `@process-manager` in Phase 3 to convert local files (PDF, DOCX, PPTX) into plain text before scenario extraction.
+
+| Tool | Description |
+|---|---|
+| `convert` | Convert a local file to markdown text |
+
+Configured in `.mcp.json`:
+
+```json
+"markitdown": {
+  "command": "npx",
+  "args": ["markitdown-mcp-npx"]
+}
+```
+
+---
+
+## Atlassian MCP
+
+Used by `@process-manager` in Phase 3 to fetch Jira ticket content (description, acceptance criteria, attachments) when `inputs.jira.url` is set.
+
+| Tool | Description |
+|---|---|
+| `fetch` | Fetch a Jira issue by URL or ticket ID |
+| `search` | Search Jira issues using JQL |
+
+Configured as a streamable-http server pointing to Anthropic's hosted Atlassian MCP:
+
+```json
+"atlassian": {
+  "type": "streamable-http",
+  "url": "https://mcp.atlassian.com/v1/mcp"
+}
+```
+
+Authentication uses your Atlassian OAuth token or `JIRA_API_TOKEN` env var. The Atlassian MCP is only included in the pipeline when `inputs.jira.url` is set — it is not loaded for non-Jira runs.
+
+---
+
+## Configuration
+
+### Project `.mcp.json`
+
+Add this file to your project root to configure the Playwright MCP server. The plugin init command writes this automatically — only edit it manually if you need to change defaults.
+
+```json
+{
+  "mcpServers": {
+    "playwright-test": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--output-dir", ".playwright-mcp"]
+    }
+  }
+}
+```
+
+The `--output-dir .playwright-mcp` flag keeps MCP screenshots out of your project root. The `.playwright-mcp/` directory should be added to `.gitignore`.
+
+### Claude Desktop Config
+
+To use the Specwright MCP server from Claude Desktop, add this to `~/.claude/claude_desktop_config.json`. Set `PROJECT_PATH` to the absolute path of the project you want to automate.
+
+```json
+{
+  "mcpServers": {
+    "specwright": {
+      "command": "npx",
+      "args": ["-y", "@specwright/mcp"],
+      "env": { "PROJECT_PATH": "/path/to/your-project" }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after editing this file. You can verify connectivity by asking: "What is the current pipeline status for my project?"
+
+<DocsPrevNext />

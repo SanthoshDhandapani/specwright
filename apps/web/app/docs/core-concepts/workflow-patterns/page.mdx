@@ -1,0 +1,213 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Workflow Patterns
+
+Specwright supports three distinct execution patterns depending on whether your scenarios are independent, share data across module boundaries, or depend on each other within a single module.
+
+---
+
+## Four execution modes
+
+| Mode | Tag | Workers | Data handoff | Use when |
+|---|---|---|---|---|
+| Regular | _(none)_ | parallel | none | Independent scenarios, no shared state |
+| Parallel | `@parallel-scenarios-execution` | N (fully parallel) | none | Stateless scenarios that can run concurrently |
+| Cross-module workflow | `@precondition` + `@workflow-consumer` | 1 → N | `test-data/{scope}.json` | Multi-phase journeys spanning different pages |
+| Serial CRUD | `@serial-execution` | 1 | Live app DB | Single-module scenarios that chain state |
+
+---
+
+## Cross-module workflows (`@precondition` + `@workflow-consumer`)
+
+Use this pattern when data created in Phase 0 must be available to Phase 1+ — and the phases navigate to **different pages or modules**.
+
+### Config shape
+
+```js
+{
+  moduleName: '@BookingWorkflow',
+  category: '@Workflows',
+  subModuleName: ['@0-Precondition', '@1-FilterAndSearch', '@2-BulkActions'],
+  fileName: 'booking_workflow',
+  pageURL: 'http://localhost:3000/bookings',
+  instructions: [
+    '@0-Precondition (precondition @cross-feature-data): Navigate to /bookings, capture total row count and first-row status, save as predata under scope "bookingworkflow"',
+    '@1-FilterAndSearch (workflow-consumer): Load predata from "bookingworkflow", filter by captured status, verify count matches',
+    '@2-BulkActions (workflow-consumer): Load predata, select 2 rows, verify toolbar shows "2 items selected"',
+  ],
+  explore: true,
+}
+```
+
+Each `subModuleName` entry becomes a separate directory and Playwright project phase. Phases run in order via project dependencies.
+
+### Phase tagging in instructions
+
+Each instruction string that belongs to a phase starts with the phase name:
+
+```
+'@0-Precondition (precondition @cross-feature-data): ...'
+'@1-FilterAndSearch (workflow-consumer): ...'
+```
+
+**Precondition phases** — marked `(precondition @cross-feature-data)`:
+- Run via the `precondition` project (1 worker, sequential)
+- Write data to `e2e-tests/test-data/{scopeName}.json`
+- Data is available to all consumer phases via file read
+
+**Consumer phases** — marked `(workflow-consumer)`:
+- Run via the `workflow-consumers` project (parallel, after precondition completes)
+- Read data with `Given I load predata from "{scopeName}"`
+- Poll the JSON file with a 30-second timeout so parallel workers don't race
+
+### Data handoff
+
+```gherkin
+# Phase @0 — writes to file
+Scenario: Capture booking state
+  Given I navigate to the "Bookings" page
+  When I note the total row count
+  And I save the row count as predata under scope "bookingworkflow"
+
+# Phase @1 — reads from file
+Scenario: Verify filter behaviour
+  Given I load predata from "bookingworkflow"
+  When I filter by the captured status value
+  Then the row count should decrease
+```
+
+### One-time setup guard
+
+When a precondition should only run once (idempotent fixture), add a guard so re-runs skip creation if data already exists:
+
+```gherkin
+@0-Precondition @cross-feature-data
+Scenario: Create test fixture (one-time)
+  Given predata does not exist for scope "fixture"
+  When I create the fixture and save it
+```
+
+### localStorage snapshot pattern
+
+For auth-gated workflows, the precondition saves the browser's full auth state so consumers don't need to re-authenticate:
+
+```gherkin
+# Phase @0-Auth (precondition @cross-feature-data)
+Scenario: Authenticate and snapshot storage
+  Given I log in with test credentials
+  And I save the browser storage as "workflow-auth"
+
+# Phase @1-Action (workflow-consumer)
+Scenario: Act as authenticated user
+  Given I restore browser storage from "workflow-auth"
+  When I navigate to the protected page
+```
+
+---
+
+## Serial CRUD (`@serial-execution`)
+
+Use this pattern when scenarios within a **single module** form a state chain — typically a full CRUD lifecycle where each scenario depends on the database state left by the previous one.
+
+```gherkin
+@ui @rules @serial-execution
+Feature: Task Assignment Restrictions
+
+  @critical @crud @create
+  Scenario: Create a rule           # → creates "E2E Test Rule"
+    ...
+
+  @critical @crud @edit
+  Scenario: Edit the rule           # → finds "E2E Test Rule", renames it
+    ...
+
+  @critical @crud @duplicate
+  Scenario: Duplicate the rule      # → duplicates the renamed rule
+    ...
+
+  @critical @crud @delete
+  Scenario: Delete duplicated rule  # → deletes the duplicate
+    ...
+
+  @cleanup @critical
+  Scenario: Clean up all test rules # → removes everything created above
+    ...
+```
+
+The `@serial-execution` tag at the Feature level routes the entire feature to the `serial-execution` Playwright project, which enforces:
+
+- **`workers: 1`** — all scenarios run in a single worker, in filesystem order
+- **Shared `storageState`** — uses the pre-authenticated `user.json` (no re-login per scenario)
+- **No file handoff** — data lives in the app's running database; each scenario reads state the previous one left behind
+
+### Key distinction from workflows
+
+| | Cross-module workflow | Serial CRUD |
+|---|---|---|
+| Data lives in | `test-data/{scope}.json` | App database |
+| Phases span | Multiple pages / modules | One module |
+| Consumer parallelism | Consumers run in parallel | Always 1 worker |
+| Data setup | Phase 0 writes, Phase 1+ read | Each scenario reads live DB state |
+| File handoff | Required | Not needed |
+
+### When to use `@serial-execution`
+
+- Full CRUD lifecycle: create → edit → duplicate → delete → cleanup
+- Each scenario's `When` clause depends on a named entity created in a prior scenario
+- All scenarios target the same page or module
+- You do **not** need data to survive across module boundaries
+
+### What NOT to use it for
+
+- Scenarios that are actually independent — use the default `main-e2e` project instead (parallel, faster)
+- Cross-module journeys — use `@precondition` + `@workflow-consumer` instead (proper file handoff)
+
+---
+
+## Execution order
+
+```
+setup (auth)
+  │
+  ├─→ serial-execution    @serial-execution modules   (workers: 1)
+  │
+  ├─→ precondition        workflow Phase 0             (workers: 1)
+  │       │
+  │       └─→ workflow-consumers   workflow Phase 1+  (parallel)
+  │
+  └─→ main-e2e            everything else              (parallel)
+```
+
+`run-workflow` and `chromium` are invoked explicitly only — they are never part of `pnpm test:bdd`.
+
+See [Playwright Projects](/docs/reference/playwright-projects) for the full project configuration and tag routing rules.
+
+---
+
+## Naming conventions
+
+| Convention | Example |
+|---|---|
+| Phase 0 is always the precondition | `@0-Precondition`, `@0-Auth`, `@0-CreateUser` |
+| Phases 1+ are consumers | `@1-FilterAndSearch`, `@2-BulkActions` |
+| Scope name matches workflow | `"bookingworkflow"`, `"userworkflow"` |
+| Phase tag format | `@0-PhaseName` (no spaces, PascalCase suffix) |
+| Serial CRUD tag | `@serial-execution` on the Feature line (not on individual Scenarios) |
+
+---
+
+## When to use each pattern
+
+**Use a cross-module workflow** (`@precondition` + `@workflow-consumer`) when:
+- Phase 0 creates or captures data that Phase 1+ must reference
+- Phases navigate to different pages or modules
+- You want consumer phases to run in parallel after setup
+
+**Use serial CRUD** (`@serial-execution`) when:
+- Scenarios form an ordered chain within one module (create → edit → delete)
+- Data lives in the app's running DB, not a hand-off file
+- Parallel execution would break scenario ordering
+
+**Use regular modules** (no special tag) for everything else. See [Modules vs Workflows](/docs/core-concepts/modules-vs-workflows) for the decision guide.
+
+<DocsPrevNext />

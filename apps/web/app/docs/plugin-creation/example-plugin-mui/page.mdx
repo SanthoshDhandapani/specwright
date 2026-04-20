@@ -1,0 +1,74 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Example: plugin-mui
+
+## Overview
+
+`@specwright/plugin-mui` adds Material UI component support to Specwright. It is the reference implementation for how an overlay plugin should be structured and is used by the [Todo App example](/docs/examples/todo-app-mui).
+
+Published at [npmjs.com/package/@specwright/plugin-mui](https://www.npmjs.com/package/@specwright/plugin-mui).
+
+## What it overrides (4 of 7 slots)
+
+| Override | What it adds |
+|---|---|
+| `stepHelpers.js` | `MUI_SELECT`, `MUI_AUTOCOMPLETE`, `MUI_DATE_PICKER`, `MUI_CHIP_INPUT` FIELD_TYPES with interaction handlers |
+| `email-password.js` | Standard two-step login (re-exported from base — correct behavior for most MUI apps) |
+| `code-generator.md` | MUI interaction patterns — `role="combobox"` → `role="listbox"` → click option |
+| `dependencies.md` | `@mui/material` section: selector conventions, component-to-role mapping |
+
+## Installing
+
+```bash
+# Step 1: install base plugin
+npx @specwright/plugin init
+
+# Step 2: install MUI overlay
+npm install @specwright/plugin-mui
+bash node_modules/@specwright/plugin-mui/install.sh .
+```
+
+Or via Specwright Desktop:
+```
+Settings → Plugin → Change → npm tab → @specwright/plugin-mui
+```
+
+## What gets added to stepHelpers.js
+
+```js
+MUI_SELECT: 'MUI_SELECT',             // <Select> — click to open listbox, click option
+MUI_AUTOCOMPLETE: 'MUI_AUTOCOMPLETE', // <Autocomplete> — type to filter, click result
+MUI_DATE_PICKER: 'MUI_DATE_PICKER',   // <DatePicker> — clear + type date string + Tab
+MUI_CHIP_INPUT: 'MUI_CHIP_INPUT',     // chip input — type + Enter to add tag
+```
+
+Each key maps to a handler in `stepHelpers.js` that knows the specific Playwright interaction sequence for that component.
+
+## How the code-generator uses it
+
+The code-generator agent reads `code-generator.md` to understand which Playwright API calls to use for each MUI component. For example, given this instruction:
+
+```
+'@0-Precondition: Set Priority to High using the MUI Select dropdown.
+  Type "Work" in Category Autocomplete and select it.'
+```
+
+The agent generates:
+
+```js
+// MUI_SELECT handler
+await page.locator('[data-testid="priority-select"]').click();
+await page.getByRole('option', { name: 'High' }).click();
+
+// MUI_AUTOCOMPLETE handler
+await page.locator('[data-testid="category-autocomplete"]').fill('Work');
+await page.getByRole('option', { name: 'Work' }).click();
+```
+
+Without the MUI patterns in `code-generator.md`, the agent would generate standard `fill()` calls that don't work on MUI's controlled components.
+
+## Live example
+
+The Todo App at `apps/examples/todo-app/` uses this plugin end-to-end. See [Todo App (MUI Plugin)](/docs/examples/todo-app-mui) for a full walkthrough including workflow tests across MUI Select, Autocomplete, Snackbar, and Dialog.
+
+<DocsPrevNext />

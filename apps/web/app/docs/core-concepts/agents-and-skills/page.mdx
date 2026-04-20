@@ -13,7 +13,7 @@ import { DocsPrevNext } from "@/components/docs/docs-prev-next";
 
 **Agents never invoke each other.** Skills are the orchestrators — they pre-read files and pass content inline to agents.
 
-## Skills (7)
+## Skills (8)
 
 | Skill | Invoked as | What it does |
 |---|---|---|
@@ -23,9 +23,10 @@ import { DocsPrevNext } from "@/components/docs/docs-prev-next";
 | `e2e-heal` | `/e2e-heal @ModuleName` | Phase 8 only (run + fix failures) |
 | `e2e-run` | `/e2e-run` | Run existing tests without healing |
 | `e2e-validate` | `/e2e-validate` | Validate generated feature files |
+| `e2e-process` | `/e2e-process <jira-url-or-file>` | Phase 3 only — convert Jira tickets or files to a parsed test plan |
 | `e2e-desktop-automate` | Natural language in Claude Desktop | Full pipeline via MCP tools |
 
-## Agents (8)
+## Agents (9)
 
 ### `@playwright-test-planner`
 
@@ -33,19 +34,27 @@ The exploration agent. Opens a real browser, navigates your app, and builds the 
 
 - **Tools**: `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`
 - **Output**: `seed.spec.js`, `{module}-plan.md`, planner `MEMORY.md`
-- **Budget**: 20 browser calls max (5 in verification mode)
+- **Budget**: 20 browser calls max (5 in verification mode when memory is fresh)
+
+### `@explorer`
+
+Combines authentication + browser exploration into a single agent. Authenticates via the configured auth strategy, then navigates the app, discovers UI elements, and writes the seed file and test plan.
 
 ### `@bdd-generator`
 
-Converts the test plan into Gherkin `.feature` files using 3-column data tables.
+Converts the test plan into Gherkin `.feature` files using 3-column data tables (`| Field | Value | Type |`). Does not write Playwright implementation code — that is `@code-generator`'s job.
 
 ### `@code-generator`
 
-Converts the `.feature` file into Playwright `steps.js` using `processDataTable` + `validateExpectations`.
+Reads the `.feature` file and the seed file, then fills in the Playwright implementation inside `steps.js`. Uses `processDataTable()` + `validateExpectations()` from `stepHelpers.js`.
 
 ### `@playwright-test-healer`
 
-Diagnoses and fixes failing tests — greps source for broken selectors, applies fixes, retries up to 3 times.
+Diagnoses and fixes failing tests — greps source for broken selectors, applies targeted fixes, retries up to 3 iterations.
+
+### `@playwright-test-generator`
+
+Creates automated browser tests by executing test plan steps live via Playwright MCP tools, reading the recorded action log, and writing a working `seed.spec.js`.
 
 ### `@execution-manager`
 
@@ -53,21 +62,17 @@ Runs the correct Playwright command based on module category and tags:
 
 | Category / Tag | Projects |
 |---|---|
-| `@Workflows` | `--project setup --project run-workflow` |
-| `@authentication` | `--project auth-tests` |
-| `@serial-execution` | `--project setup --project serial-execution` |
+| `@Workflows` | `--project setup --project precondition --project workflow-consumers` |
+| `@authentication` in module name | `--project auth-tests` |
+| `@serial-execution` tag in feature file | `--project setup --project serial-execution` |
 | All other `@Modules` | `--project setup --project main-e2e` |
-
-### `@bdd-quality-scorer`
-
-Evaluates the generated test suite and produces the Phase 10 quality score (0–100).
 
 ### `@input-processor`
 
-Handles Phase 3 input conversion — Jira, files, plain text.
+Handles Phase 3 input conversion — converts Excel, CSV, PDF, JSON, Word, PowerPoint, and HTML files to parsed test plan markdown via the Markitdown MCP.
 
-### `@browser-probe`
+### `@jira-processor`
 
-Minimal diagnostic agent for verifying Playwright MCP connectivity.
+Fetches Jira requirements via the Atlassian MCP, analyzes completeness, asks targeted clarifying questions, and outputs refined requirements as a test plan.
 
 <DocsPrevNext />

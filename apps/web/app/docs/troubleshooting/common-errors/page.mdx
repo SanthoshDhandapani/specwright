@@ -1,0 +1,122 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Common Errors
+
+The most common errors new users hit, with cause and fix for each.
+
+---
+
+### 1. Browser doesn't open during Phase 4
+
+**Cause:** `HEADLESS=true` is the default. The browser is running — you just can't see it.
+
+**Fix:** Add this to `e2e-tests/.env.testing`:
+
+```bash
+HEADLESS=false
+```
+
+Restart the pipeline and Phase 4 will open a visible Chromium window.
+
+---
+
+### 2. `OAUTH_STORAGE_KEY` is undefined
+
+**Cause:** The field is missing from `.env.testing`, commented out, or misspelled. There is no fallback by design — an undefined storage key would silently inject auth into the wrong localStorage slot, causing all tests to run unauthenticated without an obvious error.
+
+**Fix:** Add the line explicitly to `.env.testing`:
+
+```bash
+OAUTH_STORAGE_KEY=your-exact-key-name
+```
+
+To find the correct key: open your app → log in → DevTools → Application → Local Storage → find the key containing your JWT or user object. Common names: `auth-token`, `user`, `session`, `supabase.auth.token`.
+
+---
+
+### 3. Phase 7 hangs for 2+ minutes
+
+**Cause:** The `@bdd-generator` agent is scanning all files in `shared/` to find reusable steps, instead of using the step list from the approved plan. This usually happens when the agent's memory file has accumulated stale context from a previous run.
+
+**Fix:** Clear the agent's memory and re-run:
+
+```bash
+rm -f .claude/agent-memory/bdd-generator/MEMORY.md
+```
+
+Then run `/e2e-automate` again. On the next run the agent will rebuild from the plan directly.
+
+---
+
+### 4. Consumer phase sees no data from precondition
+
+**Cause:** The precondition step saved only scalar values (strings, numbers) to `test-data.json`, but the consumer expects a re-hydrated store — typically the full localStorage state from the end of the precondition scenario.
+
+**Fix:** Add a localStorage snapshot in the precondition `After` hook so the full app state is captured:
+
+```js
+// e2e-tests/features/playwright-bdd/@Workflows/@YourWorkflow/@0-Precondition/steps.js
+
+After({ tags: '@cross-feature-data' }, async ({ page, $bddContext }) => {
+  const storage = await page.evaluate(() => JSON.stringify(localStorage));
+  const existing = $bddContext.testData ?? {};
+  $bddContext.testData = { ...existing, localStorageSnapshot: storage };
+});
+```
+
+The consumer phase reads `$bddContext.testData.localStorageSnapshot` to restore the exact localStorage state from Phase 0.
+
+---
+
+### 5. "Step not found" after editing a steps file
+
+**Cause:** playwright-bdd caches generated step bindings in `.features-gen/`. Editing `steps.js` after the cache was built means Playwright is still loading the old bindings.
+
+**Fix:**
+
+```bash
+rm -rf .features-gen/ && pnpm test:bdd
+```
+
+`pnpm test:bdd` runs `bddgen` before Playwright, which rebuilds `.features-gen/` from scratch.
+
+---
+
+### 6. Auth fails in tests but works in the browser manually
+
+**Cause:** Stale `storageState` — the `user.json` file was captured with a session that has since expired (or with the wrong user account).
+
+**Fix:** Delete the cached auth state and re-run:
+
+```bash
+rm -f e2e-tests/playwright/auth-storage/.auth/user.json
+pnpm test:bdd
+```
+
+The `setup` project will re-run auth and write a fresh `user.json` before the test suite starts.
+
+---
+
+### 7. Steps defined in one module aren't visible to another
+
+**Cause:** Steps defined in `@Modules/@SomePage/steps.js` are path-scoped — playwright-bdd only loads them for feature files that live under the same directory. They are invisible to any feature file in a different `@Module` directory.
+
+**Fix:** Move the step to `shared/` so it has global scope:
+
+```
+e2e-tests/features/playwright-bdd/shared/common.steps.js
+```
+
+Any step that is used — or might be used — across more than one module belongs in `shared/`. The `@bdd-generator` agent is instructed to check `shared/` before writing a new step, but it may miss edge cases; always verify after generation.
+
+---
+
+## Still stuck?
+
+Open an issue at [github.com/specwright/specwright/issues](https://github.com/specwright/specwright/issues) with:
+
+- Your `.env.testing` (redact credentials)
+- The failing phase number and the exact error message
+- Your `instructions.js` entry
+
+<DocsPrevNext />

@@ -1,0 +1,128 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Data Persistence Issues
+
+Test data issues cause failures that look like real bugs — a field is empty when it should be filled, or a record that should exist isn't found. This page helps diagnose and fix them.
+
+## `<from_test_data>` returns undefined
+
+The step tries to read a value that was never generated.
+
+**Symptoms:**
+```
+Error: testData['name'] is undefined
+Expected: "John Doe"
+Received: undefined
+```
+
+**Causes:**
+
+1. **The `<gen_test_data>` step ran in a different scenario** — `page.testData` is scenario-scoped. If Scenario A generated a name and Scenario B tries to read it, it won't be there.
+
+   Fix: Use `<gen_test_data>` and `<from_test_data>` within the same scenario.
+
+2. **The field name doesn't match** — `| Full Name | <gen_test_data> |` generates a value under the key `"Full Name"`. If the validation step uses a different label, the key lookup fails.
+
+   Fix: Ensure the field name in the `<gen_test_data>` row and the `<from_test_data>` row are identical.
+
+3. **The interaction step failed silently** — if the fill step threw an error that was caught, `testData` was never populated.
+
+   Fix: Check for selector failures in the same scenario (see [Selector Failures](/docs/troubleshooting/selector-failures)).
+
+## Predata file not found (workflow phases)
+
+```
+Error: Predata file not found: e2e-tests/test-data/booking.json after 30s
+```
+
+**Causes:**
+
+1. **Phase 0 (precondition) didn't run** — the precondition scenario was skipped or failed before writing the file.
+
+   Fix: Run just the precondition phase first and check for errors:
+   ```bash
+   npx playwright test --project precondition
+   ```
+
+2. **Scope name mismatch** — Phase 0 saves under `"booking"` but Phase 1 loads from `"bookingworkflow"`.
+
+   Fix: Check both the save step and the load step use the same scope name.
+
+3. **The file exists but is stale** — the file was written by a previous test run with different data.
+
+   Fix: Delete and re-run:
+   ```bash
+   rm e2e-tests/test-data/booking.json
+   npx playwright test --project precondition
+   ```
+
+## Predata file has wrong content
+
+The file exists and loads, but the values don't match what was created.
+
+**Causes:**
+
+1. **The precondition ran multiple times** — the file was overwritten by a later run with different generated values.
+
+   Fix: Use the one-time guard pattern:
+   ```gherkin
+   Given predata does not exist for scope "booking"
+   ```
+   This skips the scenario if the file already exists, preventing overwrites.
+
+2. **Worker timing** — a consumer started before the precondition fully wrote the file.
+
+   Fix: This should not happen because Playwright waits for the `precondition` project to finish before starting `workflow-consumers`. If it is happening, check that the `dependencies` field is set correctly in `playwright.config.ts`.
+
+## Auth state missing across phases
+
+```
+Error: storageState file not found: e2e-tests/test-data/workflow-auth.json
+```
+
+The workflow uses a saved auth state but it was never created or was deleted.
+
+**Fix:** The auth state is created by the `setup` project (Phase 0 of every run). Ensure `setup` ran successfully:
+
+```bash
+npx playwright test --project setup
+```
+
+If `setup` failed due to auth issues, see [Auth Issues](/docs/troubleshooting/auth-issues).
+
+## `featureDataCache` empty in second scenario
+
+Feature-level cache (shared across scenarios in one `.feature` file) appears empty in Scenario 2.
+
+**Cause:** The `BeforeAll` / `AfterAll` hooks that initialize the feature page are not executing — often because the test file has `fullyParallel: true` at the file level, which creates separate worker contexts.
+
+**Fix:** Add `// @ts-expect-error` if needed, but first check that `global-hooks.js` is being imported by your feature. Features in `@`-prefixed directories must import from `fixtures.js` — the global hooks are attached there.
+
+## `test-data/` directory doesn't exist
+
+```
+ENOENT: no such file or directory, open 'e2e-tests/test-data/booking.json'
+```
+
+The directory is created on first write, but if the precondition fails before writing, the directory may not exist.
+
+**Fix:**
+
+```bash
+mkdir -p e2e-tests/test-data
+```
+
+Or re-run the precondition — a successful run creates the directory automatically.
+
+## Resetting all test data
+
+To start fresh (clear all generated test data and auth state):
+
+```bash
+rm -rf e2e-tests/test-data/
+rm -rf e2e-tests/playwright/.auth/
+```
+
+The next full test run will regenerate everything.
+
+<DocsPrevNext />

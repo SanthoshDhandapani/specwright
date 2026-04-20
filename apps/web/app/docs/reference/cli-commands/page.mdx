@@ -1,0 +1,80 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# CLI Commands Reference
+
+All `pnpm` scripts installed by the plugin after `specwright init`, plus every Claude Code slash command available in the pipeline.
+
+---
+
+## BDD Test Scripts
+
+| Command | What it runs |
+|---|---|
+| `pnpm test:bdd` | Full suite: modules + workflows (recommended for CI) |
+| `pnpm test:bdd:all` | Everything including authentication tests |
+| `pnpm test:bdd:auth` | Authentication tests only (`auth-tests` project) |
+| `pnpm test:bdd:serial` | `@serial-execution` features only |
+| `pnpm test:bdd:workflows` | All workflows — precondition then consumers |
+| `pnpm test:bdd:workflow` | Single workflow — pair with `--grep @WorkflowTag` |
+| `pnpm test:bdd:debug` | Debug mode with `PWDEBUG=console` |
+
+## Report Scripts
+
+| Command | What it does |
+|---|---|
+| `pnpm report:playwright` | Open the Playwright HTML report in a browser |
+| `pnpm report:bdd` | Generate the BDD Cucumber HTML report |
+| `pnpm report:bdd:open` | Open the BDD Cucumber report in a browser |
+| `pnpm test:clean` | Remove reports, `.features-gen/`, and all `test-data/*.json` files |
+
+---
+
+## Running with Filters
+
+Always run `bddgen` before `playwright test`. The `pnpm test:bdd` family handles this automatically, but when using `npx` directly you must chain them.
+
+```bash
+# Filter by tag
+pnpm bddgen && npx playwright test --project setup --project main-e2e --grep @LoginPage
+
+# Filter by scenario title
+pnpm bddgen && npx playwright test --project setup --project main-e2e -g "Successful login"
+
+# Headed mode (visible browser window)
+pnpm bddgen && npx playwright test --project setup --project main-e2e --grep @Tag --headed
+
+# Single workflow
+pnpm bddgen && npx playwright test \
+  --project setup \
+  --project precondition \
+  --project workflow-consumers \
+  --grep @MyWorkflow
+```
+
+**Never run `npx playwright test` directly without `bddgen`.** It will execute against stale compiled specs in `.features-gen/` and silently pass or fail for the wrong reasons.
+
+---
+
+## Claude Code Slash Commands
+
+| Command | Description |
+|---|---|
+| `/e2e-automate` | Full 10-phase pipeline — process, plan, validate, generate, heal, score |
+| `/e2e-plan [url]` | Browser exploration + test plan only (Phases 4–5) |
+| `/e2e-generate [plan-file]` | BDD generation only (Phase 7) — feature files + step implementations |
+| `/e2e-heal [@ModuleName]` | Run tests + auto-heal failures (Phases 8–9) |
+| `/e2e-run` | Run existing tests without the healing loop |
+| `/e2e-validate` | Validate generated feature files and produce quality score |
+| `/e2e-process [input]` | Convert Jira ticket, PDF, or plain text into a structured test plan |
+| `/e2e-desktop-automate` | Full pipeline via MCP — for Claude Desktop only |
+
+### When to use each command
+
+- **Starting fresh on a new module:** `/e2e-automate` — runs everything end to end.
+- **Re-exploring after UI changes:** `/e2e-plan [url]` — refreshes selectors and plan without touching existing feature files.
+- **Regenerating after plan edits:** `/e2e-generate [plan-file]` — skips exploration, goes straight to BDD output.
+- **Fixing a broken test suite:** `/e2e-heal @ModuleName` — runs tests, diagnoses failures, applies fixes, retries.
+- **Checking test quality:** `/e2e-validate` — runs the scorer against the current feature files.
+- **Processing a Jira ticket:** `/e2e-process https://your-org.atlassian.net/browse/PROJ-123` — extracts acceptance criteria and formats them as a plan.
+
+<DocsPrevNext />

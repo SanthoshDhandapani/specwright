@@ -28,65 +28,232 @@ export default [
 ];
 ```
 
+---
+
 ## Field reference
 
 ### `moduleName` — string, required
 
-The module identifier. Must start with `@`. Used as a Playwright `--grep` tag and as part of the output path.
+The module identifier. Must start with `@`. Used as:
+- A Playwright `--grep` tag to filter which tests run
+- Part of the output file path (`@Modules/@LoginPage/login.feature`)
+- The agent memory key for selector caching
+
+```js
+moduleName: '@LoginPage'
+moduleName: '@BookingWorkflow'
+```
 
 ### `category` — `'@Modules' | '@Workflows'`, required
 
-| Value | Projects used |
-|---|---|
-| `@Modules` | `setup` + `main-e2e` |
-| `@Workflows` | `setup` + `run-workflow` |
+Determines which Playwright projects run this module.
+
+| Value | Projects used | Use when |
+|---|---|---|
+| `@Modules` | `setup` + `main-e2e` | Independent, parallel tests |
+| `@Workflows` | `setup` + `run-workflow` (+ precondition/consumers) | Multi-phase, data-sharing tests |
+
+See [Modules vs Workflows](/docs/core-concepts/modules-vs-workflows) for the full decision guide.
 
 ### `subModuleName` — string[]
 
-Phase names for multi-step workflows. Empty array for regular modules.
+Phase names for multi-step tests. Works for both `@Modules` and `@Workflows`. Empty array for single-phase tests.
+
+Each entry becomes a subdirectory in the generated feature path:
 
 ```js
+// Single phase — no sub-modules
+subModuleName: []
+
+// Multi-phase workflow (3 ordered phases)
 subModuleName: ['@0-Precondition', '@1-FilterAndSearch', '@2-BulkActions']
+
+// Multi-phase module (e.g. a complex form split across steps)
+subModuleName: ['@0-FillBasicInfo', '@1-FillAddress', '@2-Review']
+```
+
+Generated paths:
+```
+@Modules/@LoginPage/login.feature           (subModuleName: [])
+@Workflows/@BookingWorkflow/@0-Precondition/booking_workflow.feature
+@Workflows/@BookingWorkflow/@1-FilterAndSearch/booking_workflow.feature
 ```
 
 ### `fileName` — string, required
 
-Base filename for generated files (no extension, lowercase with underscores).
+Base filename for all generated files. Use lowercase with underscores, no extension.
+
+```js
+fileName: 'login'          // → login.feature, steps.js
+fileName: 'booking_workflow' // → booking_workflow.feature, steps.js
+```
 
 ### `pageURL` — string, required
 
-The URL the exploration agent navigates to first.
+The URL the exploration agent navigates to in Phase 4. Must be a running application URL.
+
+```js
+pageURL: 'http://localhost:3000/login'
+pageURL: 'https://staging.myapp.com/dashboard'
+```
 
 ### `filePath` — string, optional
 
-Path to a local file (PDF, DOCX) to use as the primary input source instead of `instructions[]`.
+Path to a local file (PDF, DOCX) to use as the **primary input source** instead of `instructions[]`. When set, the process-manager agent reads the document and extracts test scenarios from it.
+
+```js
+filePath: 'docs/booking-requirements.pdf'
+filePath: ''  // empty = use instructions[] array
+```
+
+If both `filePath` and `instructions` are set, the document takes precedence and `instructions` is treated as supplementary notes.
 
 ### `inputs.jira.url` — string, optional
 
-When set, Jira becomes the primary input source. `instructions[]` is treated as supplementary guidance.
+When set, the Jira ticket URL becomes the **primary input source**. The agent fetches the ticket content (acceptance criteria, description, attachments) and generates scenarios from it.
 
-### `instructions` — string[], required
+```js
+inputs: { jira: { url: 'https://yourorg.atlassian.net/browse/PROJ-123' } }
+inputs: { jira: { url: '' } }  // empty = not used
+```
+
+**Priority order:** Jira URL → `filePath` → `instructions[]`
+
+### `instructions` — string[], required (unless filePath or Jira is set)
 
 Plain-English descriptions of what to test. Each string maps to one or more Gherkin scenarios.
 
 ```js
 instructions: [
   'Verify the form has email and password fields',
-  '@0-CreateUser (precondition @cross-feature-data): Fill form → save as predata',
-  '@1-VerifyInList (workflow-consumer): Load predata, verify user in list',
+  'Successful login redirects to /dashboard',
+  'Wrong password shows "Invalid credentials" error',
 ]
 ```
 
+#### Workflow phase tagging in instructions
+
+For workflows, each instruction starts with the phase name in parentheses with a role marker:
+
+```js
+instructions: [
+  // Phase tag syntax: @PhaseName (role @tag-annotation): description
+  '@0-CreateUser (precondition @cross-feature-data): Fill Name, Email, Phone with <gen_test_data>. Submit. Verify success card. Save all values as predata under scope "userworkflow".',
+  '@0-CreateUser: Submit the form with all fields empty — verify "Name is required", "Email is required", "Phone is required" errors.',
+  '@1-VerifyInList (workflow-consumer): Load predata from "userworkflow". Navigate to /users list. Verify the created user card appears with correct name and email.',
+  '@1-VerifyInList: After the success card, click "Add Another User" — verify the form resets.',
+]
+```
+
+| Annotation | Meaning |
+|---|---|
+| `(precondition @cross-feature-data)` | This phase writes data consumed by later phases |
+| `(workflow-consumer)` | This phase reads predata from an earlier phase |
+| `(serial)` | This phase must run single-threaded (no parallel) |
+
 ### `explore` — boolean
 
-Whether to run Phase 4 (browser exploration). Set `false` to skip to Phase 7 using an existing plan.
+Controls Phase 4 (browser exploration). Should be `true` in almost all cases.
+
+```js
+explore: true   // Default — browser navigates your app, discovers selectors, builds the plan
+explore: false  // Skip browser exploration — scan local src/ directory instead
+```
+
+Set `false` only when:
+- The project is running locally and the `src/` directory is available for code scanning
+- The test plan is already well-understood and browser discovery isn't needed
+
+When `explore: false`, the pipeline reads your `src/` source files to infer selectors and component structure instead of opening a browser.
 
 ### `runExploredCases` — boolean
 
-Whether to run Phase 5 (seed validation). Default: `false`.
+Whether to run Phase 5 (seed validation). The seed file is raw Playwright test code generated directly from browser exploration. Running it validates that the selectors work before generating the BDD tests.
+
+```js
+runExploredCases: false  // Skip seed validation (default, faster)
+runExploredCases: true   // Validate selectors before generating BDD
+```
 
 ### `runGeneratedCases` — boolean
 
-Whether to run Phase 8 (test execution + auto-healing). Default: `false`.
+Whether to run Phase 8 (generated test execution + auto-healing). After generating the `.feature` and `steps.js` files, Phase 8 runs them and automatically fixes failures up to 3 times.
+
+```js
+runGeneratedCases: false  // Generate only, don't run (default)
+runGeneratedCases: true   // Generate and run tests
+```
+
+---
+
+## Multiple configs in one run
+
+Pass an array of config objects to test multiple modules in a single pipeline run:
+
+```js
+export default [
+  {
+    moduleName: '@LoginPage',
+    category: '@Modules',
+    // ...
+  },
+  {
+    moduleName: '@Dashboard',
+    category: '@Modules',
+    // ...
+  },
+  {
+    moduleName: '@BookingWorkflow',
+    category: '@Workflows',
+    subModuleName: ['@0-Precondition', '@1-Verify'],
+    // ...
+  },
+];
+```
+
+The pipeline processes each config entry in order through all 10 phases.
+
+---
+
+## Common patterns
+
+### Minimal module config
+
+```js
+{
+  moduleName: '@HomePage',
+  category: '@Modules',
+  subModuleName: [],
+  fileName: 'homepage',
+  pageURL: 'http://localhost:3000',
+  filePath: '',
+  inputs: { jira: { url: '' } },
+  instructions: ['Verify the page title and navigation links'],
+  explore: true,
+  runExploredCases: false,
+  runGeneratedCases: false,
+}
+```
+
+### Two-phase workflow
+
+```js
+{
+  moduleName: '@UserWorkflow',
+  category: '@Workflows',
+  subModuleName: ['@0-CreateUser', '@1-VerifyInList'],
+  fileName: 'user_workflow',
+  pageURL: 'http://localhost:3000/users/add',
+  filePath: '',
+  inputs: { jira: { url: '' } },
+  instructions: [
+    '@0-CreateUser (precondition @cross-feature-data): Fill and submit the create user form with <gen_test_data>. Save as predata under scope "userworkflow".',
+    '@1-VerifyInList (workflow-consumer): Load predata from "userworkflow". Navigate to /users. Verify the user appears in the list.',
+  ],
+  explore: true,
+  runExploredCases: false,
+  runGeneratedCases: false,
+}
+```
 
 <DocsPrevNext />

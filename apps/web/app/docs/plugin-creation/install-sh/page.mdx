@@ -1,0 +1,75 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# install.sh
+
+## What it does
+
+`install.sh` copies the `overrides/` tree into the target project on top of an already-installed base plugin. It is the only mechanism Specwright uses to apply an overlay — there is no package-manager hook or postinstall magic.
+
+## Standard template
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+TARGET=${1:-$(pwd)}
+OVERLAY_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Guard: base plugin must be installed first
+if [ ! -f "$TARGET/e2e-tests/playwright/fixtures.js" ]; then
+  echo "ERROR: Base @specwright/plugin not installed."
+  echo "Run: npx @specwright/plugin init"
+  exit 1
+fi
+
+# Copy override files onto base installation
+cp -r "$OVERLAY_DIR/overrides/." "$TARGET/"
+
+# Set auth strategy in .env.testing
+if grep -q "^AUTH_STRATEGY=" "$TARGET/e2e-tests/.env.testing" 2>/dev/null; then
+  sed -i '' 's/^AUTH_STRATEGY=.*/AUTH_STRATEGY=email-password/' "$TARGET/e2e-tests/.env.testing"
+else
+  echo "AUTH_STRATEGY=email-password" >> "$TARGET/e2e-tests/.env.testing"
+fi
+
+# Write overlay manifest to project root
+cp "$OVERLAY_DIR/specwright.plugin.json" "$TARGET/"
+
+echo "✓ my-org-e2e overlay installed"
+echo "  Next: set credentials in e2e-tests/.env.testing"
+```
+
+## Key sections explained
+
+**`TARGET=${1:-$(pwd)}`** — Accepts the project path as the first argument, defaulting to the current directory. This makes the script usable both as `bash install.sh .` and `bash install.sh /path/to/project`.
+
+**Guard check** — Fails loudly if the base plugin is not installed, with an actionable error message. The guard checks for `fixtures.js` since it is always present after a base plugin install. Without this guard, an accidental install into a bare project would silently copy files into the wrong location.
+
+**`cp -r overrides/. "$TARGET/"`** — The dot after `overrides/` copies the *contents* of the directory, not the directory itself. This preserves the full path structure so `overrides/e2e-tests/utils/stepHelpers.js` lands at `$TARGET/e2e-tests/utils/stepHelpers.js`.
+
+**`sed` update** — Updates `AUTH_STRATEGY` in `.env.testing` without clobbering other env vars. The `grep -q` check handles both the case where the key already exists (update in place) and where it doesn't (append).
+
+**Manifest copy** — Writes `specwright.plugin.json` to the project root so `detectPlugin()` can identify which overlay is installed at runtime and in Specwright Desktop's status display.
+
+## Idempotency
+
+Running `install.sh` twice is safe. It overwrites the override files and re-sets `AUTH_STRATEGY`, but makes no other changes. There is no need to uninstall before reinstalling.
+
+## Installing
+
+**From a local path:**
+```bash
+bash /path/to/my-org-e2e/install.sh .
+```
+
+**From an npm package:**
+```bash
+npm install my-org-e2e
+bash node_modules/my-org-e2e/install.sh .
+```
+
+**Via Specwright Desktop:**
+```
+Settings → Plugin → Change → Local tab → Browse to plugin directory
+```
+
+<DocsPrevNext />

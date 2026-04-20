@@ -1,0 +1,128 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Auth Issues
+
+Authentication problems prevent the pipeline from exploring or running tests. This page covers the most common auth failures and how to fix them.
+
+## Pipeline stops at auth — no browser exploration
+
+**Symptoms:**
+- Phase 4 completes in seconds with no browser activity
+- Agent log shows: `Auth failed — could not inject session`
+- Tests redirect to the login page instead of the target URL
+
+**Check `.env.testing` first:**
+
+```bash
+cat e2e-tests/.env.testing
+```
+
+Required fields for each strategy:
+
+| Strategy | Required fields |
+|---|---|
+| `oauth` | `AUTH_STRATEGY=oauth`, `OAUTH_STORAGE_KEY`, `TEST_USER_EMAIL` |
+| `email-password` | `AUTH_STRATEGY=email-password`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD` |
+| `none` | `AUTH_STRATEGY=none` |
+
+Missing or empty `OAUTH_STORAGE_KEY` is the most common oauth failure.
+
+## OAuth: storage key mismatch
+
+The agent tries to inject `{ key: "wrong-key", value: "{...}" }` but the app reads a different key.
+
+**How to find the correct key:**
+
+1. Log in to the app manually in your browser
+2. Open DevTools → Application → Local Storage
+3. Look for the key that contains your user token (usually a JSON object with `token`, `user`, or `email`)
+4. Copy the key name exactly (it is case-sensitive)
+
+**Set it in `.env.testing`:**
+
+```
+OAUTH_STORAGE_KEY=specwright-show-user
+```
+
+## OAuth: `TEST_USER_NAME` mismatch
+
+The pipeline detects the logged-in user by matching `TEST_USER_NAME` against what's displayed in the app header. If the name doesn't match, it re-triggers login.
+
+**Fix:** Set `TEST_USER_NAME` to exactly what the app displays:
+
+```
+TEST_USER_NAME=Santhosh
+```
+
+If the app shows an email address instead of a name, set `TEST_USER_NAME` to the email prefix or leave it blank (the agent will derive it from `TEST_USER_EMAIL`).
+
+## Email-password: 2FA blocking login
+
+If your app has two-factor authentication that can't be bypassed, add the bypass code:
+
+```
+TEST_2FA_CODE=99999999
+```
+
+Some apps accept a test bypass code for automation environments. Check with your backend team.
+
+## `authFile` not found
+
+```
+Error: ENOENT: no such file or directory 'e2e-tests/playwright/.auth/user.json'
+```
+
+The auth setup test must run before other tests. This is handled by the `setup` Playwright project which runs first.
+
+**Fix:** Run `pnpm test:bdd` instead of `npx playwright test` directly. The `test:bdd` script runs `bddgen` first which generates the correct project execution order.
+
+## Auth state expires mid-run
+
+Long test runs can outlast the auth session. The `setup` project re-authenticates at the start of each run, but if your session TTL is very short (< 5 minutes), tests may fail mid-run.
+
+**Fix:** If using oauth, check that `OAUTH_STORAGE_KEY` stores a long-lived token (not a session cookie that expires). Most JWT-based apps use localStorage tokens that last hours or days.
+
+## Desktop app: auth modal shows wrong fields
+
+The Desktop app shows email-password fields but you're using OAuth (or vice versa).
+
+**Fix:** The auth modal shows fields based on `AUTH_STRATEGY` in `.env.testing`. Open the `.env.testing` file in the Desktop environment editor and confirm `AUTH_STRATEGY` is set correctly, then save and re-open the auth modal.
+
+## `OAUTH_SIGNIN_PATH` not set
+
+If your app's sign-in page is not at `/signin`, the OAuth strategy can't find the login button.
+
+```
+OAUTH_SIGNIN_PATH=/auth/login
+```
+
+If `OAUTH_STORAGE_KEY` is set (localStorage injection path), `OAUTH_SIGNIN_PATH` is not needed — the pipeline skips the sign-in page entirely and injects the token directly.
+
+## `email-password` — wrong password field selector
+
+The login page uses a custom password input that doesn't match the default selector.
+
+**Fix:** Update `e2e-tests/data/authenticationData.js` with the correct `data-testid` values:
+
+```js
+export const authData = {
+  loginEmail: 'user-email-input',     // data-testid of email field
+  loginEmailSubmit: 'continue-btn',   // data-testid of "Continue" button
+  loginPassword: 'password-field',    // data-testid of password field
+  loginSubmit: 'sign-in-btn',         // data-testid of final submit button
+};
+```
+
+Find the correct values by inspecting the login page in browser DevTools.
+
+## Clearing stale auth state
+
+If auth worked before but is now failing, the saved auth state may be stale:
+
+```bash
+rm -rf e2e-tests/playwright/.auth/
+```
+
+This forces a fresh authentication on the next run.
+
+<DocsPrevNext />

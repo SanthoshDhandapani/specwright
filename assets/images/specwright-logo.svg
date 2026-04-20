@@ -1,7 +1,7 @@
 <svg viewBox="0 0 69 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Specwright logo">
   <defs>
     <linearGradient id="grad" x1="0" y1="0" x2="69" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#b09ef5"/>
+      <stop offset="0%" stop-color="#9e87f0"/>
       <stop offset="100%" stop-color="#5b78e8"/>
     </linearGradient>
   </defs>

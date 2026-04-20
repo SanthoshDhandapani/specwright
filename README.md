@@ -82,7 +82,7 @@ claude       # open Claude Code
 /e2e-automate
 ```
 
-Full docs: **[specwright-e2e-test-automator.vercel.app/docs](https://specwright-e2e-test-automator.vercel.app/docs)**
+Full docs: **[Specwright Documentation](https://specwright-e2e-test-automator.vercel.app/docs)**
 
 ---
 
@@ -182,7 +182,7 @@ e2e-tests/features/playwright-bdd/
 
 **ShowBuff** (`apps/examples/show-buff/`) is the primary demo app — a TV show discovery app with OAuth, custom Watchlists, and Favorites.
 
-**Live app:** [specwright-show-buff.vercel.app](https://specwright-show-buff.vercel.app/)
+**Live app:** [ShowBuff on Vercel](https://specwright-show-buff.vercel.app/)
 
 ```bash
 # Run locally
@@ -237,7 +237,7 @@ export default [
 ];
 ```
 
-Full field reference: [specwright-e2e-test-automator.vercel.app/docs/configuration/instructions](https://specwright-e2e-test-automator.vercel.app/docs/configuration/instructions)
+Full field reference: [instructions.js configuration](https://specwright-e2e-test-automator.vercel.app/docs/configuration/instructions)
 
 ### `e2e-tests/.env.testing`
 
@@ -262,7 +262,7 @@ HEADLESS=true                      # set false to watch the browser
 
 ## Documentation
 
-Full documentation at **[specwright-e2e-test-automator.vercel.app/docs](https://specwright-e2e-test-automator.vercel.app/docs)**
+Full documentation at **[Specwright Docs](https://specwright-e2e-test-automator.vercel.app/docs)**
 
 - [Getting Started](https://specwright-e2e-test-automator.vercel.app/docs/getting-started/introduction)
 - [10-Phase Pipeline](https://specwright-e2e-test-automator.vercel.app/docs/core-concepts/pipeline)

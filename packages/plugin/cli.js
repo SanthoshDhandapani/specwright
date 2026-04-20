@@ -147,31 +147,60 @@ function detectPackageManager(dir) {
   return 'pnpm';
 }
 
+function runUpdate() {
+  const installScript = path.join(__dirname, 'install.sh');
+  if (!fs.existsSync(installScript)) {
+    console.error('Error: install.sh not found in plugin package.');
+    process.exit(1);
+  }
+
+  const updateIndex = args.indexOf('update');
+  const target = args.find((a, i) => i > updateIndex && !a.startsWith('--')) || process.cwd();
+  const resolved = path.resolve(target);
+
+  if (!fs.existsSync(path.join(resolved, 'e2e-tests/playwright/fixtures.js'))) {
+    console.error('Error: @specwright/plugin not installed in this project. Run init first.');
+    process.exit(1);
+  }
+
+  console.log(`\n  Specwright E2E Plugin — Updating framework files\n`);
+  console.log(`  Target: ${resolved}\n`);
+  console.log('  ℹ  User-customized files (authenticationData.js, .env.testing, instructions.js) are preserved.\n');
+
+  try {
+    execSync(`bash "${installScript}" "${resolved}" --skip-auth --skip-install`, {
+      stdio: 'inherit',
+      env: { ...process.env },
+    });
+    console.log('\n  ✅ Base plugin updated.\n');
+  } catch {
+    process.exit(1);
+  }
+}
+
 if (command === 'init') {
   runInit();
+} else if (command === 'update') {
+  runUpdate();
 } else {
   console.log(`
   @specwright/plugin — AI-powered E2E test automation
 
   Usage:
     npx @specwright/plugin init [target-dir] [options]
+    npx @specwright/plugin update [target-dir]
 
-  Options:
+  Commands:
+    init    Install the plugin into a project (interactive)
+    update  Update framework files to the latest version
+            (preserves authenticationData.js, .env.testing, instructions.js)
+
+  Init options:
     --skip-auth           Skip authentication test module
     --with-auth           Include authentication module (default, no prompt)
     --base-url=URL        Set base URL (e.g., --base-url=http://localhost:3000)
     --pm=MANAGER          Set package manager: pnpm, npm, or yarn
     --non-interactive     Skip all prompts, use defaults (for CI/desktop app)
-
-  This installs the Playwright BDD framework, Claude Code agents,
-  MCP server config, and shared step definitions into your project.
-
-  After install:
-    pnpm install                    Install dependencies
-    npx playwright install          Install browsers
-    pnpm test:bdd                   Run tests
-    claude → /e2e-automate          Generate tests with AI
-    claude → /e2e-desktop-automate  Explore & plan via browser
 
   More info: https://github.com/SanthoshDhandapani/specwright
   `);

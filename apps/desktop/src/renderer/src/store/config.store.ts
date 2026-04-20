@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { usePipelineStore } from "./pipeline.store";
+import { useInstructionStore } from "./instruction.store";
 
 export type PluginSource =
   | { type: "local"; dirPath: string }
@@ -87,6 +88,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   bootstrapAt: async (folder: string, authStrategy?: "email-password" | "oauth" | "none") => {
     usePipelineStore.getState().clearFeed();
+    useInstructionStore.getState().clearAll();
     set({ projectPath: folder, projectState: "bootstrapping", bootstrapLog: [] });
 
     const { pendingPlugin } = get();
@@ -113,6 +115,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   loadExistingProject: async (folderPath: string) => {
     usePipelineStore.getState().clearFeed();
+    useInstructionStore.getState().clearAll();
     await window.specwright.project.setPath(folderPath);
     const isReady = await window.specwright.project.isBootstrapped(folderPath);
     if (!isReady) {
@@ -159,6 +162,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   resetProject: async () => {
     usePipelineStore.getState().clearFeed();
+    useInstructionStore.getState().clearAll();
     await window.specwright.project.setPath("");
     set({ projectPath: "", projectState: "none", envVars: { ...DEFAULT_ENV }, pendingPlugin: null });
   },

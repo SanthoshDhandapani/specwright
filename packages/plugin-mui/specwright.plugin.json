@@ -1,0 +1,14 @@
+{
+  "name": "@specwright/plugin-mui",
+  "version": "0.1.4",
+  "extends": "@specwright/plugin",
+  "requiredBaseVersion": ">=0.4.0",
+  "description": "Material UI overlay — MUI Select, Autocomplete, DatePicker, Dialog, Snackbar FIELD_TYPES and Playwright patterns",
+  "authStrategy": "email-password",
+  "overrides": [
+    "e2e-tests/utils/stepHelpers.js",
+    "e2e-tests/playwright/auth-strategies/email-password.js",
+    ".claude/agents/playwright/code-generator.md",
+    ".claude/rules/dependencies.md"
+  ]
+}

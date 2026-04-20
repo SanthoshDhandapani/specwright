@@ -14,30 +14,18 @@ on:
           - all
           - mac
           - windows
-          - linux
   push:
     tags:
       - "desktop-v*"
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            platform: mac
-            dist_cmd: pnpm --filter @specwright/desktop dist:mac
-          - os: windows-latest
-            platform: windows
-            dist_cmd: pnpm --filter @specwright/desktop dist:win
-          # - os: ubuntu-latest
-          #   platform: linux
-          #   dist_cmd: pnpm --filter @specwright/desktop dist:linux
-    runs-on: ${{ matrix.os }}
+  build-mac:
+    name: Build (mac)
+    runs-on: macos-latest
     if: >
       startsWith(github.ref, 'refs/tags/desktop-v') ||
       github.event.inputs.platform == 'all' ||
-      github.event.inputs.platform == matrix.platform
+      github.event.inputs.platform == 'mac'
 
     steps:
       - name: Checkout
@@ -59,17 +47,55 @@ jobs:
         run: pnpm --filter @specwright/agent-runner build
 
       - name: Build desktop distributables
-        run: ${{ matrix.dist_cmd }}
+        run: pnpm --filter @specwright/desktop dist:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: specwright-${{ matrix.platform }}
+          name: specwright-mac
           path: |
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.zip
+          retention-days: 30
+
+  build-windows:
+    name: Build (windows)
+    runs-on: windows-latest
+    if: >
+      startsWith(github.ref, 'refs/tags/desktop-v') ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'windows'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace dependencies
+        run: pnpm --filter @specwright/agent-runner build
+
+      - name: Build desktop distributables
+        run: pnpm --filter @specwright/desktop dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: specwright-windows
+          path: |
             apps/desktop/dist/*.exe
-            apps/desktop/dist/*.AppImage
           retention-days: 30

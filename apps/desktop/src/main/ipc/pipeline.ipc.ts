@@ -254,7 +254,7 @@ export function registerPipelineIpc(
       // Uses the local cli.js so no npx download delay. Headed by default; --headless
       // flag added only when the user enables headless mode in the Desktop ConfigPanel.
       const playwrightMcpCli = path.join(
-        path.dirname(require.resolve("@playwright/mcp/cli")),
+        path.dirname(require.resolve("@playwright/mcp")),
         "cli.js"
       );
       const mcpServers: Record<string, Record<string, unknown>> = {

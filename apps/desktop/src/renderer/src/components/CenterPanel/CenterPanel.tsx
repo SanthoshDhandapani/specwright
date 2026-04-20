@@ -730,6 +730,31 @@ export default function CenterPanel(): React.JSX.Element {
 
   const hasTests = featureModules.modules.length > 0 || featureModules.workflows.length > 0;
 
+  // ── Reports availability ──────────────────────────────────────────────────────
+  const [reportAvailability, setReportAvailability] = useState({ playwright: false, bdd: false });
+  const [showReportMenu, setShowReportMenu] = useState(false);
+  const reportMenuRef = useRef<HTMLDivElement>(null);
+
+  const checkReportAvailability = useCallback(() => {
+    if (!projectPath || !window.specwright.report) return;
+    window.specwright.report.checkAvailable(projectPath).then(setReportAvailability);
+  }, [projectPath]);
+
+  useEffect(() => {
+    checkReportAvailability();
+  }, [checkReportAvailability]);
+
+  // Close report menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) {
+        setShowReportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const openRunPicker = useCallback(async () => {
     if (projectPath) {
       const [scripts, modules] = await Promise.all([
@@ -820,6 +845,7 @@ export default function CenterPanel(): React.JSX.Element {
       }
 
       finishRun(fullText, sessionId, userMessage);
+      checkReportAvailability();
     });
     const offError = window.specwright.pipeline.onError(({ error }) => setError(error));
     const offLog   = window.specwright.pipeline.onLog(({ line }) => {
@@ -918,6 +944,8 @@ export default function CenterPanel(): React.JSX.Element {
               Healer
             </button>
           </div>
+          {/* Right-side actions: Run Tests + Reports grouped together */}
+          <div className="flex items-center gap-4">
           {/* Run Tests — only shown when generated tests exist */}
           {hasTests && (
             <button
@@ -927,6 +955,37 @@ export default function CenterPanel(): React.JSX.Element {
               <span>▶</span> Run Tests
             </button>
           )}
+
+          {/* Reports — only shown when at least one report exists */}
+          {(reportAvailability.playwright || reportAvailability.bdd) && (
+            <div className="relative" ref={reportMenuRef}>
+              <button
+                onClick={() => setShowReportMenu((v) => !v)}
+                className="text-slate-400 hover:text-slate-200 text-xs border border-slate-700 hover:border-slate-500 rounded px-2.5 py-1 transition-colors flex items-center gap-1.5"
+              >
+                <span>📊</span> Reports <span className="opacity-60">▾</span>
+              </button>
+              {showReportMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 min-w-[170px] py-1">
+                  <button
+                    disabled={!reportAvailability.playwright}
+                    onClick={() => { setShowReportMenu(false); window.specwright.report.openPlaywright(projectPath!); }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    <span>🎭</span> Playwright Report
+                  </button>
+                  <button
+                    disabled={!reportAvailability.bdd}
+                    onClick={() => { setShowReportMenu(false); window.specwright.report.openBdd(projectPath!); }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    <span>🥒</span> BDD Report
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          </div>
         </div>
       )}
 

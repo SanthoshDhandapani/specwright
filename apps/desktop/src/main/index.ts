@@ -6,6 +6,7 @@ import { registerConfigIpc } from "./ipc/config.ipc";
 import { registerProjectIpc } from "./ipc/project.ipc";
 import { registerPipelineIpc } from "./ipc/pipeline.ipc";
 import { registerAtlassianIpc } from "./ipc/atlassian.ipc";
+import { registerReportIpc } from "./ipc/report.ipc";
 import { initLogger, closeLogger, log, getLogFilePath, isLoggingEnabled, setLoggingEnabled } from "./logger";
 
 // Suppress EPIPE errors from aborted pipeline processes — these are expected
@@ -185,6 +186,7 @@ app.whenReady().then(async () => {
   registerProjectIpc(configService, projectService, () => mainWindow);
   registerPipelineIpc(configService, projectService, () => mainWindow);
   registerAtlassianIpc();
+  registerReportIpc();
 
   // Open a URL in the system default browser
   const { ipcMain } = await import("electron");

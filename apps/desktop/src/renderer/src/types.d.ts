@@ -54,6 +54,12 @@ interface ShellAPI {
   openUrl: (url: string) => Promise<void>;
 }
 
+interface ReportAPI {
+  checkAvailable: (projectPath: string) => Promise<{ playwright: boolean; bdd: boolean }>;
+  openPlaywright: (projectPath: string) => Promise<void>;
+  openBdd: (projectPath: string) => Promise<void>;
+}
+
 interface SpecwrightAPI {
   project: {
     pickFolder: () => Promise<string | null>;
@@ -102,6 +108,7 @@ interface SpecwrightAPI {
     openLog: () => Promise<boolean>;
   };
   shell: ShellAPI;
+  report: ReportAPI;
   atlassian: {
     status: () => Promise<{ status: "idle" | "connected" | "needs-auth" }>;
     connect: () => Promise<{ success: boolean; error?: string }>;

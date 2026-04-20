@@ -1,6 +1,7 @@
 name: Desktop Build
 
 # Trigger manually or via tag like "desktop-v0.1.0"
+# Does NOT trigger on branch pushes or PRs.
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +18,8 @@ on:
   push:
     tags:
       - "desktop-v*"
+    branches-ignore:
+      - "**"
 
 jobs:
   build:
@@ -40,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -63,7 +66,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: specwright-${{ matrix.platform }}
           path: |

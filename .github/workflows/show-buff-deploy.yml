@@ -1,0 +1,61 @@
+name: Deploy Show-Buff
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - preview
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.SHOW_BUFF_VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build show-buff
+        run: pnpm --filter @specwright/show-buff build
+
+      - name: Pull Vercel project settings
+        run: npx vercel pull --yes --environment=${{ github.event.inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/examples/show-buff
+
+      - name: Build for Vercel
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            npx vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+        working-directory: apps/examples/show-buff
+
+      - name: Deploy
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            npx vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+        working-directory: apps/examples/show-buff

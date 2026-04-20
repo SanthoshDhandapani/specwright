@@ -1,0 +1,104 @@
+name: Desktop Release
+
+# Triggered by pushing a tag like "desktop-v0.1.0"
+on:
+  push:
+    tags:
+      - "desktop-v*"
+    branches-ignore:
+      - "**"
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            dist_cmd: pnpm --filter @specwright/desktop dist:mac
+            artifacts: |
+              apps/desktop/dist/*.dmg
+              apps/desktop/dist/*.zip
+          - os: windows-latest
+            platform: windows
+            dist_cmd: pnpm --filter @specwright/desktop dist:win
+            artifacts: |
+              apps/desktop/dist/*.exe
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build agent-runner
+        run: pnpm --filter @specwright/agent-runner build
+
+      - name: Build distributables
+        run: ${{ matrix.dist_cmd }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: specwright-${{ matrix.platform }}
+          path: ${{ matrix.artifacts }}
+          retention-days: 7
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh release-artifacts/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Specwright Desktop ${{ github.ref_name }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: release-artifacts/**/*
+          body: |
+            ## Installation
+
+            | Platform | Download |
+            |---|---|
+            | macOS (Apple Silicon) | `Specwright-*-mac-arm64.dmg` |
+            | macOS (Intel) | `Specwright-*-mac-x64.dmg` |
+            | Windows | `Specwright-*-win-x64.exe` |
+
+            > **macOS:** Open the DMG, drag Specwright to Applications.
+            > **Windows:** Run the installer — the app will auto-launch when done.
+
+            ---

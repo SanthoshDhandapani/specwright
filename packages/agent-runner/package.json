@@ -11,7 +11,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-"@modelcontextprotocol/sdk": "^1.12.1",
+"@modelcontextprotocol/sdk": "^1.29.0",
     "ai": "^6.0.168",
     "@ai-sdk/anthropic": "^3.0.71",
     "@ai-sdk/mcp": "^1.0.36",

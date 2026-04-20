@@ -1,0 +1,28 @@
+# Add these lines to your project's .gitignore
+
+# Specwright bootstrap sentinel (written during install, deleted on completion)
+.bootstrapping
+
+# Claude Code (user-specific settings, not tracked)
+.claude/settings.local.json
+
+# Agent memory (runtime data, populated per-project)
+.claude/agent-memory/
+
+# playwright-bdd generated specs
+.features-gen/
+
+# E2E auth and test data
+e2e-tests/playwright/auth-storage/.auth/user.json
+e2e-tests/playwright/test-data/*.json
+e2e-tests/playwright/test-data/**/*.json
+
+# Playwright MCP screenshots
+.playwright-mcp/
+
+# Reports
+reports/cucumber-bdd/*
+reports/playwright/*
+reports/json/*
+reports/screenshots/*
+.specwright/

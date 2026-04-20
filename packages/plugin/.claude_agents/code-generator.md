@@ -225,14 +225,16 @@ The framework context provides:
 
 **Use processDataTable when:**
 
-- Step receives a Gherkin data table with 2+ fields
-- Fields use `<gen_test_data>` or `<from_test_data>` placeholders
-- Fields need different interaction types (FILL, DROPDOWN, etc.)
+- Step receives a Gherkin 3-column data table (regardless of whether values are static or dynamic)
+- FIELD_CONFIG maps each row's `Field Name` to its FIELD_TYPE (FILL, DROPDOWN, CLICK, CHECKBOX_TOGGLE, or any overlay-provided type)
+- This is the correct path for ALL multi-field form interactions — even if all values are `Static`
 
 **Use direct field interaction when:**
 
-- Single field operation (e.g., "Enter username")
-- No data table involved
+- Step has NO data table (single-field step like `I enter {string} in the search box`)
+- Standalone non-form actions (button click, navigation)
+
+**Key principle:** If bdd-generator put multiple form fields in a single data table, wire ALL of them through `processDataTable` with a `FIELD_CONFIG` entry per row. The FIELD_TYPE handles the interaction — `FILL` for text inputs, `DROPDOWN` for native selects/comboboxes, `CLICK` for toggles, `CHECKBOX_TOGGLE` for checkboxes. Overlay plugins (e.g. plugin-mui) provide additional FIELD_TYPES for custom components — use whatever types are available in the project's `stepHelpers.js`. Never generate separate `page.click()` / `page.fill()` calls for rows that belong to the same data table step.
 
 ```javascript
 // ✅ GOOD — Direct interaction for single field

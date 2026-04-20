@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "playwright-test": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
+    },
+    "markitdown": {
+      "command": "npx",
+      "args": [
+        "markitdown-mcp-npx"
+      ]
+    },
+    "atlassian": {
+      "type": "streamable-http",
+      "url": "https://mcp.atlassian.com/v1/mcp"
+    }
+  }
+}

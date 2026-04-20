@@ -21,3 +21,12 @@ e2e-tests/playwright/test-data/**/*.json
 # MCP server local deps
 packages/mcp-server/node_modules/
 packages/mcp-server/package-lock.json
+
+# Internal tooling & planning docs (not for repo)
+.claude/
+.changeset/
+.codegraph/
+.code-review-graph/
+AGENTS.md
+IMPLEMENTATION-PLAN.md
+NEXT-PHASE.md

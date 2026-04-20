@@ -1,0 +1,89 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# 10-Phase Pipeline
+
+The Specwright pipeline runs sequentially through 10 phases. Each phase has a clear input, output, and responsibility.
+
+## Overview
+
+```
+Phase 1   Initialization        Read instructions.js → build pipeline plan
+Phase 2   Detection & Routing   Detect input sources (Jira / file / text)
+Phase 3   Input Processing      Fetch Jira / convert file / normalise text → parsed plan
+Phase 4   Exploration           Browser agent explores live app → seed file + plan
+Phase 5   Seed Validation       (optional) Run seed.spec.js to verify selectors
+Phase 6   ⛔ User Approval       Present plan — wait for explicit yes before proceeding
+Phase 7   BDD Generation        bdd-generator + code-generator → .feature + steps.js
+Phase 8   Test & Heal           (optional) Run tests, auto-fix failures up to 3 iterations
+Phase 9   Cleanup               Remove intermediate plan/seed files
+Phase 10  Final Review          Quality score + phase-by-phase summary
+```
+
+## Phase 1 — Initialization
+
+Reads `e2e-tests/instructions.js` and builds a structured pipeline plan for each config entry. If `instructions.js` is empty or missing, prompts for setup.
+
+## Phase 2 — Detection & Routing
+
+Determines the input source priority for each config entry:
+
+| Field | Role |
+|---|---|
+| `inputs.jira.url` | Primary — fetches Jira ticket content |
+| `filePath` | Primary — reads/converts a local file (PDF, DOCX, etc.) |
+| `instructions[]` | Standalone or supplementary to a primary source |
+
+Priority order: **Jira → File → Instructions-only**
+
+## Phase 3 — Input Processing
+
+Converts the raw input into a structured parsed plan at `e2e-tests/plans/{module}-parsed.md`. For Jira tickets, uses the Atlassian MCP. For files, uses the markitdown MCP.
+
+## Phase 4 — Exploration
+
+**A real browser opens and navigates your app.** The `@playwright-test-planner` agent:
+
+1. Authenticates using `AUTH_STRATEGY` from `.env.testing`
+2. Navigates to `pageURL`
+3. Takes an initial full-page accessibility tree snapshot
+4. Clicks through interactive elements (budget: 20 browser calls)
+5. Writes `e2e-tests/playwright/generated/seed.spec.js` — validated selectors
+6. Writes `e2e-tests/plans/{module}-plan.md` — the test plan
+7. Updates `.claude/agent-memory/playwright-test-planner/MEMORY.md`
+
+> On repeat runs, if planner memory has fresh selectors for the URL, the agent runs in **verification mode** (5 browser calls instead of 20).
+
+## Phase 5 — Seed Validation (optional)
+
+Only runs when `runExploredCases: true`. Executes `seed.spec.js` to confirm discovered selectors work. Failures are healed before proceeding.
+
+## Phase 6 — User Approval ⛔
+
+**The pipeline always pauses here.** The plan is presented for review before any test files are written. Type `yes` / `approved` / `proceed` to continue.
+
+## Phase 7 — BDD Generation
+
+Two agents run sequentially:
+
+1. **`@bdd-generator`** — reads the plan and writes the Gherkin `.feature` file with 3-column data tables
+2. **`@code-generator`** — reads the `.feature` + seed selectors to write `steps.js` with full Playwright implementations
+
+**Output paths** (deterministic):
+```
+e2e-tests/features/playwright-bdd/{category}/@{moduleName}/{fileName}.feature
+e2e-tests/features/playwright-bdd/{category}/@{moduleName}/steps.js
+```
+
+## Phase 8 — Test & Heal (optional)
+
+Only runs when `runGeneratedCases: true`. The `@playwright-test-healer` agent runs tests, diagnoses failures, fixes selectors in `steps.js`, and retries — up to 3 iterations.
+
+## Phase 9 — Cleanup
+
+Removes `e2e-tests/plans/` contents and resets `seed.spec.js`. Agent memory and committed BDD files are **never removed**.
+
+## Phase 10 — Final Review
+
+Produces a quality score (0–100). A score ≥ 90 is **production-ready**.
+
+<DocsPrevNext />

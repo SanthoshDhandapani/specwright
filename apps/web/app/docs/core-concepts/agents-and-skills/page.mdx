@@ -1,0 +1,73 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Agents & Skills
+
+## Skills vs Agents
+
+| | Skills | Agents |
+|---|---|---|
+| **What** | Orchestration scripts | Pure building blocks |
+| **Invoked by** | User (slash command or prompt) | Skills only |
+| **Invokes** | Other skills + agents | Tools (browser, file, bash) |
+| **Example** | `/e2e-automate` | `@playwright-test-planner` |
+
+**Agents never invoke each other.** Skills are the orchestrators — they pre-read files and pass content inline to agents.
+
+## Skills (7)
+
+| Skill | Invoked as | What it does |
+|---|---|---|
+| `e2e-automate` | `/e2e-automate` | Full 10-phase pipeline |
+| `e2e-plan` | `/e2e-plan <url>` | Phases 4–5 only (explore + validate) |
+| `e2e-generate` | `/e2e-generate <plan-file>` | Phase 7 only (BDD generation) |
+| `e2e-heal` | `/e2e-heal @ModuleName` | Phase 8 only (run + fix failures) |
+| `e2e-run` | `/e2e-run` | Run existing tests without healing |
+| `e2e-validate` | `/e2e-validate` | Validate generated feature files |
+| `e2e-desktop-automate` | Natural language in Claude Desktop | Full pipeline via MCP tools |
+
+## Agents (8)
+
+### `@playwright-test-planner`
+
+The exploration agent. Opens a real browser, navigates your app, and builds the test plan.
+
+- **Tools**: `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`
+- **Output**: `seed.spec.js`, `{module}-plan.md`, planner `MEMORY.md`
+- **Budget**: 20 browser calls max (5 in verification mode)
+
+### `@bdd-generator`
+
+Converts the test plan into Gherkin `.feature` files using 3-column data tables.
+
+### `@code-generator`
+
+Converts the `.feature` file into Playwright `steps.js` using `processDataTable` + `validateExpectations`.
+
+### `@playwright-test-healer`
+
+Diagnoses and fixes failing tests — greps source for broken selectors, applies fixes, retries up to 3 times.
+
+### `@execution-manager`
+
+Runs the correct Playwright command based on module category and tags:
+
+| Category / Tag | Projects |
+|---|---|
+| `@Workflows` | `--project setup --project run-workflow` |
+| `@authentication` | `--project auth-tests` |
+| `@serial-execution` | `--project setup --project serial-execution` |
+| All other `@Modules` | `--project setup --project main-e2e` |
+
+### `@bdd-quality-scorer`
+
+Evaluates the generated test suite and produces the Phase 10 quality score (0–100).
+
+### `@input-processor`
+
+Handles Phase 3 input conversion — Jira, files, plain text.
+
+### `@browser-probe`
+
+Minimal diagnostic agent for verifying Playwright MCP connectivity.
+
+<DocsPrevNext />

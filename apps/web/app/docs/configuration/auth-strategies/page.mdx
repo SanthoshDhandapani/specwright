@@ -1,0 +1,46 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Auth Strategies
+
+Specwright supports two auth strategies, configured in `e2e-tests/.env.testing`.
+
+## Email + Password
+
+```bash
+AUTH_STRATEGY=email-password
+TEST_USER_EMAIL=you@example.com
+TEST_USER_PASSWORD=yourpassword
+```
+
+The agent fills a login form with the provided credentials, then saves browser storage state to `.auth/user.json`.
+
+## OAuth / localStorage injection
+
+For apps that use OAuth, Specwright bypasses the popup by injecting the auth token directly into `localStorage` — no browser OAuth flow needed.
+
+```bash
+AUTH_STRATEGY=oauth
+TEST_USER_EMAIL=you@example.com
+TEST_USER_NAME=Your Name
+OAUTH_STORAGE_KEY=your-auth-key     # localStorage key your app reads
+OAUTH_SIGNIN_PATH=/signin           # optional, default: /signin
+OAUTH_BUTTON_TEST_ID=               # optional, click-based fallback
+OAUTH_POST_LOGIN_URL=**/            # optional, default: **/
+TEST_USER_PICTURE=                  # optional, SVG initials auto-generated if blank
+```
+
+> **Finding your `OAUTH_STORAGE_KEY`:** Open your app in a browser, log in normally, then check `localStorage` in DevTools. Look for a key that contains a JWT or user object.
+
+## Storage state
+
+After successful authentication, Playwright saves browser storage state (cookies + localStorage) to:
+
+```
+e2e-tests/playwright/.auth/user.json
+```
+
+This file is loaded by all non-setup test projects so they start authenticated without re-running the login flow.
+
+> `e2e-tests/.env.testing` and `e2e-tests/playwright/.auth/` are both gitignored. Never commit credentials or auth state files.
+
+<DocsPrevNext />

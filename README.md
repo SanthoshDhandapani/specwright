@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="apps/desktop/build/specwright-logo.png" alt="Specwright" width="80">
   <h1 align="center">Specwright</h1>
   <p align="center">
     AI-powered E2E test automation. Point at your app, explore with real browsers, generate Playwright BDD tests.

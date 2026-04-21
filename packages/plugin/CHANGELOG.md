@@ -5,6 +5,20 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.4.1] — 2026-04-21
+
+### Fixed
+
+- **`install.sh` — bootstrap crash when running from npx cache.** The script was doing `cp "$PLUGIN_DIR/.specwright/.gitkeep" "$TARGET_DIR/.specwright/.gitkeep"` but `.specwright/` was not included in the published npm package, so the `cp` always failed with "No such file or directory" when installed via `npx`. Fixed by replacing the `cp` with `touch "$TARGET_DIR/.specwright/.gitkeep"` — the `.gitkeep` is an empty file, so creating it directly is equivalent and requires no source file from the package.
+
+- **`package.json` — added `.specwright/` to `files`.** The `.specwright/` directory was missing from the npm `files` manifest, meaning it was never shipped in the published package. Added to prevent any future references to files inside it from failing.
+
+### Changed
+
+- **Desktop `ProjectService.ts` — non-interactive `pnpm install`.** The dependency install step (`pnpm install --ignore-scripts`) now passes `--yes` so pnpm auto-accepts the "remove and reinstall node_modules" prompt that appears when the lockfile changes after the plugin merges new devDependencies into `package.json`. Without this flag the bootstrap would stall waiting for user input that the Desktop app cannot provide.
+
+---
+
 ## [0.4.0] — 2026-04-20
 
 ### Changed

@@ -234,9 +234,9 @@ export class ProjectService {
         const hasPnpmLock = fs.existsSync(path.join(projectPath, "pnpm-lock.yaml"));
         const hasYarnLock = fs.existsSync(path.join(projectPath, "yarn.lock"));
         const installCmd = hasPnpmLock
-          ? "pnpm install --ignore-scripts"
+          ? "pnpm install --ignore-scripts --yes"
           : hasYarnLock
-          ? "yarn install --ignore-scripts"
+          ? "yarn install --ignore-scripts --non-interactive"
           : "npm install --ignore-scripts";
         const pm = hasPnpmLock ? "pnpm" : hasYarnLock ? "yarn" : "npm";
         onLog?.(`[bootstrap] Installing dependencies (${pm})...`);

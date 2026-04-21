@@ -196,31 +196,29 @@ app.whenReady().then(async () => {
   // ── Auto-update ──────────────────────────────────────────────────────────
   ipcMain.handle("app:get-version", () => app.getVersion());
 
+  const RELEASES_URL = "https://github.com/SanthoshDhandapani/specwright/releases/latest";
+
   ipcMain.handle("app:install-update", () => {
-    if (app.isPackaged) {
-      autoUpdater.quitAndInstall();
-    } else {
-      // Dev mode — reload the renderer to simulate a restart
-      mainWindow?.webContents.reload();
-    }
+    // macOS requires a code-signed app for Squirrel's in-place update.
+    // Until the build is signed with an Apple Developer ID, open the releases
+    // page so the user can download and install the new DMG manually.
+    shell.openExternal(RELEASES_URL);
   });
 
   if (app.isPackaged) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
+    // Don't auto-download — without code signing the install always fails with
+    // a signature validation error. Just notify the renderer so it can show the
+    // "new version available" badge, and let the user download from GitHub.
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
 
     autoUpdater.on("update-available", (info) => {
       log(`[updater] Update available: ${info.version}`);
-      mainWindow?.webContents.send("app:update-available", { version: info.version });
-    });
-
-    autoUpdater.on("update-downloaded", (info) => {
-      log(`[updater] Update downloaded: ${info.version}`);
       mainWindow?.webContents.send("app:update-downloaded", { version: info.version });
     });
 
     autoUpdater.on("error", (err) => {
-      log(`[updater] Error: ${err.message}`);
+      log(`[updater] Check failed: ${err.message}`);
     });
 
     autoUpdater.checkForUpdates().catch((err) => {

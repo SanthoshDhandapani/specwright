@@ -37,9 +37,12 @@ export default function ConfigPanel(): React.JSX.Element {
   const [applyingPlugin, setApplyingPlugin] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [appVersion, setAppVersion] = useState<string>("");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
 
   useEffect(() => {
     window.specwright.app.getVersion().then(setAppVersion).catch(() => null);
+    const off = window.specwright.app.onUpdateDownloaded(({ version }) => setUpdateVersion(version));
+    return off;
   }, []);
 
   const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
@@ -179,9 +182,23 @@ export default function ConfigPanel(): React.JSX.Element {
         <div>
           <div className="flex items-baseline justify-between">
             <h1 className="text-brand-400 font-semibold text-base tracking-tight">Specwright</h1>
-            {appVersion && (
-              <span className="text-slate-600 text-xs font-mono">v{appVersion}</span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {appVersion && (
+                <span className="text-slate-600 text-xs font-mono">v{appVersion}</span>
+              )}
+              {updateVersion && (
+                <button
+                  onClick={() => window.specwright.app.installUpdate()}
+                  title={`v${updateVersion} available — click to download`}
+                  className="flex items-center gap-1 text-brand-400 hover:text-brand-300 text-xs transition-colors"
+                >
+                  <svg width="7" height="7" viewBox="0 0 7 7" fill="currentColor" className="shrink-0">
+                    <circle cx="3.5" cy="3.5" r="3.5" />
+                  </svg>
+                  Update
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-slate-500 text-xs mt-0.5">AI Test Generation</p>
         </div>

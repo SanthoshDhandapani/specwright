@@ -3,20 +3,14 @@ import React, { useEffect, useState } from "react";
 function SpecwrightLogo({ size = 48 }: { size?: number }): React.JSX.Element {
   return (
     <svg viewBox="0 0 69 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Specwright logo" width={size} height={size * 40 / 69}>
-      <defs>
-        <linearGradient id="sw-grad" x1="0" y1="0" x2="69" y2="40" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#9e87f0"/>
-          <stop offset="100%" stopColor="#5b78e8"/>
-        </linearGradient>
-      </defs>
-      <rect x="0"  y="16" width="6" height="8"  rx="3" fill="url(#sw-grad)"/>
-      <rect x="9"  y="10" width="6" height="20" rx="3" fill="url(#sw-grad)"/>
-      <rect x="18" y="5"  width="6" height="30" rx="3" fill="url(#sw-grad)"/>
-      <rect x="27" y="0"  width="6" height="40" rx="3" fill="url(#sw-grad)"/>
-      <rect x="36" y="2"  width="6" height="36" rx="3" fill="url(#sw-grad)"/>
-      <rect x="45" y="8"  width="6" height="24" rx="3" fill="url(#sw-grad)"/>
-      <rect x="54" y="13" width="6" height="14" rx="3" fill="url(#sw-grad)"/>
-      <rect x="63" y="17" width="6" height="6"  rx="3" fill="url(#sw-grad)"/>
+      <rect x="0"  y="16" width="6" height="8"  rx="3" fill="white"/>
+      <rect x="9"  y="10" width="6" height="20" rx="3" fill="white"/>
+      <rect x="18" y="5"  width="6" height="30" rx="3" fill="white"/>
+      <rect x="27" y="0"  width="6" height="40" rx="3" fill="white"/>
+      <rect x="36" y="2"  width="6" height="36" rx="3" fill="white"/>
+      <rect x="45" y="8"  width="6" height="24" rx="3" fill="white"/>
+      <rect x="54" y="13" width="6" height="14" rx="3" fill="white"/>
+      <rect x="63" y="17" width="6" height="6"  rx="3" fill="white"/>
     </svg>
   );
 }

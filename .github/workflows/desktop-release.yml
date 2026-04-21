@@ -17,8 +17,36 @@ on:
         default: ""
 
 jobs:
+  bump-version:
+    name: Bump version & commit
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump package.json version
+        run: |
+          cd apps/desktop
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+
+      - name: Commit and push version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/package.json
+          git commit -m "DYFN-11508: Bump desktop version to ${{ github.event.inputs.version }}" || echo "Nothing to commit"
+          git push
+
   build:
     name: Build (${{ matrix.platform }})
+    needs: [bump-version]
+    if: always() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +67,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -48,12 +78,6 @@ jobs:
         with:
           node-version: 20.20.2
           cache: pnpm
-
-      - name: Bump version in package.json
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          cd apps/desktop
-          npm version ${{ github.event.inputs.version }} --no-git-tag-version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -110,9 +134,9 @@ jobs:
 
             | Platform | Download |
             |---|---|
-            | macOS (Apple Silicon) | `Specwright-*-mac-arm64.dmg` |
-            | macOS (Intel) | `Specwright-*-mac-x64.dmg` |
-            | Windows | `Specwright-*-win-x64.exe` |
+            | macOS (Apple Silicon) | `Specwright-${{ github.event.inputs.version }}-mac-arm64.dmg` |
+            | macOS (Intel) | `Specwright-${{ github.event.inputs.version }}-mac-x64.dmg` |
+            | Windows | `Specwright-${{ github.event.inputs.version }}-win-x64.exe` |
 
             > **macOS:** Open the DMG, drag Specwright to Applications.
             > **Windows:** Run the installer — the app will auto-launch when done.
@@ -132,9 +156,9 @@ jobs:
 
             | Platform | Download |
             |---|---|
-            | macOS (Apple Silicon) | `Specwright-*-mac-arm64.dmg` |
-            | macOS (Intel) | `Specwright-*-mac-x64.dmg` |
-            | Windows | `Specwright-*-win-x64.exe` |
+            | macOS (Apple Silicon) | `Specwright-${{ github.event.inputs.version }}-mac-arm64.dmg` |
+            | macOS (Intel) | `Specwright-${{ github.event.inputs.version }}-mac-x64.dmg` |
+            | Windows | `Specwright-${{ github.event.inputs.version }}-win-x64.exe` |
 
             > **macOS:** Open the DMG, drag Specwright to Applications.
             > **Windows:** Run the installer — the app will auto-launch when done.

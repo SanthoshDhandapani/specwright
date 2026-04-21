@@ -57,11 +57,13 @@ jobs:
             artifacts: |
               apps/desktop/dist/*.dmg
               apps/desktop/dist/*.zip
+              apps/desktop/dist/latest-mac.yml
           - os: windows-latest
             platform: windows
             dist_cmd: pnpm --filter @specwright/desktop dist:win
             artifacts: |
               apps/desktop/dist/*.exe
+              apps/desktop/dist/latest.yml
     runs-on: ${{ matrix.os }}
 
     steps:

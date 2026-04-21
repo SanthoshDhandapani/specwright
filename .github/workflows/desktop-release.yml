@@ -8,9 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. 0.1.0)"
+        description: "Release version (e.g. 0.1.2)"
         required: true
         default: "0.1.0"
+      release_notes:
+        description: "Release notes (optional — leave blank to auto-generate from commits)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -44,6 +48,12 @@ jobs:
         with:
           node-version: 20.20.2
           cache: pnpm
+
+      - name: Bump version in package.json
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          cd apps/desktop
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -83,7 +93,32 @@ jobs:
       - name: List artifacts
         run: ls -lh release-artifacts/
 
-      - name: Create release
+      - name: Create release (with custom notes)
+        if: github.event.inputs.release_notes != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('desktop-v{0}', github.event.inputs.version) }}
+          name: "Specwright Desktop ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('desktop-v{0}', github.event.inputs.version) }}"
+          generate_release_notes: false
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.event.inputs.version, '-beta') || contains(github.ref_name, '-alpha') || contains(github.event.inputs.version, '-alpha') }}
+          files: release-artifacts/**/*
+          body: |
+            ${{ github.event.inputs.release_notes }}
+
+            ## Installation
+
+            | Platform | Download |
+            |---|---|
+            | macOS (Apple Silicon) | `Specwright-*-mac-arm64.dmg` |
+            | macOS (Intel) | `Specwright-*-mac-x64.dmg` |
+            | Windows | `Specwright-*-win-x64.exe` |
+
+            > **macOS:** Open the DMG, drag Specwright to Applications.
+            > **Windows:** Run the installer — the app will auto-launch when done.
+
+      - name: Create release (auto-generated notes)
+        if: github.event.inputs.release_notes == ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('desktop-v{0}', github.event.inputs.version) }}
@@ -103,5 +138,3 @@ jobs:
 
             > **macOS:** Open the DMG, drag Specwright to Applications.
             > **Windows:** Run the installer — the app will auto-launch when done.
-
-            ---

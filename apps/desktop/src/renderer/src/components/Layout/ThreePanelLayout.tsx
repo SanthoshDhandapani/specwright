@@ -103,19 +103,10 @@ export default function ThreePanelLayout({ left, center, right }: Props): React.
                 className="pointer-events-auto flex items-center gap-1 bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium px-2 py-0.5 rounded-full transition-colors"
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
                 onClick={() => window.specwright.app.installUpdate()}
-                title={`v${updateState.version} downloaded — click to restart and install`}
+                title={`v${updateState.version} available — click to open download page`}
               >
                 <span>↑</span> Restart to update
               </button>
-            )}
-            {updateState.status === "available" && (
-              <span
-                className="flex items-center gap-1 text-brand-400 text-xs"
-                title={`v${updateState.version} is downloading…`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse inline-block" />
-                Updating…
-              </span>
             )}
           </div>
 

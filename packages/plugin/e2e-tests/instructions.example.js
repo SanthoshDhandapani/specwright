@@ -29,6 +29,7 @@ export default [
     pageURL: 'http://localhost:5173/your-page', // Update: your app's URL
     inputs: {},
     explore: true,
+    autoApprove: false,       // true = skip Phase 6 approval prompt and generate immediately
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -105,6 +106,8 @@ export default [
  * pageURL       — App URL for exploration. Required when explore: true.
  * inputs.jira.url — Jira ticket URL for requirements extraction.
  * explore       — Enable live browser exploration for selector discovery.
+ * autoApprove   — Skip the Phase 6 user approval prompt and proceed to BDD generation
+ *                 automatically. Useful for CI or trusted runs. Default: false.
  * runExploredCases  — Run explored seed tests before BDD generation (Phase 5).
  * runGeneratedCases — Run generated BDD tests after creation (Phase 8).
  */

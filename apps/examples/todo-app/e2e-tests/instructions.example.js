@@ -37,6 +37,7 @@ export default [
     pageURL: 'http://localhost:5174/signin',
     inputs: {},
     explore: true,
+    autoApprove: false,       // true = skip Phase 6 approval prompt and generate immediately
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -62,6 +63,7 @@ export default [
     pageURL: 'http://localhost:5174/todos',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -86,6 +88,7 @@ export default [
     pageURL: 'http://localhost:5174/todos/new',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -109,6 +112,7 @@ export default [
     pageURL: 'http://localhost:5174/todos/new',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -126,6 +130,8 @@ export default [
  * instructions      — Test scenario descriptions. One entry = one scenario area.
  * pageURL           — Starting URL for browser exploration.
  * explore           — Enable live browser exploration for selector discovery (Phase 4).
+ * autoApprove       — Skip the Phase 6 user approval prompt and proceed to BDD generation
+ *                     automatically. Useful for CI or trusted runs. Default: false.
  * runExploredCases  — Run seed tests before BDD generation (Phase 5).
  * runGeneratedCases — Run generated BDD tests after creation (Phase 8).
  *

@@ -39,14 +39,14 @@ Check for `e2e-tests/.knowledge/generate-context.md`:
 - **Found** → read it (~2.5KB). Contains FIELD_TYPES, API signatures, faker patterns, import depth table. Log: `📦 Using generate-context.md`
 - **Not found** → fall back: read `e2e-tests/utils/stepHelpers.js` AND `e2e-tests/utils/testDataGenerator.js`. Log: `⚠️ generate-context.md missing — run: node e2e-tests/scripts/extract-generate-context.js`
 
-**0c. Selectors (conditional)**
+**0c. Selectors (ALWAYS use seed.spec.js)**
 
-Check `.claude/agent-memory/playwright-test-planner/MEMORY.md` for a `### Key Selectors: {Module}` section matching the target module from the plan.
+Read `e2e-tests/playwright/generated/seed.spec.js` and pass inline.
 
-- **Selectors present** → pass that `### Key Selectors` table inline. Log: `📦 Using planner memory selectors for {module}`
-- **Not present / memory empty** → check `e2e-tests/playwright/generated/seed.spec.js`:
-  - **seed.spec.js exists** → read it and pass inline. Log: `📄 Falling back to seed.spec.js`
-  - **seed.spec.js also absent** → **HALT**. Do not proceed. Log: `🛑 No selectors available — run /e2e-plan first to explore the app and generate seed.spec.js`
+- **seed.spec.js exists** → read it and pass inline. Log: `📄 Using seed.spec.js selectors`
+- **seed.spec.js absent** → **HALT**. Do not proceed. Log: `🛑 No selectors available — run /e2e-plan first to explore the app and generate seed.spec.js`
+
+Do NOT read planner memory for generation — memory is only used during exploration (/e2e-plan) and healing (/e2e-heal). The seed file written by Phase 4 is the authoritative selector source for BDD generation.
 
 Pass all collected content inline when invoking agents. Agents MUST NOT re-read any of these files.
 

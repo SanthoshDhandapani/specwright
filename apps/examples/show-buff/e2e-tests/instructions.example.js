@@ -40,6 +40,7 @@ export default [
     pageURL: '/home',
     inputs: {},
     explore: true,
+    autoApprove: false,       // true = skip Phase 6 approval prompt and generate immediately
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -70,6 +71,7 @@ export default [
     pageURL: '/home',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -97,6 +99,7 @@ export default [
     pageURL: '/favorites',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -123,6 +126,7 @@ export default [
     pageURL: '/watchlist',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -150,6 +154,7 @@ export default [
     pageURL: '/lists',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -178,6 +183,7 @@ export default [
     pageURL: '/lists',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -199,6 +205,7 @@ export default [
     pageURL: '/home',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -220,6 +227,7 @@ export default [
     pageURL: '/lists',
     inputs: {},
     explore: true,
+    autoApprove: false,
     runExploredCases: false,
     runGeneratedCases: false,
   },
@@ -238,6 +246,8 @@ export default [
  * pageURL       — App URL for browser exploration. Required when explore: true.
  * inputs.jira   — { url: "https://org.atlassian.net/browse/PROJ-123" } for Jira-driven generation.
  * explore       — Enable live browser exploration for selector discovery (Phase 4).
+ * autoApprove   — Skip the Phase 6 user approval prompt and proceed to BDD generation
+ *                 automatically. Useful for CI or trusted runs. Default: false.
  * runExploredCases  — Run seed tests in browser before BDD generation (Phase 5).
  * runGeneratedCases — Run generated BDD tests after creation (Phase 8).
  *

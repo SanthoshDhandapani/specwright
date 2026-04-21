@@ -217,11 +217,26 @@ export default [
       'Click on a card and verify detail view',
     ],
     explore: true,
+    autoApprove: false,       // skip Phase 6 approval and generate immediately
     runExploredCases: false,
     runGeneratedCases: false,
   },
 ];
 ```
+
+| Field | Type | Description |
+|---|---|---|
+| `moduleName` | string | Target module tag (e.g. `@Dashboard`) |
+| `category` | string | `@Modules` (default) or `@Workflows` |
+| `subModuleName` | string[] | Sub-phase tags for workflows (e.g. `['@0-Setup', '@1-Verify']`) |
+| `fileName` | string | Output filename stem (e.g. `dashboard` → `dashboard.feature`) |
+| `pageURL` | string | App URL for browser exploration. Required when `explore: true` |
+| `filePath` | string | Source file for data-driven generation (CSV, Excel, PDF, JSON) |
+| `instructions` | string[] | Free-text descriptions of what to test |
+| `explore` | boolean | Run live browser exploration to discover selectors (Phase 4) |
+| `autoApprove` | boolean | Skip the Phase 6 approval prompt and proceed to generation automatically. Useful for CI or trusted runs. Default: `false` |
+| `runExploredCases` | boolean | Run explored seed tests before BDD generation (Phase 5) |
+| `runGeneratedCases` | boolean | Run generated BDD tests after creation (Phase 8) |
 
 ## Prerequisites
 

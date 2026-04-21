@@ -226,14 +226,6 @@ app.whenReady().then(async () => {
     autoUpdater.checkForUpdates().catch((err) => {
       log(`[updater] Check failed: ${err.message}`);
     });
-  } else {
-    // Dev mode — simulate update flow so the UI is visible for testing
-    setTimeout(() => {
-      mainWindow?.webContents.send("app:update-available", { version: "99.0.0" });
-    }, 3000);
-    setTimeout(() => {
-      mainWindow?.webContents.send("app:update-downloaded", { version: "99.0.0" });
-    }, 6000);
   }
 
   buildMenu();

@@ -129,12 +129,24 @@ export default function WelcomeScreen(): React.JSX.Element {
         </div>
 
         {(isBootstrapping || hasError) && bootstrapLog.length > 0 && (
-          <div className="w-full max-w-lg bg-slate-900 rounded-lg border border-slate-700 p-4 font-mono text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto">
-            {bootstrapLog.map((line, i) => (
-              <div key={i} className={line.includes("Error") ? "text-red-400" : "text-slate-300"}>
-                {line}
-              </div>
-            ))}
+          <div className="w-full max-w-lg">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-slate-500 font-mono">Bootstrap log</span>
+              <button
+                onClick={() => navigator.clipboard.writeText(bootstrapLog.join("\n"))}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2 py-0.5 rounded hover:bg-slate-800"
+                title="Copy log to clipboard"
+              >
+                Copy logs
+              </button>
+            </div>
+            <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 font-mono text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+              {bootstrapLog.map((line, i) => (
+                <div key={i} className={line.includes("Error") ? "text-red-400" : "text-slate-300"}>
+                  {line}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

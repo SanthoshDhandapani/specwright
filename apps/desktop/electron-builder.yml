@@ -21,12 +21,30 @@ files:
   - package.json
   - node_modules/**/*
 
-# Extra resources bundled alongside the app (not inside asar)
+# Unpack @playwright/mcp and its deps from asar so Node can execute cli.js directly.
+# Files inside app.asar cannot be spawned as child processes.
+# playwright-core and playwright are required by @playwright/mcp at runtime.
+asarUnpack:
+  - node_modules/@playwright/mcp/**/*
+  - node_modules/playwright-core/**/*
+  - node_modules/playwright/**/*
+
+# beforePack downloads the uv binary for the current platform into bin/.
+# extraResources then copies whichever binary exists into the packaged app.
+# Users never need to install uv or Python manually.
+beforePack: ./build/downloadUv.js
+
 extraResources:
   - from: src/main/resources
     to: resources
-    filter:
-      - "**/*"
+  - from: bin/uv
+    to: bin/uv
+  - from: bin/uvx
+    to: bin/uvx
+  - from: bin/uv.exe
+    to: bin/uv.exe
+  - from: bin/uvx.exe
+    to: bin/uvx.exe
 
 # macOS
 mac:

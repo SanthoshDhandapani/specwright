@@ -42,6 +42,48 @@ import { getAtlassianAccessToken } from "./atlassian.ipc";
  *
  * Result is cached after the first successful lookup.
  */
+let _nodePath: string | null = null;
+function resolveNodePath(): string {
+  if (_nodePath !== null) return _nodePath;
+  if (!app.isPackaged) { _nodePath = "node"; return _nodePath; }
+
+  const home = require("os").homedir();
+
+  // Check well-known node install locations
+  const candidates = [
+    `/opt/homebrew/bin/node`,                          // Homebrew (Apple Silicon)
+    `/usr/local/bin/node`,                             // Homebrew (Intel) or manual
+    `${home}/.volta/bin/node`,                         // Volta
+    `${home}/.nvm/versions/node/current/bin/node`,    // nvm symlink
+    `/usr/bin/node`,
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      _nodePath = p;
+      fileLog(`[pipeline] resolveNodePath → ${p} (direct lookup)`);
+      return _nodePath;
+    }
+  }
+
+  // Fall back to login shell which picks up nvm/pyenv shims
+  const shell = fs.existsSync("/bin/zsh") ? "/bin/zsh" : "/bin/bash";
+  try {
+    const result = execSync(`${shell} -l -c 'which node'`, {
+      timeout: 5000, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (result && fs.existsSync(result)) {
+      _nodePath = result;
+      fileLog(`[pipeline] resolveNodePath → ${result} (shell lookup)`);
+      return _nodePath;
+    }
+  } catch { /* ignore */ }
+
+  _nodePath = "node"; // last resort — may fail if not in PATH
+  fileLog("[pipeline] resolveNodePath → node (fallback)");
+  return _nodePath;
+}
+
 let _claudePath: string | null = null;
 function resolveClaudePath(): string | null {
   if (_claudePath !== null) return _claudePath;
@@ -250,16 +292,20 @@ export function registerPipelineIpc(
       // Desktop is fully self-contained — hardcodes all 3 core MCP servers.
       // No read of project .mcp.json; that file is only for CLI users.
       //
-      // `playwright-test` uses @playwright/mcp (installed as a workspace dependency).
-      // Uses the local cli.js so no npx download delay. Headed by default; --headless
-      // flag added only when the user enables headless mode in the Desktop ConfigPanel.
+      // Both MCP servers are installed as local dependencies and unpacked from
+      // asar (see asarUnpack in electron-builder.yml) so Node can execute them
+      // directly without npx. require.resolve returns the virtual asar path even
+      // when asarUnpack is set — replace app.asar with app.asar.unpacked so the
+      // external node process can actually read the file off disk.
       const playwrightMcpCli = path.join(
-        path.dirname(require.resolve("@playwright/mcp")),
+        path.dirname(require.resolve("@playwright/mcp/package.json"))
+          .replace("app.asar" + path.sep, "app.asar.unpacked" + path.sep),
         "cli.js"
       );
+      fileLog(`[pipeline] playwright-mcp cli → ${playwrightMcpCli}`);
       const mcpServers: Record<string, Record<string, unknown>> = {
         "playwright-test": {
-          command: "node",
+          command: resolveNodePath(),
           args: [
             playwrightMcpCli,
             "--output-dir", screenshotDir,
@@ -267,8 +313,12 @@ export function registerPipelineIpc(
           ],
         },
         "markitdown": {
-          command: "npx",
-          args: ["markitdown-mcp-npx"],
+          // In packaged app: use bundled uvx from extraResources (downloaded by beforePack).
+          // In dev: fall back to system uvx.
+          command: app.isPackaged
+            ? path.join(process.resourcesPath, "bin", process.platform === "win32" ? "uvx.exe" : "uvx")
+            : "uvx",
+          args: ["markitdown-mcp"],
         },
         "atlassian": await (async () => {
           const token = await getAtlassianAccessToken();

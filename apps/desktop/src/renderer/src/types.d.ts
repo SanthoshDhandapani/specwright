@@ -109,6 +109,12 @@ interface SpecwrightAPI {
   };
   shell: ShellAPI;
   report: ReportAPI;
+  app: {
+    getVersion: () => Promise<string>;
+    onUpdateAvailable: (cb: (data: { version: string }) => void) => () => void;
+    onUpdateDownloaded: (cb: (data: { version: string }) => void) => () => void;
+    installUpdate: () => Promise<void>;
+  };
   atlassian: {
     status: () => Promise<{ status: "idle" | "connected" | "needs-auth" }>;
     connect: () => Promise<{ success: boolean; error?: string }>;

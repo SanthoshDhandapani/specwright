@@ -1,5 +1,6 @@
 import { app, BrowserWindow, nativeImage, shell, Menu, MenuItem } from "electron";
 import { join } from "path";
+import { autoUpdater } from "electron-updater";
 import { ConfigService } from "./services/ConfigService";
 import { ProjectService } from "./services/ProjectService";
 import { registerConfigIpc } from "./ipc/config.ipc";
@@ -191,6 +192,49 @@ app.whenReady().then(async () => {
   // Open a URL in the system default browser
   const { ipcMain } = await import("electron");
   ipcMain.handle("shell:open-url", (_event, url: string) => shell.openExternal(url));
+
+  // ── Auto-update ──────────────────────────────────────────────────────────
+  ipcMain.handle("app:get-version", () => app.getVersion());
+
+  ipcMain.handle("app:install-update", () => {
+    if (app.isPackaged) {
+      autoUpdater.quitAndInstall();
+    } else {
+      // Dev mode — reload the renderer to simulate a restart
+      mainWindow?.webContents.reload();
+    }
+  });
+
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on("update-available", (info) => {
+      log(`[updater] Update available: ${info.version}`);
+      mainWindow?.webContents.send("app:update-available", { version: info.version });
+    });
+
+    autoUpdater.on("update-downloaded", (info) => {
+      log(`[updater] Update downloaded: ${info.version}`);
+      mainWindow?.webContents.send("app:update-downloaded", { version: info.version });
+    });
+
+    autoUpdater.on("error", (err) => {
+      log(`[updater] Error: ${err.message}`);
+    });
+
+    autoUpdater.checkForUpdates().catch((err) => {
+      log(`[updater] Check failed: ${err.message}`);
+    });
+  } else {
+    // Dev mode — simulate update flow so the UI is visible for testing
+    setTimeout(() => {
+      mainWindow?.webContents.send("app:update-available", { version: "99.0.0" });
+    }, 3000);
+    setTimeout(() => {
+      mainWindow?.webContents.send("app:update-downloaded", { version: "99.0.0" });
+    }, 6000);
+  }
 
   buildMenu();
 

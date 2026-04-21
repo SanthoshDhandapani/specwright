@@ -36,6 +36,11 @@ export default function ConfigPanel(): React.JSX.Element {
   const [pluginInfo, setPluginInfo] = useState<PluginInfo | null>(null);
   const [applyingPlugin, setApplyingPlugin] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>("");
+
+  useEffect(() => {
+    window.specwright.app.getVersion().then(setAppVersion).catch(() => null);
+  }, []);
 
   const authStrategy = (envVars.AUTH_STRATEGY || "none") as string;
   const authRequired = authStrategy !== "none";
@@ -172,7 +177,12 @@ export default function ConfigPanel(): React.JSX.Element {
       <div className="flex flex-col h-full px-4 py-3 gap-4 overflow-y-auto scrollable">
 
         <div>
-          <h1 className="text-brand-400 font-semibold text-base tracking-tight">Specwright</h1>
+          <div className="flex items-baseline justify-between">
+            <h1 className="text-brand-400 font-semibold text-base tracking-tight">Specwright</h1>
+            {appVersion && (
+              <span className="text-slate-600 text-xs font-mono">v{appVersion}</span>
+            )}
+          </div>
           <p className="text-slate-500 text-xs mt-0.5">AI Test Generation</p>
         </div>
 

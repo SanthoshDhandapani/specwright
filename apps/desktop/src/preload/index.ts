@@ -123,6 +123,19 @@ contextBridge.exposeInMainWorld("specwright", {
     openUrl: (url: string) => ipcRenderer.invoke("shell:open-url", url) as Promise<void>,
   },
 
+  app: {
+    getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>,
+    onUpdateAvailable: (cb: (data: { version: string }) => void) => {
+      ipcRenderer.on("app:update-available", (_e, data) => cb(data));
+      return () => ipcRenderer.removeAllListeners("app:update-available");
+    },
+    onUpdateDownloaded: (cb: (data: { version: string }) => void) => {
+      ipcRenderer.on("app:update-downloaded", (_e, data) => cb(data));
+      return () => ipcRenderer.removeAllListeners("app:update-downloaded");
+    },
+    installUpdate: () => ipcRenderer.invoke("app:install-update"),
+  },
+
   report: {
     checkAvailable: (projectPath: string) =>
       ipcRenderer.invoke("report:check-available", projectPath) as Promise<{ playwright: boolean; bdd: boolean }>,

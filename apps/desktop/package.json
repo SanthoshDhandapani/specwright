@@ -26,6 +26,7 @@
     "@specwright/plugin": "workspace:*",
     "claude-runner": "^0.5.0",
     "electron-store": "^10.1.0",
+    "electron-updater": "^6.8.3",
     "markitdown-mcp-npx": "^1.0.3"
   },
   "devDependencies": {

@@ -90,7 +90,7 @@ echo "  ✅ .claude/ installed"
 # ── Step 2: Copy e2e-tests/ infrastructure ──
 echo "📦 Step 2: Installing e2e-tests/ infrastructure..."
 mkdir -p "$TARGET_DIR/.specwright"
-cp "$PLUGIN_DIR/.specwright/.gitkeep" "$TARGET_DIR/.specwright/.gitkeep"
+touch "$TARGET_DIR/.specwright/.gitkeep"
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/auth-storage/.auth"
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/generated"
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/test-data"

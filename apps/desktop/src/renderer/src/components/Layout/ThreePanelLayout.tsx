@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 interface Props {
   left: React.ReactNode;
@@ -34,9 +34,22 @@ const ICON_BTN =
 const LEFT_BTN_INSET = 86; // px from left edge of center panel when left panel is collapsed
 const RIGHT_BTN_INSET = 10; // px from right edge of window
 
+type UpdateState = { status: "idle" } | { status: "available"; version: string } | { status: "downloaded"; version: string };
+
 export default function ThreePanelLayout({ left, center, right }: Props): React.JSX.Element {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
+
+  useEffect(() => {
+    const offAvailable = window.specwright.app.onUpdateAvailable(({ version }) =>
+      setUpdateState({ status: "available", version })
+    );
+    const offDownloaded = window.specwright.app.onUpdateDownloaded(({ version }) =>
+      setUpdateState({ status: "downloaded", version })
+    );
+    return () => { offAvailable(); offDownloaded(); };
+  }, []);
 
   return (
     <div className="flex h-screen w-screen bg-slate-900 overflow-hidden">
@@ -80,10 +93,31 @@ export default function ThreePanelLayout({ left, center, right }: Props): React.
             <LayoutIcon highlight={leftCollapsed ? "right" : "left"} />
           </button>
 
-          {/* App name — always centred in the full title bar width */}
-          <span className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs font-medium tracking-widest uppercase select-none pointer-events-none">
-            Specwright
-          </span>
+          {/* App name + update badge — centred in title bar */}
+          <div className="absolute inset-0 flex items-center justify-center gap-2 select-none pointer-events-none">
+            <span className="text-slate-500 text-xs font-medium tracking-widest uppercase">
+              Specwright
+            </span>
+            {updateState.status === "downloaded" && (
+              <button
+                className="pointer-events-auto flex items-center gap-1 bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium px-2 py-0.5 rounded-full transition-colors"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+                onClick={() => window.specwright.app.installUpdate()}
+                title={`v${updateState.version} downloaded — click to restart and install`}
+              >
+                <span>↑</span> Restart to update
+              </button>
+            )}
+            {updateState.status === "available" && (
+              <span
+                className="flex items-center gap-1 text-brand-400 text-xs"
+                title={`v${updateState.version} is downloading…`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse inline-block" />
+                Updating…
+              </span>
+            )}
+          </div>
 
           {/* Right panel toggle */}
           {right && (

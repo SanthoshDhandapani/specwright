@@ -40,7 +40,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add apps/desktop/package.json
-          git commit -m "DYFN-11508: Bump desktop version to ${{ github.event.inputs.version }}" || echo "Nothing to commit"
+          git commit -m "chore: bump desktop version to ${{ github.event.inputs.version }}" || echo "Nothing to commit"
           git push
 
   build:

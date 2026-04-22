@@ -89,6 +89,33 @@ Claude Desktop requires a separate `claude_desktop_config.json` entry. The pipel
 }
 ```
 
+> **Using nvm, asdf, or volta?** Claude Desktop launches MCP servers via macOS launchd, which uses a minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) — not your shell's PATH. If `npx` is installed via a version manager it won't be found. Fix it by using the absolute path to `npx` and adding a `PATH` env override:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "specwright": {
+>       "command": "/Users/you/.nvm/versions/node/v22.12.0/bin/npx",
+>       "args": ["@specwright/mcp"],
+>       "env": {
+>         "SPECWRIGHT_PROJECT": "/absolute/path/to/your/project",
+>         "PATH": "/Users/you/.nvm/versions/node/v22.12.0/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+>       }
+>     },
+>     "playwright-test": {
+>       "command": "/Users/you/.nvm/versions/node/v22.12.0/bin/npx",
+>       "args": ["@playwright/mcp@latest", "--output-dir", "/tmp/playwright-mcp"],
+>       "env": {
+>         "PATH": "/Users/you/.nvm/versions/node/v22.12.0/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+>       }
+>     }
+>   }
+> }
+> ```
+>
+> Find your npx path with: `which npx`  
+> Find your Node version path with: `ls ~/.nvm/versions/node/` (or `~/.asdf/shims/npx` for asdf)
+
 ### 2. Restart Claude Desktop
 
 ### Why the key name must be `playwright-test`

@@ -316,37 +316,38 @@ export default function InstructionCard({ card, index }: Props): React.JSX.Eleme
         </div>
       </div>
 
-      {/* Checkboxes */}
-      <div className="flex flex-wrap gap-4 pt-1">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={card.explore}
-            onChange={(e) => update({ explore: e.target.checked })}
-            className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
-          />
-          <span className="text-slate-300 text-xs">Explore</span>
-        </label>
-        {card.explore && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={card.runExploredCases}
-              onChange={(e) => update({ runExploredCases: e.target.checked })}
-              className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
-            />
-            <span className="text-slate-300 text-xs">Run explored cases</span>
-          </label>
-        )}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={card.runGeneratedCases}
-            onChange={(e) => update({ runGeneratedCases: e.target.checked })}
-            className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-brand-500 focus:ring-brand-500"
-          />
-          <span className="text-slate-300 text-xs">Run generated cases</span>
-        </label>
+      {/* Toggles */}
+      <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+        {(
+          [
+            { key: "explore", label: "Explore" },
+            ...(card.explore ? [{ key: "runExploredCases", label: "Validate Exploration" }] : []),
+            { key: "runGeneratedCases", label: "Validate Generated" },
+            { key: "autoApprove", label: "Auto Approve" },
+          ] as { key: keyof typeof card; label: string }[]
+        ).map(({ key, label }) => {
+          const active = card[key] as boolean;
+          return (
+            <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={active}
+                onClick={() => update({ [key]: !active })}
+                className={`relative inline-flex w-8 h-4 flex-shrink-0 rounded-full border-2 transition-colors duration-200 focus:outline-none ${
+                  active ? "bg-brand-500 border-brand-500" : "bg-slate-600 border-slate-600"
+                }`}
+              >
+                <span
+                  className={`inline-block w-3 h-3 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                    active ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span className="text-slate-300 text-xs">{label}</span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );

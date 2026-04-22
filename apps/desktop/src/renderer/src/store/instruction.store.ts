@@ -16,6 +16,7 @@ export interface InstructionCard {
   explore: boolean;
   runExploredCases: boolean;
   runGeneratedCases: boolean;
+  autoApprove: boolean;
 }
 
 export type SerializedInstruction = Omit<InstructionCard, "id">;
@@ -54,6 +55,7 @@ function defaultCard(): InstructionCard {
     explore: true,
     runExploredCases: false,
     runGeneratedCases: true,
+    autoApprove: false,
   };
 }
 

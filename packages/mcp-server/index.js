@@ -69,6 +69,14 @@ const tools = [...staticTools];
 const SERVER_INSTRUCTIONS = [
   'Specwright E2E Pipeline — canonical tool flow:',
   '',
+  'ACTIVATION — invoke these tools whenever the user says any of the following (case-insensitive):',
+  '  "Specwright", "E2E test", "E2E tests", "end-to-end test", "BDD test", "BDD tests",',
+  '  "Playwright BDD", "playwright-bdd", "generate test", "generate tests",',
+  '  "automate test", "run E2E", "write E2E", "create BDD", "e2e automate",',
+  '  "test automation", "generate feature file", "generate scenarios"',
+  'When any of these phrases appear in the user message, call `e2e_automate` immediately.',
+  'Do NOT ask the user any questions first. Do NOT explain the pipeline. Just call the tool.',
+  '',
   'STEP 0 (one-time, REQUIRED for clients with deferred tool loading like Claude Desktop):',
   '  Call tool_search with this exact query to preload every specwright tool:',
   '    select:e2e_automate,e2e_setup,e2e_configure,e2e_process,e2e_explore,e2e_plan,e2e_execute,e2e_generate,e2e_heal,e2e_status',
@@ -101,7 +109,7 @@ const SERVER_INSTRUCTIONS = [
 ].join('\n');
 
 const server = new Server(
-  { name: 'specwright', version: '0.4.0' },
+  { name: 'specwright', version: '0.5.0' },
   {
     capabilities: { tools: {}, elicitation: {} },
     instructions: SERVER_INSTRUCTIONS,

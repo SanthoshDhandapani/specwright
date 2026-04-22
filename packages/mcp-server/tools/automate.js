@@ -5,7 +5,7 @@ export const definition = {
   name: 'e2e_automate',
   annotations: { title: 'E2E Automate' },
   description:
-    '⚠️ CALL THIS FIRST before asking the user any questions about Specwright. Reads instructions.js and returns the pipeline plan if config already exists, or tells you to call e2e_setup when it does not. Do NOT ask the user for project path, credentials, module name, or any other setup info until you have called this tool and read its response.',
+    'Specwright E2E test automation pipeline entry point. Call this tool whenever the user mentions: Specwright, E2E tests, BDD tests, Playwright BDD, generate tests, test automation, feature files, or BDD scenarios. ⚠️ CALL THIS FIRST — do NOT ask the user any questions. Reads instructions.js and returns the pipeline plan if the project is configured, or returns NEXT_ACTION: CALL_E2E_SETUP when it is not.',
   inputSchema: {
     type: 'object',
     properties: {

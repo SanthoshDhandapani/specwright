@@ -25,6 +25,7 @@ interface TemplateEntry {
   explore: boolean;
   runExploredCases: boolean;
   runGeneratedCases: boolean;
+  autoApprove: boolean;
 }
 
 /** Built-in quick-start templates — always available, use BASE_URL from settings */
@@ -44,6 +45,7 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
       explore: true,
       runExploredCases: false,
       runGeneratedCases: false,
+      autoApprove: false,
     },
     {
       templateName: "🧭 Page Navigation",
@@ -64,6 +66,7 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
       explore: true,
       runExploredCases: false,
       runGeneratedCases: false,
+      autoApprove: false,
     },
     {
       templateName: "📝 Form & CRUD",
@@ -86,6 +89,7 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
       explore: true,
       runExploredCases: false,
       runGeneratedCases: false,
+      autoApprove: false,
     },
     {
       templateName: "🔐 Auth Flow",
@@ -107,6 +111,7 @@ function getBuiltInTemplates(baseUrl: string): TemplateEntry[] {
       explore: true,
       runExploredCases: false,
       runGeneratedCases: false,
+      autoApprove: false,
     },
   ];
 }
@@ -158,6 +163,7 @@ export default function TemplatePanel(): React.JSX.Element {
         explore: tmpl.explore,
         runExploredCases: tmpl.runExploredCases,
         runGeneratedCases: tmpl.runGeneratedCases,
+        autoApprove: tmpl.autoApprove ?? false,
       });
       // Brief "Inserted" indicator on the button — auto-clears after 2s
       if (insertTimerRef.current) clearTimeout(insertTimerRef.current);
@@ -187,6 +193,7 @@ export default function TemplatePanel(): React.JSX.Element {
       explore: firstCard.explore === true,
       runExploredCases: firstCard.runExploredCases === true,
       runGeneratedCases: firstCard.runGeneratedCases === true,
+      autoApprove: firstCard.autoApprove === true,
     };
 
     const updated = [...customTemplates, newTemplate];
@@ -244,6 +251,11 @@ export default function TemplatePanel(): React.JSX.Element {
           {tmpl.steps.length > 0 ? ` · ${tmpl.steps.length} step${tmpl.steps.length > 1 ? "s" : ""}` : ""}
           {urlPath ? ` · ${urlPath}` : ""}
         </p>
+        {tmpl.jiraURL && (
+          <span className="inline-flex items-center gap-1 bg-blue-900/40 text-blue-300 text-[10px] rounded px-1.5 py-0.5 border border-blue-800 w-fit">
+            <span>🔗</span> Jira
+          </span>
+        )}
 
         <button
           onClick={() => handleInsert(tmpl)}

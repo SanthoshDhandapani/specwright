@@ -30,6 +30,13 @@ export async function handler({ moduleName, category, fileName, jiraUrl, filePat
   const config = getConfig();
   if (!config.projectConfigured) return notConfigured();
 
+  // If a Jira URL is provided, check that Atlassian MCP is configured in Claude Desktop.
+  // Without it, mcp__atlassian__getJiraIssue won't exist and Phase 3 will silently fail.
+  if (jiraUrl) {
+    const atlassianWarning = checkAtlassianMcp();
+    if (atlassianWarning) return atlassianWarning;
+  }
+
   const { projectRoot } = config;
   const cat = category || '@Modules';
   const stem = fileName || moduleName.replace('@', '').toLowerCase();
@@ -127,7 +134,11 @@ export async function handler({ moduleName, category, fileName, jiraUrl, filePat
     `---`,
     ``,
     `## After completion`,
-    `1. Save the parsed plan to \`${parsedPath}\` via the \`Write\` tool`,
+    `⚠️ **Output a visible message to the user** (Claude Desktop hides tool results):`,
+    `Write: "✅ Phase 3 complete — plan written to \`${parsedPath}\`. Starting browser exploration..."`,
+    `Then proceed immediately to call \`e2e_explore\`.`,
+    ``,
+    `1. Save the parsed plan to \`${parsedPath}\` via \`mcp__specwright__write_file\``,
     `2. Extract the filtered scenario list (as an array of strings) from the parsed plan`,
     `3. **Merge with the original config instructions[]** — both inform exploration:`,
     `   \`\`\`javascript`,
@@ -154,6 +165,64 @@ function notConfigured() {
     content: [{
       type: 'text',
       text: '⚠️ Project not configured. Call `e2e_configure` with `action: "set_project"` first.',
+    }],
+  };
+}
+
+// Returns an MCP error response if the Atlassian MCP is not present in claude_desktop_config.json,
+// null if present (or if the config file can't be read — don't block in that case).
+function checkAtlassianMcp() {
+  const os = process.platform;
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const desktopConfigPath = os === 'darwin'
+    ? path.join(home, 'Library/Application Support/Claude/claude_desktop_config.json')
+    : path.join(home, 'AppData/Roaming/Claude/claude_desktop_config.json');
+
+  let desktopConfig = null;
+  try {
+    desktopConfig = JSON.parse(fs.readFileSync(desktopConfigPath, 'utf-8'));
+  } catch {
+    return null; // Can't read config — don't block
+  }
+
+  const servers = desktopConfig?.mcpServers || {};
+  const hasAtlassian = Object.keys(servers).some(
+    (k) => k.toLowerCase().includes('atlassian') ||
+      (servers[k]?.url || '').includes('atlassian.com/v1/mcp')
+  );
+
+  if (hasAtlassian) return null;
+
+  const snippet = JSON.stringify({
+    atlassian: {
+      type: 'streamable-http',
+      url: 'https://mcp.atlassian.com/v1/mcp',
+    },
+  }, null, 2);
+
+  return {
+    content: [{
+      type: 'text',
+      text: [
+        `## ⛔ Jira input detected but Atlassian MCP is not configured`,
+        ``,
+        `The config entry has a Jira URL, but Claude Desktop has no \`atlassian\` MCP entry.`,
+        `Without it, \`mcp__atlassian__getJiraIssue\` doesn't exist and the Jira ticket cannot be fetched.`,
+        ``,
+        `**To fix:** Add the following to \`~/Library/Application Support/Claude/claude_desktop_config.json\`:`,
+        ``,
+        '```json',
+        snippet,
+        '```',
+        ``,
+        `Then **restart Claude Desktop** and retry.`,
+        ``,
+        `> **Authentication:** Claude handles Atlassian OAuth natively — no API token or credentials needed.`,
+        `> On first use, Claude will prompt you to authorise access to your Atlassian account in the browser.`,
+        ``,
+        `> **Jira-free alternative:** Remove \`inputs.jira.url\` from your \`instructions.js\` config entry`,
+        `> and use the \`instructions[]\` array to describe scenarios directly — no Atlassian MCP required.`,
+      ].join('\n'),
     }],
   };
 }

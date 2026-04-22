@@ -37,6 +37,23 @@ export async function handler({ planFilePath, moduleName, category, fileName }) 
   const stepHelpersPath = path.join(projectRoot, 'e2e-tests/utils/stepHelpers.js');
   const knowledgePath = path.join(projectRoot, 'e2e-tests/.knowledge/generate-context.md');
 
+  // Read shared step definitions to produce a de-duplicated DO NOT REDEFINE list
+  const sharedDir = path.join(featuresDir, 'shared');
+  const sharedStepLines = [];
+  if (fs.existsSync(sharedDir)) {
+    const sharedFiles = fs.readdirSync(sharedDir).filter((f) => f.endsWith('.js'));
+    for (const file of sharedFiles) {
+      try {
+        const src = fs.readFileSync(path.join(sharedDir, file), 'utf-8');
+        const matches = [...src.matchAll(/(Given|When|Then)\(\s*['"`]([^'"`]+)['"`]/g)];
+        if (matches.length > 0) {
+          sharedStepLines.push(`  **${file}:**`);
+          for (const m of matches) sharedStepLines.push(`  - \`${m[1]} ${m[2]}\``);
+        }
+      } catch { /* skip unreadable */ }
+    }
+  }
+
   const text = [
     `# Phase 7: BDD Generation — ${moduleName}`,
     ``,
@@ -50,11 +67,11 @@ export async function handler({ planFilePath, moduleName, category, fileName }) 
     `❌ **Do NOT** write to \`e2e-tests/playwright/\` — that directory is for the seed exploration file only.`,
     `❌ **Do NOT** use \`.spec.js\` extension for BDD output — use \`.feature\` and \`steps.js\` exactly as shown above.`,
     `❌ **Do NOT** re-run browser exploration — the seed file already has validated selectors.`,
-    `✅ Use the \`Write\` tool for both files, to the EXACT paths above.`,
+    `✅ Use \`mcp__specwright__write_file\` for both files, to the EXACT paths above.`,
     ``,
     `---`,
     ``,
-    `## Context files to Read first`,
+    `## Context files to read first (use \`mcp__specwright__read_file\`)`,
     ``,
     `- **Plan** (approved by user): \`${resolvedPlan}\``,
     `- **Seed** (validated selectors): \`${fs.existsSync(seedFilePath) ? seedFilePath : '(none — explore:false mode)'}\``,
@@ -74,18 +91,26 @@ export async function handler({ planFilePath, moduleName, category, fileName }) 
     `  - \`<gen_test_data>\` + \`SharedGenerated\` → faker-generated, cached across scenarios`,
     `  - \`<from_test_data>\` + \`SharedGenerated\` → reads cached value from earlier scenario`,
     `  - Static known values → type \`Static\``,
-    `- Reuse shared steps from \`e2e-tests/features/playwright-bdd/shared/\` — DO NOT redefine \`I am logged in\`, \`I navigate to\`, \`I should see the heading\`, \`I load predata from\`, etc.`,
+    `- **DO NOT redefine** any shared step — use them directly in the \`.feature\` file. Steps already available from \`shared/\`:`,
+    ...(sharedStepLines.length > 0 ? sharedStepLines : [`  (shared/ directory not found — run \`npx @specwright/plugin init\` first)`]),
     `- Assertion steps: describe expected state, not tool calls`,
     ``,
     `Write the file to \`${featurePath}\` via the \`Write\` tool.`,
     ``,
     `## Step 2: Generate \`steps.js\``,
     ``,
-    `- Import from fixtures, NOT playwright-bdd directly:`,
-    `  \`import { Given, When, Then, expect } from '<path>/playwright/fixtures.js';\``,
+    `- Import from fixtures, NOT playwright-bdd directly. Compute the relative path by counting`,
+    `  how many directories deep \`steps.js\` is from \`e2e-tests/\`, then go that many levels up:`,
+    `  - \`e2e-tests/features/playwright-bdd/@Modules/@Mod/steps.js\`           → \`../../../../playwright/fixtures.js\``,
+    `  - \`e2e-tests/features/playwright-bdd/@Workflows/@Flow/steps.js\`         → \`../../../../playwright/fixtures.js\``,
+    `  - \`e2e-tests/features/playwright-bdd/@Workflows/@Flow/@0-Phase/steps.js\`→ \`../../../../../playwright/fixtures.js\``,
+    `  The output path for this generation is \`${stepsPath}\` — count its depth and apply the rule.`,
+    `  NEVER use a placeholder like \`<path>\` — resolve it to the actual relative path.`,
+    `- Import \`processDataTable\`, \`validateExpectations\`, \`FIELD_TYPES\` from stepHelpers using the same`,
+    `  depth-counting rule: relative path from \`${stepsPath}\` to \`${stepHelpersPath}\`.`,
     `- Use \`processDataTable(page, dataTable, { mapping, fieldConfig })\` for form fill steps`,
     `- Use \`validateExpectations(page, dataTable, { mapping, validationConfig, container })\` for assertion steps`,
-    `- \`FIELD_TYPES\` (from \`stepHelpers.js\`): FILL, DROPDOWN, CHECKBOX_TOGGLE, CLICK, CUSTOM; validation: TEXT_VISIBLE, INPUT_VALUE`,
+    `- \`FIELD_TYPES\`: FILL, DROPDOWN, CHECKBOX_TOGGLE, CLICK, CUSTOM; validation: TEXT_VISIBLE, INPUT_VALUE`,
     `- Use selectors from the seed file — never invent new ones`,
     `- Cross-feature workflows: \`saveScopedTestData('<scope>', { ... })\` in precondition; consumers load via the shared step \`Given I load predata from "<scope>"\`.`,
     ``,
@@ -102,9 +127,39 @@ export async function handler({ planFilePath, moduleName, category, fileName }) 
     ``,
     `## After completion`,
     ``,
+    `⚠️ **Output a visible message to the user** with the generated file paths and the EXACT run command below — do NOT invent alternative commands:`,
+    ``,
     `Report the scenario count and BDD file paths:`,
     `- \`${featurePath}\``,
     `- \`${stepsPath}\``,
+    ``,
+    `### ✅ To run the generated tests`,
+    ``,
+    `This project uses **playwright-bdd** — NOT cucumber-js, NOT jest, NOT vitest.`,
+    `The ONLY correct way to run these tests is:`,
+    ``,
+    category === '@Workflows'
+      ? [
+          '```bash',
+          `cd ${projectRoot}`,
+          `npx bddgen && npx playwright test --project setup --project precondition --project workflow-consumers --grep "@${moduleName.replace('@', '').toLowerCase()}"`,
+          '```',
+          `- \`npx bddgen\` MUST run first — it compiles \`.feature\` → \`.features-gen/*.spec.js\``,
+          `- \`--project setup\` creates the auth session`,
+          `- \`--project precondition\` runs \`@precondition\` scenarios (1 worker, serial)`,
+          `- \`--project workflow-consumers\` runs \`@workflow-consumer\` scenarios (parallel)`,
+          `- NEVER use \`npx cucumber-js\`, \`--project chromium\`, or \`--project run-workflow\` for workflows`,
+        ].join('\n')
+      : [
+          '```bash',
+          `cd ${projectRoot}`,
+          `npx bddgen && npx playwright test --project setup --project main-e2e --grep "@${moduleName.replace('@', '').toLowerCase()}"`,
+          '```',
+          `- \`npx bddgen\` MUST run first — it compiles \`.feature\` → \`.features-gen/*.spec.js\``,
+          `- \`--project setup\` creates the auth session`,
+          `- \`--project main-e2e\` runs the module scenarios in parallel`,
+          `- NEVER use \`npx cucumber-js\` — this framework uses Playwright, not Cucumber CLI`,
+        ].join('\n'),
     ``,
     `Next steps:`,
     `1. If \`runGeneratedCases: true\` → call \`e2e_heal\` (Phase 8)`,

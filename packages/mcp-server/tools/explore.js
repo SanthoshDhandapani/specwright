@@ -28,6 +28,12 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
   const config = getConfig();
   if (!config.projectConfigured) return notConfigured();
 
+  // ── Playwright MCP --output-dir check ────────────────────────────────────
+  // Check BEFORE returning exploration instructions so Claude never attempts
+  // browser_navigate without a valid output dir (which fails with ENOENT /.playwright-mcp).
+  const playwrightWarning = checkPlaywrightOutputDir(config.projectRoot);
+  if (playwrightWarning) return playwrightWarning;
+
   const { projectRoot } = config;
   const cat = category || '@Modules';
   const stem = fileName || moduleName.replace('@', '').toLowerCase();
@@ -76,10 +82,15 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
     ``,
     `## Step 1: Read memory + authenticate`,
     ``,
-    `- \`Read\` \`${memoryFile}\` — check if this module's selectors exist`,
-    `  - If present → **verification mode** (2–5 browser calls minimum, still MUST do live checks)`,
-    `  - If absent → **full exploration** (5–20 browser calls)`,
-    `- \`Read\` \`${envFile}\` — get \`AUTH_STRATEGY\` and auth credentials`,
+    `- \`mcp__specwright__read_file\` path: \`${memoryFile}\` — check if this module's selectors exist`,
+    `  - If present → **verification mode**: use memory selectors as a starting point ONLY.`,
+    `    ⚠️ Memory is a HINT, NOT a substitute for live exploration.`,
+    `    You MUST still perform each scenario from the instructions list:`,
+    `    navigate to the page, click interactive elements, fill forms, open dropdowns — one browser`,
+    `    interaction per scenario step. Verification mode means you skip re-discovering ALREADY-KNOWN`,
+    `    static elements (headings, labels). It does NOT mean one snapshot then done.`,
+    `  - If absent → **full exploration**: discover all selectors from scratch (5–20 browser calls)`,
+    `- \`mcp__specwright__read_file\` path: \`${envFile}\` — get \`AUTH_STRATEGY\` and auth credentials`,
     `  - If \`AUTH_STRATEGY=oauth\` + \`OAUTH_STORAGE_KEY\` set → use localStorage injection (see Step 2)`,
     `  - If \`AUTH_STRATEGY=email-password\` → login flow via form`,
     `  - If \`AUTH_STRATEGY=none\` or missing → skip authentication`,
@@ -105,6 +116,14 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
     `mcp__playwright-test__browser_snapshot                       # full accessibility tree — your source of truth for selectors`,
     `\`\`\``,
     ``,
+    `⚠️ **The snapshot above is step 0 — NOT the end of exploration.**`,
+    `You now MUST work through each scenario from the instructions list. For EACH scenario:`,
+    `1. Identify the interactive elements involved (forms, buttons, dropdowns, modals)`,
+    `2. Perform the actual interaction via browser tools`,
+    `3. Take a snapshot AFTER to confirm the expected state`,
+    ``,
+    `Do NOT skip this per-scenario work even if memory has selectors — memory tells you WHERE to look, not whether the selectors still work.`,
+    ``,
     `Then for each scenario above, perform the interaction:`,
     `- Navigation / clicks → \`browser_click\` using refs from the snapshot`,
     `- Form fills → \`browser_type\` or \`browser_fill_form\``,
@@ -125,7 +144,7 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
     ``,
     `## Step 5: Update memory file`,
     ``,
-    `Use \`Edit\` or \`Write\` to append / update memory at \`${memoryFile}\` with a table:`,
+    `Use \`mcp__specwright__write_file\` to append / update memory at \`${memoryFile}\` with a table:`,
     ``,
     `\`\`\`markdown`,
     `## Key Selectors: ${moduleName} (${pageURL})`,
@@ -140,7 +159,7 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
     ``,
     `## Step 7: Write the seed file`,
     ``,
-    `Use \`Write\` to create \`${seedFile}\` with the structure:`,
+    `Use \`mcp__specwright__write_file\` to create \`${seedFile}\` with the structure:`,
     ``,
     '```javascript',
     `import { test, expect } from '@playwright/test';`,
@@ -178,7 +197,7 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
     ``,
     `## Step 8: Write the plan file`,
     ``,
-    `Use \`Write\` to create \`${planFile}\` with:`,
+    `Use \`mcp__specwright__write_file\` to create \`${planFile}\` with:`,
     ``,
     `- Module info (name, URL, category, file stem)`,
     `- Discovered selectors table (same as memory)`,
@@ -188,16 +207,21 @@ export async function handler({ pageURL, moduleName, category, fileName, instruc
     ``,
     `## Budget`,
     ``,
-    `| Mode | Min calls | Max calls |`,
-    `|------|-----------|-----------|`,
-    `| Verification (memory exists) | 2 | 5 |`,
-    `| Full exploration (no memory) | 5 | 20 |`,
+    `| Mode | Minimum browser calls |`,
+    `|------|----------------------|`,
+    `| Verification (memory exists) | 1 navigate + 1 snapshot + **1 interaction per instruction** |`,
+    `| Full exploration (no memory) | 1 navigate + 1 snapshot + **1 interaction per instruction** + extra discovery |`,
+    ``,
+    `The minimum is always driven by the **instruction count**, not a fixed number.`,
+    `${instructions && instructions.length > 0 ? `This run has **${instructions.length} instruction(s)** — minimum ${instructions.length + 2} browser calls required.` : ''}`,
     ``,
     `## Forbidden shortcuts`,
     ``,
-    `- ❌ Writing seed/plan/memory without at least one live \`browser_snapshot\` of \`${pageURL}\``,
+    `- ❌ **Navigate + snapshot → done**: ONE snapshot is never sufficient — you must interact with each scenario`,
+    `- ❌ Writing seed/plan/memory based on memory alone without performing the scenario interactions live`,
     `- ❌ Using \`browser_take_screenshot\` for selector discovery (use \`browser_snapshot\` — screenshots don't give refs)`,
     `- ❌ Inventing selectors not seen in snapshot output`,
+    `- ❌ Treating "verification mode" as permission to skip scenario interactions`,
     `- ❌ Waiting on \`networkidle\` or deprecated Playwright APIs`,
     ``,
     `## ⛔ If a browser tool fails`,
@@ -244,4 +268,101 @@ function notConfigured() {
       text: '⚠️ Project not configured. Call `e2e_configure` with `action: "set_project"` first.',
     }],
   };
+}
+
+// Returns an MCP error response if playwright-test MCP is missing --output-dir,
+// null if everything is correctly configured.
+function checkPlaywrightOutputDir(projectRoot) {
+  const os = process.platform;
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const desktopConfigPath = os === 'darwin'
+    ? path.join(home, 'Library/Application Support/Claude/claude_desktop_config.json')
+    : path.join(home, 'AppData/Roaming/Claude/claude_desktop_config.json');
+
+  let desktopConfig = null;
+  try {
+    desktopConfig = JSON.parse(fs.readFileSync(desktopConfigPath, 'utf-8'));
+  } catch {
+    return null; // Can't read config — don't block, let it fail naturally
+  }
+
+  const servers = desktopConfig?.mcpServers || {};
+  const pwEntry = servers['playwright-test'];
+  // Use /tmp/playwright-mcp — universal path that works across all projects
+  // without embedding a project-specific path in the global claude_desktop_config.json
+  const outputDir = '/tmp/playwright-mcp';
+
+  const snippet = JSON.stringify({
+    'playwright-test': {
+      command: 'npx',
+      args: ['@playwright/mcp@latest', '--output-dir', outputDir],
+    },
+  }, null, 2);
+
+  const fixSteps = [
+    `1. Open \`~/Library/Application Support/Claude/claude_desktop_config.json\``,
+    `2. Add or update the \`playwright-test\` entry in \`mcpServers\`:`,
+    '```json',
+    snippet,
+    '```',
+    `3. Save and **restart Claude Desktop**`,
+    `4. Say "retry" — the project is still configured and exploration will start immediately`,
+  ].join('\n');
+
+  // Check if playwright is installed under a different key name
+  const wrongKeyNames = Object.keys(servers).filter(
+    (k) => k !== 'playwright-test' && (
+      k.toLowerCase().includes('playwright') ||
+      (servers[k]?.args || []).some((a) => a.includes('@playwright/mcp'))
+    )
+  );
+
+  if (!pwEntry) {
+    const wrongKeyHint = wrongKeyNames.length > 0
+      ? [
+          ``,
+          `> **Already have Playwright installed?** Found an entry named \`${wrongKeyNames[0]}\` in your config.`,
+          `> The key name MUST be \`playwright-test\` — Specwright tools use \`mcp__playwright-test__*\` prefixes.`,
+          `> Rename the key from \`"${wrongKeyNames[0]}"\` to \`"playwright-test"\` and add \`--output-dir\`.`,
+        ].join('\n')
+      : '';
+
+    return {
+      content: [{
+        type: 'text',
+        text: [
+          `## ⛔ Browser exploration blocked — \`playwright-test\` MCP not configured`,
+          ``,
+          `Claude Desktop needs an MCP entry named exactly \`playwright-test\` to open a browser.`,
+          `The key name is not flexible — Specwright pipeline tools call \`mcp__playwright-test__browser_navigate\`,`,
+          `\`mcp__playwright-test__browser_snapshot\`, etc., which only resolve when the key is \`playwright-test\`.`,
+          wrongKeyHint,
+          ``,
+          fixSteps,
+          ``,
+          `> **Why \`--output-dir\`?** Claude Desktop starts the Playwright MCP from the system root (\`/\`),`,
+          `> so a relative \`.playwright-mcp\` resolves to \`/.playwright-mcp\` and fails with \`ENOENT\`.`,
+        ].join('\n'),
+      }],
+    };
+  }
+
+  const args = pwEntry.args || [];
+  if (!args.includes('--output-dir')) {
+    return {
+      content: [{
+        type: 'text',
+        text: [
+          `## ⛔ Browser exploration blocked — \`playwright-test\` MCP missing \`--output-dir\``,
+          ``,
+          `The \`playwright-test\` MCP is registered but has no \`--output-dir\`.`,
+          `Without it, the server defaults to \`/.playwright-mcp\` (root) and fails with \`ENOENT\`.`,
+          ``,
+          fixSteps,
+        ].join('\n'),
+      }],
+    };
+  }
+
+  return null;
 }

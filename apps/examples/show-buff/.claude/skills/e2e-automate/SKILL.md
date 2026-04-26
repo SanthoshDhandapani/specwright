@@ -149,24 +149,41 @@ rm -f e2e-tests/plans/*.md
 
 Calculate a quality score from aggregated pipeline data and display a formatted summary.
 
-**Score calculation — internal only. Do NOT output the formula, weights, or per-component values in the review unless score < 80:**
+**Score calculation — start at 100 and subtract only for actual observed failures. Do NOT output the deduction breakdown unless score < 90:**
 
 ```
-Components (only include phases that actually ran):
-  inputProcessingScore   = (successful configs / total configs) × 100     [always active]
-  selectorDiscoveryScore = (validated selectors / total discovered) × 100 [if explore: true]
-  testExecutionScore     = (passed tests / total tests) × 100            [if runGeneratedCases: true]
-  healingSuccessScore    = (auto-fixed / total failures) × 100           [if healing ran]
+Start: 100
 
-Weights redistributed among active components only:
-  - Generation only (explore + no execution): input=0.40, selectors=0.60
-  - Generation + execution (no healing needed): input=0.25, selectors=0.25, execution=0.50
-  - Full pipeline (all phases ran): input=0.20, selectors=0.20, execution=0.35, healing=0.25
+Deductions (only apply when a problem actually occurred — deliberate config flags like
+runGeneratedCases: false are NOT deductions):
+
+  Config processing failures:
+    -15 per config entry that failed to process (parse error, missing Jira ticket, etc.)
+
+  BDD generation failures:
+    -20 if expected .feature or steps.js files were not created
+
+  Test execution (only if runGeneratedCases: true):
+    -5  if healing was required but all tests ended up passing (auto-resolved)
+    -15 per test that is still failing after max healing iterations
+    -10 if test run could not start (bddgen failed, project misconfigured, etc.)
+
+  Phase errors (not config-driven skips):
+    -10 if any phase aborted unexpectedly
+
+Minimum score: 0. Cap deductions at -60 so the score is always meaningful.
 ```
 
-**Rating:** 95-100 Excellent ⭐⭐⭐⭐⭐ | 85-94 Very Good ⭐⭐⭐⭐ | 75-84 Good ⭐⭐⭐ | 60-74 Fair ⭐⭐ | 0-59 Poor ⭐
+**Scoring is deduction-only — a clean run with no failures always scores 100, regardless of which phases ran.**
 
-**Status:** score>=95 → "READY FOR PRODUCTION" | >=85 → "READY WITH MINOR FIXES" | >=75 → "REQUIRES ATTENTION" | >=60 → "NEEDS IMPROVEMENT" | else → "SIGNIFICANT ISSUES"
+**Rating:** 100 Perfect ⭐⭐⭐⭐⭐ | 90-99 Excellent ⭐⭐⭐⭐⭐ | 75-89 Good ⭐⭐⭐⭐ | 60-74 Fair ⭐⭐⭐ | 0-59 Poor ⭐⭐
+
+**Status:**
+- score = 100  → "PRODUCTION READY"
+- score 90–99  → "PRODUCTION READY — issues detected and auto-resolved"
+- score 75–89  → "READY — manual review recommended"
+- score 60–74  → "REQUIRES ATTENTION"
+- score < 60   → "SIGNIFICANT ISSUES"
 
 Run the following command to compute the actual wall-clock duration:
 ```bash
@@ -185,13 +202,10 @@ Use the output as the duration value.
 ## 📊 Quality Score: {score}/100 {stars}
 **{status}** | ⏱ {Xm Ys} (Phase 1 → Phase 10)
 
-{ONLY if score < 80 — show as diagnosis, not as standard output:}
-| Component | Score | Weight |
-|---|---|---|
-| Input Processing | {score} | {weight} |
-| Selector Discovery | {score} | {weight} |  ← only if ran
-| Test Execution | {score} | {weight} |      ← only if ran
-| Healing | {score} | {weight} |             ← only if ran
+{ONLY if score < 90 — list what caused deductions as a diagnosis:}
+| Issue | Deduction |
+|---|---|
+| {description of what failed} | -{n} |
 
 ---
 

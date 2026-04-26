@@ -1,0 +1,78 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Future Scope
+
+Specwright is designed to evolve. This page covers planned directions — multi-LLM support, CI integration, and team features.
+
+---
+
+## Multi-LLM Support
+
+The Specwright agent pipeline is **model-agnostic**. Every agent and skill is defined in plain Markdown files (`.md`, `.mdx`) with a frontmatter `model:` field. Switching models requires changing that field — no pipeline code changes needed.
+
+### Models compatible today
+
+| Model | Status | Notes |
+|---|---|---|
+| Claude Sonnet 4.x | ✅ Default | Recommended for generation (speed + quality) |
+| Claude Opus 4.x | ✅ Supported | Used for healing — stronger reasoning |
+| GPT-4o / GPT-4.1 | ⚠️ Possible | Requires Claude Code model override or SDK swap |
+| Gemini 2.5 Pro | ⚠️ Possible | Browser MCP tool format adapter needed |
+| Local models (Ollama, LM Studio) | ⚠️ Experimental | Works for generation phases; browser exploration requires strong tool-use capability |
+
+### What switching requires
+
+To run an agent on a different model, change its frontmatter:
+
+```yaml
+---
+name: code-generator
+model: gpt-4o      # was claude-sonnet-4-6
+tools: Read, Write, Edit
+---
+```
+
+No changes to skills, the pipeline orchestration, or Playwright BDD are needed. The agent contract (inputs, outputs, file paths) is model-independent.
+
+> **Note:** Browser exploration (Phase 4) is the most model-sensitive phase. It requires strong tool-use, multi-step reasoning, and accurate Playwright selector generation. Weaker models may produce incorrect selectors that fail the seed validation step.
+
+---
+
+## Roadmap
+
+### Specwright Desktop — Overlay plugin auto-install
+
+When a project's `.specwright.json` specifies an `overlay` field, the Desktop app will automatically detect and install the overlay plugin on top of the base plugin during project bootstrap — no manual `install.sh` run needed.
+
+```json
+{
+  "plugin": "@specwright/plugin",
+  "overlay": "fourkites-e2e",
+  "overlayPath": "../fourkites-ai-plugins/plugins/fourkites-e2e"
+}
+```
+
+### Parallel multi-module runs
+
+Currently, config entries in `instructions.js` are processed sequentially (one module at a time). A future mode will allow concurrent Phase 4 exploration across multiple modules, reducing total wall-clock time for projects with 5+ modules.
+
+### CI mode
+
+A headless, non-interactive pipeline mode for GitHub Actions and other CI systems:
+
+- No approval gate (Phase 6 auto-skipped)
+- JSON result export per module (pass/fail, scenario count, healing stats)
+- Exit code reflects pipeline success/failure for CI gate decisions
+- Compatible with `--reporter=json` Playwright output
+
+### Visual regression
+
+Phase 8 healing could optionally run `expect(page).toHaveScreenshot()` assertions against a stored baseline — detecting unintended UI changes without writing explicit visual assertions in feature files.
+
+### Specwright Cloud (opt-in)
+
+A shared layer for teams — agent memory, generated test files, and quality score history synced across developers. Local-first by default; cloud sync is entirely opt-in and self-hostable.
+
+---
+
+<DocsPrevNext href="/docs/architecture/future-scope" />

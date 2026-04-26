@@ -51,6 +51,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: "Shared Steps", href: "/docs/reference/shared-steps" },
       { label: "Playwright Projects", href: "/docs/reference/playwright-projects" },
       { label: "CLI Commands", href: "/docs/reference/cli-commands" },
+      { label: "Performance & Tokens", href: "/docs/reference/performance" },
     ],
   },
   {
@@ -84,6 +85,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: "Overview", href: "/docs/architecture/overview" },
       { label: "Invariants", href: "/docs/architecture/invariants" },
       { label: "Customization Tiers", href: "/docs/architecture/customization" },
+      { label: "Future Scope", href: "/docs/architecture/future-scope" },
     ],
   },
   {

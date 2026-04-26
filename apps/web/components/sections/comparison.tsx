@@ -11,6 +11,9 @@ const ROWS = [
   { feature: "Open Source (MIT)", specwright: "✅", codegen: "✅", saas: "❌" },
   { feature: "Workflow cross-phase", specwright: "✅", codegen: "❌", saas: "⚠️" },
   { feature: "Quality score report", specwright: "✅", codegen: "❌", saas: "Some" },
+  { feature: "Fully customizable (4 tiers)", specwright: "✅", codegen: "❌", saas: "⚠️ limited" },
+  { feature: "Module / Workflow report split", specwright: "✅", codegen: "❌", saas: "⚠️" },
+  { feature: "Screenshots, traces & videos", specwright: "✅", codegen: "✅", saas: "✅" },
   { feature: "Cost", specwright: "Free", codegen: "Free", saas: "$$$+/mo" },
 ];
 

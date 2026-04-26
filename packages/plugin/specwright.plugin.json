@@ -1,0 +1,6 @@
+{
+  "name": "@specwright/plugin",
+  "version": "0.4.1",
+  "type": "base",
+  "description": "Specwright base E2E plugin — scaffolds playwright-bdd, fixtures, auth strategies, and the agent pipeline"
+}

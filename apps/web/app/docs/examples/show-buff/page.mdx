@@ -61,4 +61,45 @@ npx playwright install chromium
 npx bddgen && npx playwright test --project setup --project run-workflow --grep "@ListWorkflow"
 ```
 
+## Test Artifacts
+
+Specwright captures screenshots, traces, and videos for **both passing and failing** tests automatically — no extra config needed.
+
+### Two report types, side by side
+
+```bash
+pnpm report:bdd        # Cucumber BDD HTML report
+pnpm report:playwright # Playwright HTML report with embedded video
+```
+
+**Cucumber BDD report** — scenario-level pass/fail grouped by module and workflow phase. The Show-Buff report shows `@ListWorkflow` broken into its three phases in order, with cross-phase predata flow visible in the scenario names.
+
+**Playwright HTML report** — timeline view per test, with network requests, console logs, and embedded video playback. Click any test to watch the full browser recording.
+
+### Module / Workflow report segregation
+
+Each category appears as its own section in both reports. Workflow phases are listed in execution order (`@0-CreateList` → `@1-AddShows` → `@2-VerifyList`), making it easy to trace exactly where a cross-phase failure originates — whether in the precondition that creates data or the consumer that reads it.
+
+This segregation is automatic — it comes from the `subModuleName[]` array and `@cross-feature-data` tags in the generated feature files. No report configuration is needed.
+
+### Artifacts captured per test run
+
+| Artifact | Location | Captured when |
+|---|---|---|
+| Full screen recording | `test-results/{test-name}/video.webm` | Always |
+| Page-level recording | `test-results/{test-name}/page@{hash}.webm` | Always |
+| Failure screenshot | `test-results/{test-name}/test-failed-*.png` | Failures only |
+| Named failure screenshot | `reports/screenshots/failure-{scenario-name}.png` | Failures only |
+| Playwright trace | `test-results/{test-name}/trace.zip` | Configurable |
+| Playwright HTML report | `reports/playwright/index.html` | Every run |
+| Cucumber HTML report | `reports/cucumber-bdd/html-report/index.html` | Every run |
+
+### Viewing traces
+
+Traces capture a full DOM snapshot, network requests, and console output at every step — useful for diagnosing flaky tests or selector regressions.
+
+```bash
+npx playwright show-trace test-results/{test-name}/trace.zip
+```
+
 <DocsPrevNext />

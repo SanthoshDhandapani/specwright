@@ -114,7 +114,9 @@ cp "$PLUGIN_DIR/e2e-tests/playwright/auth-strategies/"*.js "$TARGET_DIR/e2e-test
 cp "$PLUGIN_DIR/e2e-tests/utils/stepHelpers.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/utils/testDataGenerator.js" "$TARGET_DIR/e2e-tests/utils/"
 cp "$PLUGIN_DIR/e2e-tests/.knowledge/generate-context.md" "$TARGET_DIR/e2e-tests/.knowledge/"
-cp "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/shared/"*.js "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared/"
+for f in "$PLUGIN_DIR/e2e-tests/features/playwright-bdd/shared/"*.js; do
+  safe_copy "$f" "$TARGET_DIR/e2e-tests/features/playwright-bdd/shared/$(basename "$f")"
+done
 cp "$PLUGIN_DIR/e2e-tests/scripts/generate-bdd-report.js" "$TARGET_DIR/e2e-tests/scripts/"
 
 # User-configurable files: only create if missing (never overwrite user's config)

@@ -76,10 +76,13 @@ async function runInit() {
     }
   }
 
-  // ── Auth module (skip if strategy is 'none') ──
+  // ── Auth module (skip if strategy is 'none' or 'oauth') ──
   if (installEnv.SPECWRIGHT_AUTH_STRATEGY === 'none') {
     installFlags.push('--skip-auth');
     console.log('  → Skipping authentication module (strategy: none)\n');
+  } else if (installEnv.SPECWRIGHT_AUTH_STRATEGY === 'oauth') {
+    installFlags.push('--skip-auth');
+    console.log('  → Skipping authentication module (OAuth apps have no login form to test)\n');
   } else if (!flags.includes('--skip-auth') && !flags.includes('--with-auth')) {
     if (nonInteractive) {
       console.log('  → Including authentication module (default)\n');
@@ -126,6 +129,14 @@ async function runInit() {
   } catch (err) {
     console.error('Installation failed:', err.message);
     process.exit(1);
+  }
+
+  // Write .specwright.json — required by MCP server set_project and Desktop app detectPlugin.
+  // Only plugin identity is written here; authStrategy lives in .env.testing.
+  const spwJsonPath = path.join(path.resolve(targetDir), '.specwright.json');
+  if (!fs.existsSync(spwJsonPath)) {
+    fs.writeFileSync(spwJsonPath, JSON.stringify({ plugin: '@specwright/plugin' }, null, 2) + '\n', 'utf-8');
+    console.log('  ✓ Created .specwright.json\n');
   }
 }
 
@@ -175,6 +186,12 @@ function runUpdate() {
     console.log('\n  ✅ Base plugin updated.\n');
   } catch {
     process.exit(1);
+  }
+
+  const spwJsonPath = path.join(resolved, '.specwright.json');
+  if (!fs.existsSync(spwJsonPath)) {
+    fs.writeFileSync(spwJsonPath, JSON.stringify({ plugin: '@specwright/plugin' }, null, 2) + '\n', 'utf-8');
+    console.log('  ✓ Created .specwright.json\n');
   }
 }
 

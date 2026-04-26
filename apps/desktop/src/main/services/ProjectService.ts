@@ -202,7 +202,8 @@ export class ProjectService {
           onLog?.("[bootstrap] Installing overlay...");
           // --skip-install: Desktop already ran dependency install via base plugin step
           await this.runStreamed(`bash "${installScript}" "${projectPath}" --skip-install`, projectPath, onLog);
-          // Persist overlay info to .specwright.json for future boots
+          // Persist overlay info to .specwright.json for future boots.
+          // Re-read the file so we merge with whatever cli.js wrote (e.g. plugin field).
           if (overlaySource) {
             const overlayManifestPath = path.join(overlayDir, "specwright.plugin.json");
             let overlayName = path.basename(overlayDir);
@@ -212,8 +213,12 @@ export class ProjectService {
                 overlayName = (m.name as string) ?? overlayName;
               } catch { /* use dir name */ }
             }
+            let currentConfig: Record<string, unknown> = {};
+            if (fs.existsSync(specwrightConfigPath)) {
+              try { currentConfig = JSON.parse(fs.readFileSync(specwrightConfigPath, "utf-8")); } catch { /* ignore */ }
+            }
             const specwrightJson = {
-              ...projectConfig,
+              ...currentConfig,
               overlay: overlayName,
               overlayPath: path.relative(projectPath, overlayDir),
             };

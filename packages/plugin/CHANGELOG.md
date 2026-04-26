@@ -5,6 +5,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.4.4] — 2026-04-27
+
+### Added
+
+- **`cli.js` — writes `.specwright.json` on `init` and `update`.** After a successful install, the CLI now creates `.specwright.json` with `{ "plugin": "@specwright/plugin" }` if the file does not exist. This is required by the MCP server's `set_project` tool and by Specwright Desktop's `detectPlugin()`. Previously the file was only written by the Desktop app, so CLI-only installs had no `.specwright.json` and could not be opened in the Desktop app without manual setup.
+
+### Fixed
+
+- **`cli.js` — OAuth strategy now skips the auth module.** `npx @specwright/plugin init --auth-strategy=oauth` now passes `--skip-auth` to `install.sh`, matching the `none` strategy behaviour. OAuth apps authenticate via a provider redirect — there is no login form to generate tests for. Previously the CLI would prompt to install the auth module (or include it by default in `--non-interactive` mode) even for OAuth projects, producing a stub authentication feature that could not be executed.
+
+- **`install.sh` — shared steps use `safe_copy` instead of `cp`.** The loop that copies `e2e-tests/features/playwright-bdd/shared/*.js` now calls `safe_copy` (only creates if missing) instead of `cp` (always overwrites). This preserves any customised shared step files (e.g. project-specific `navigation.steps.js` additions) when re-running `install.sh` or upgrading the plugin.
+
+- **`e2e-desktop-automate/SKILL.md` — Phase 10 quality score format.** Aligned the desktop skill's Phase 10 with the main `e2e-automate` quality scoring format: deduction-based score starting at 100, star ratings, status labels (`PRODUCTION READY`, `READY — manual review recommended`, etc.), and structured markdown output sections (Generation Summary, Generated Files, Test Execution, Healing, Skipped Phases, Next Steps). The previous format was a plain code-block summary with no score.
+
+---
+
 ## [0.4.3] — 2026-04-27
 
 ### Fixed

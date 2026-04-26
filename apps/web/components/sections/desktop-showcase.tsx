@@ -28,6 +28,13 @@ const DEFAULT_SLIDES: DesktopSlide[] = [
     badge: "Phase 1–3 · Input",
   },
   {
+    id: "plugin-mui",
+    label: "MUI Plugin",
+    description: "Overlay plugins extend the base framework — @specwright/plugin-mui adds MUI Select, Autocomplete, DatePicker, and Chip Input support.",
+    src: "/screenshots/plugin_mui.webp",
+    badge: "Plugin · Overlay",
+  },
+  {
     id: "explore",
     label: "Exploration",
     description: "The AI agent navigates your live app, discovers selectors, and builds a verified seed file — all automatically.",

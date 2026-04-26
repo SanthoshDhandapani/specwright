@@ -1,6 +1,6 @@
 {
   "name": "@specwright/plugin",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Generate, run, and auto-heal Playwright BDD tests using AI agents — drop-in plugin that explores your app, writes Gherkin feature files, and fixes failures automatically",
   "license": "MIT",
   "bin": {

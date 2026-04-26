@@ -5,6 +5,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.4.2] — 2026-04-26
+
+### Added
+
+- **`specwright.plugin.json` — base plugin manifest.** Adds the required manifest file (`name`, `version`, `type: "base"`) so Specwright Desktop can detect and display the base plugin in its local plugin picker. Previously the Desktop had no way to identify a locally cloned `packages/plugin/` directory as a valid plugin.
+
+### Fixed
+
+- **`e2e-automate/SKILL.md` — deduction-based quality scoring.** Replaced the ratio-weighted formula (`inputProcessingScore × 0.40 + selectorDiscoveryScore × 0.60`) with a deduction-only system starting at 100. The old formula always produced ~94 because `selectorDiscoveryScore` was unobservable and estimated at ~90% by the model. The new system only subtracts for actual observed failures (config errors, missing generated files, failing tests, unexpected phase aborts). A clean run with no failures always scores 100.
+
+- **`e2e-automate/SKILL.md` — corrected status labels.** Removed "READY WITH MINOR FIXES" (misleading — implied action items when none existed). New labels: `100 → PRODUCTION READY`, `90–99 → PRODUCTION READY — issues auto-resolved`, `75–89 → READY — manual review recommended`, `60–74 → REQUIRES ATTENTION`, `<60 → SIGNIFICANT ISSUES`. Deduction table is only shown when score < 90.
+
+- **`e2e-automate/SKILL.md` — Phase 8 per-config loop.** Phase 8 now iterates over each config entry individually, invoking `/e2e-heal @{moduleName}` with the module tag so `execution-manager` can infer the correct Playwright projects. Previously a single `/e2e-heal` call with no module context caused project inference to fall back to `chromium` (wrong for BDD mode).
+
+---
+
 ## [0.4.1] — 2026-04-21
 
 ### Fixed

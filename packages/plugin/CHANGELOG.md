@@ -5,6 +5,14 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.4.3] — 2026-04-27
+
+### Fixed
+
+- **`generate-bdd-report.js` — BDD HTML report showing all scenarios as "Skipped"** — Fixed a multi-project reporter race condition where the `serial-execution` Playwright project grep-filters non-`@serial-execution` tests and writes `skipped` results to `reports/cucumber-bdd/report.json` after the `main-e2e` project already wrote `passed` results. The script now cross-references `reports/json/results.json` (the authoritative Playwright reporter) and promotes any scenario Playwright recorded as `expected` (passed) whose steps are all `skipped` with `duration: 0` — the exact signature of grep-filtered ghost results. Individual step promotion is used (not whole-scenario promotion) so mixed-status scenarios (e.g. precondition phases where a serial-execution project ran some real steps) are also handled correctly. Applied to both the base plugin and the ShowBuff example.
+
+---
+
 ## [0.4.2] — 2026-04-26
 
 ### Added

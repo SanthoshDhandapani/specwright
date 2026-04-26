@@ -516,6 +516,52 @@ const generateReport = () => {
     }
   }
 
+  // Fix race condition: when multiple Playwright projects run concurrently, a project that
+  // grep-filters tests (e.g. serial-execution skipping non-@serial tests) can write "skipped"
+  // results to report.json AFTER a project that actually ran the tests wrote "passed".
+  // Cross-reference results.json (the authoritative Playwright reporter) and promote any
+  // scenario that Playwright recorded as "expected" (passed) but the cucumber reporter
+  // captured as all-steps-skipped (duration=0 for every non-hidden step).
+  if (fs.existsSync(playwrightResultsPath)) {
+    try {
+      const pwResults = JSON.parse(fs.readFileSync(playwrightResultsPath, "utf8"));
+      const passedTitles = new Set();
+      const collectPassed = suites => {
+        for (const suite of suites || []) {
+          for (const spec of suite.specs || []) {
+            for (const test of spec.tests || []) {
+              if (test.status === "expected") passedTitles.add(spec.title);
+            }
+          }
+          collectPassed(suite.suites);
+        }
+      };
+      collectPassed(pwResults.suites);
+
+      let fixed = 0;
+      for (const feature of reportData) {
+        for (const scenario of feature.elements || []) {
+          if (!passedTitles.has(scenario.name)) continue;
+          // Playwright says this scenario passed. Promote any step that is "skipped" with
+          // duration=0 — these are grep-filtered ghost results from another Playwright project
+          // that ran the same spec file but excluded this test. They are not genuine skips.
+          const stepsToFix = (scenario.steps || []).filter(
+            s => !s.hidden && s.result?.status === "skipped" && (s.result?.duration ?? 0) === 0
+          );
+          if (stepsToFix.length > 0) {
+            stepsToFix.forEach(s => { s.result = { status: "passed", duration: 1000000 }; });
+            fixed++;
+          }
+        }
+      }
+      if (fixed > 0) {
+        console.log(`🔧 Fixed ${fixed} scenario(s) incorrectly marked as skipped (multi-project reporter race condition)`);
+      }
+    } catch {
+      // Non-critical — proceed without cross-reference fix
+    }
+  }
+
   // Enrich features with directory hierarchy metadata
   console.log("📂 Enriching features with directory hierarchy...");
   reportData.forEach(f => {

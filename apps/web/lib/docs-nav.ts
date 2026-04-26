@@ -8,6 +8,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: "Introduction", href: "/docs/getting-started/introduction" },
       { label: "Installation", href: "/docs/getting-started/installation" },
       { label: "Quick Start", href: "/docs/getting-started/quick-start" },
+      { label: "Demo Videos", href: "/docs/getting-started/demo-videos" },
       { label: "Your First Test", href: "/docs/getting-started/first-test" },
       { label: "Choosing Your Interface", href: "/docs/getting-started/choosing-interface" },
       { label: "Updating Specwright", href: "/docs/getting-started/updating-specwright" },
@@ -52,6 +53,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: "Playwright Projects", href: "/docs/reference/playwright-projects" },
       { label: "CLI Commands", href: "/docs/reference/cli-commands" },
       { label: "Performance & Tokens", href: "/docs/reference/performance" },
+      { label: "Reports", href: "/docs/reference/reports" },
     ],
   },
   {

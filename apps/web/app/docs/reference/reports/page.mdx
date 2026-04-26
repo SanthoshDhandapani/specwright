@@ -1,0 +1,105 @@
+import Image from "next/image";
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Reports
+
+Specwright generates two complementary report types after every test run. Both live under `reports/` in your project root.
+
+---
+
+## BDD HTML Report
+
+Run `pnpm report:bdd` to generate the **Cucumber BDD HTML report**. It groups results by module and workflow phase using a directory-structured sidebar, making it easy to see which features and scenarios passed or failed.
+
+<div className="mb-6 rounded-2xl border border-slate-700/60 overflow-hidden">
+  <Image
+    src="/docs/reports/bdd-report-dashboard.png"
+    alt="BDD report dashboard showing 3 features and 11 scenarios with module/workflow directory structure"
+    width={1400}
+    height={900}
+    className="w-full block"
+    unoptimized
+  />
+  <div className="px-4 py-3 bg-slate-900/60">
+    <p className="text-sm font-semibold text-slate-200 mb-0.5">Dashboard — features & scenarios overview</p>
+    <p className="text-xs text-slate-400">Donut charts for pass/fail/skip counts. Directory tree groups <code>@Modules</code> and <code>@Workflows</code> separately, with per-phase pass counts for multi-phase workflows.</p>
+  </div>
+</div>
+
+<div className="mb-6 rounded-2xl border border-slate-700/60 overflow-hidden">
+  <Image
+    src="/docs/reports/bdd-report-feature.png"
+    alt="BDD report feature detail showing 7 scenarios for the Todo List Page feature"
+    width={1400}
+    height={900}
+    className="w-full block"
+    unoptimized
+  />
+  <div className="px-4 py-3 bg-slate-900/60">
+    <p className="text-sm font-semibold text-slate-200 mb-0.5">Feature detail — scenario-level breakdown</p>
+    <p className="text-xs text-slate-400">Each feature page lists all scenarios with tags, duration, and step-by-step pass/fail detail. Tags like <code>@todolist</code> are clickable filters.</p>
+  </div>
+</div>
+
+<div className="mb-8 rounded-2xl border border-slate-700/60 overflow-hidden">
+  <Image
+    src="/docs/reports/bdd-report-workflow.png"
+    alt="BDD report workflow phase detail showing precondition scenario with cross-feature-data tags"
+    width={1400}
+    height={900}
+    className="w-full block"
+    unoptimized
+  />
+  <div className="px-4 py-3 bg-slate-900/60">
+    <p className="text-sm font-semibold text-slate-200 mb-0.5">Workflow phase — <code>@0-Precondition</code> detail</p>
+    <p className="text-xs text-slate-400">Workflow phases appear as separate entries under the workflow directory. Tags like <code>@precondition</code>, <code>@cross-feature-data</code>, and <code>@serial-execution</code> are visible per scenario, reflecting the exact tags in the feature file.</p>
+  </div>
+</div>
+
+### Module / Workflow segregation
+
+The sidebar directory tree mirrors your feature file structure:
+
+```
+@Modules/
+  @TodoList/           ← 7 scenarios
+@Workflows/
+  @TodoWorkflow/
+    @0-Precondition/   ← 1 scenario (serial, creates shared data)
+    @1-VerifyInList/   ← 3 scenarios (parallel consumers)
+```
+
+This makes it easy to see cross-phase data flow and verify that precondition scenarios ran before consumers.
+
+### Generating the BDD report
+
+```bash
+pnpm report:bdd        # generate HTML from reports/cucumber-bdd/report.json
+pnpm report:bdd:open   # open in browser
+```
+
+> **Note:** `reports/cucumber-bdd/report.json` may be empty (0 bytes) when tests fail mid-run. This is a known limitation of `cucumberReporter` — use the Playwright report for failure analysis in that case.
+
+---
+
+## Playwright HTML Report
+
+Run `pnpm report:playwright` for the **Playwright HTML report**. It provides traces, network activity, console logs, and embedded video playback for every test.
+
+```bash
+pnpm report:playwright  # open Playwright HTML report
+```
+
+### Report artifacts
+
+| Artifact | Location | Contents |
+|---|---|---|
+| BDD HTML | `reports/cucumber-bdd/html-report/` | Feature/scenario grouped, tag filters |
+| Playwright HTML | `reports/playwright/` | Timeline, network, console, traces |
+| JSON (Playwright) | `reports/json/results.json` | Authoritative pass/fail per test |
+| Cucumber JSON | `reports/cucumber-bdd/report.json` | Source for BDD HTML report |
+| Failure screenshots | `reports/screenshots/` | Named `failure-{scenario-name}.png` |
+| Traces | `test-results/` | `.zip` files — view with `npx playwright show-trace` |
+| Videos | `test-results/` | `video.webm` per test (when enabled) |
+
+<DocsPrevNext />

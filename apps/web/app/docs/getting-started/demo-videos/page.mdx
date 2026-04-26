@@ -1,0 +1,98 @@
+import { DemoVideo } from "@/components/docs/demo-video";
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+export const BASE = "https://github.com/SanthoshDhandapani/specwright/releases/download/demo-videos-v1";
+
+# Demo Videos
+
+All demos use real apps with real tests — no staging data, no fake runs.
+
+---
+
+## Interfaces
+
+<DemoVideo
+  src={`${BASE}/Cli_Execution.mp4`}
+  poster={`${BASE}/cli-thumb.jpg`}
+  badge="Plugin CLI"
+  title="CLI pipeline — end-to-end test generation"
+  description="Runs /e2e-automate from the terminal: reads instructions.js, explores the app, generates BDD feature files and step definitions, executes tests, and prints a quality score."
+/>
+
+<DemoVideo
+  src={`${BASE}/Bootstrapping+Exploration.mp4`}
+  poster={`${BASE}/desktop-thumb.jpg`}
+  badge="Desktop App"
+  title="Bootstrapping a project and exploring the app"
+  description="Opens Show-Buff in Specwright Desktop, installs the plugin via the UI, configures OAuth auth, then launches browser exploration — showing the three-panel layout and live agent output."
+/>
+
+<DemoVideo
+  src={`${BASE}/Claude_Desktop_Favourite_Workflow.mp4`}
+  poster={`${BASE}/claude-desktop-thumb.jpg`}
+  badge="Claude Desktop"
+  title="Favorites workflow via Claude Desktop MCP"
+  description="Invokes the /e2e-desktop-automate skill inside Claude Desktop. The MCP tools handle all 10 pipeline phases — exploration, approval, generation, and quality scoring — from a single chat session."
+/>
+
+---
+
+## Workflows & Test Execution
+
+<DemoVideo
+  src={`${BASE}/Favourites_Workflow.mp4`}
+  poster={`${BASE}/favourites-thumb.jpg`}
+  badge="Workflow"
+  title="Show-Buff — Favorites workflow (2 phases)"
+  description="@FavoritesWorkflow runs in two phases: Phase 0 adds a show to favorites and saves it as predata, Phase 1 verifies it appears in the favorites grid with the correct count badge."
+/>
+
+<DemoVideo
+  src={`${BASE}/Run.View_Reports.mp4`}
+  poster={`${BASE}/run-reports-thumb.jpg`}
+  badge="Reports"
+  title="Running tests and viewing BDD + Playwright reports"
+  description="Runs pnpm test:bdd via Specwright Desktop, then opens both the Cucumber BDD HTML report (module/workflow grouped) and the Playwright HTML report (traces, screenshots, video playback)."
+/>
+
+<DemoVideo
+  src={`${BASE}/Healer_Mode.mp4`}
+  poster={`${BASE}/healer-thumb.jpg`}
+  badge="Healer"
+  title="Auto-healing failing tests"
+  description="Selects a failing test directory in the Healer tab and runs /e2e-heal. The healer agent diagnoses each failure, updates the selector or step, re-runs until green — up to 3 iterations."
+/>
+
+---
+
+## Input Modes
+
+<DemoVideo
+  src={`${BASE}/Excel_TestCases_List_Workflow.mp4`}
+  poster={`${BASE}/excel-thumb.jpg`}
+  badge="Excel Input"
+  title="Excel test cases → List workflow"
+  description="Uploads an Excel file as the input source. The input-processor agent converts it to structured instructions, which feed the full pipeline — exploration, generation, and execution."
+/>
+
+---
+
+## MUI Plugin Example
+
+<DemoVideo
+  src={`${BASE}/TodoApp-Bootstrapping+Exploration.mp4`}
+  poster={`${BASE}/todo-bootstrap-thumb.jpg`}
+  badge="Plugin"
+  title="Todo App — bootstrapping with @specwright/plugin-mui"
+  description="Installs the base plugin then applies the MUI overlay plugin, which adds Material UI field types and MUI-specific step patterns on top of the framework without changing any core files."
+/>
+
+<DemoVideo
+  src={`${BASE}/Todo_Workflow.mp4`}
+  poster={`${BASE}/todo-workflow-thumb.jpg`}
+  badge="MUI Plugin"
+  title="Todo App — workflow with MUI Select and autocomplete"
+  description="Generates a cross-phase workflow test for the MUI-based Todo app, using the MUI Select field type (COMBO_BOX) and autocomplete patterns provided by the plugin overlay."
+/>
+
+<DocsPrevNext />

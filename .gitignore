@@ -13,7 +13,9 @@ apps/desktop/dist/
 .features-gen/
 .playwright-mcp/
 test-results/
-reports/
+apps/examples/*/reports/
+apps/examples/*/e2e-tests/reports/
+packages/plugin/reports/
 e2e-tests/playwright/auth-storage/.auth/user.json
 e2e-tests/playwright/test-data/*.json
 e2e-tests/playwright/test-data/**/*.json

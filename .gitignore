@@ -32,3 +32,4 @@ packages/mcp-server/package-lock.json
 AGENTS.md
 IMPLEMENTATION-PLAN.md
 NEXT-PHASE.md
+*.bak

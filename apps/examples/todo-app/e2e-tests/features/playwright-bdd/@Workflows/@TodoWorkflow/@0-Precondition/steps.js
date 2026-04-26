@@ -21,11 +21,11 @@ const FIELD_CONFIG = {
     testID: 'input-todo-title',
   },
   'Priority': {
-    type: FIELD_TYPES.MUI_SELECT,
+    type: FIELD_TYPES.DROPDOWN,
     testID: 'select-priority',
   },
   'Category': {
-    type: FIELD_TYPES.MUI_AUTOCOMPLETE,
+    type: FIELD_TYPES.FILL,
     testID: 'input-category',
   },
 };

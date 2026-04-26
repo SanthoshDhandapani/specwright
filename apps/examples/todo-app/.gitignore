@@ -26,3 +26,5 @@ reports/playwright/*
 reports/json/*
 reports/screenshots/*
 .specwright/
+.specwright/*
+!.specwright/.gitkeep

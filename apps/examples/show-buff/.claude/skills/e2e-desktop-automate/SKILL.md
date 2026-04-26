@@ -290,21 +290,101 @@ After cleanup, confirm the state in one line:
 
 ## Phase 10: Final Review
 
-Produce a concise summary:
+Calculate a quality score from aggregated pipeline data and display a formatted summary.
+
+**Score calculation — start at 100 and subtract only for actual observed failures. Do NOT output the deduction breakdown unless score < 90:**
 
 ```
-✅ Pipeline Complete — @<Module>
+Start: 100
 
-Exploration:  N selectors discovered in Ms
-Plan:         X scenarios approved
-Generation:   .feature + steps.js (Y lines)
-Execution:    P passed / F failed
-Healing:      I iterations, K fixes applied
+Deductions (only apply when a problem actually occurred — deliberate config flags like
+runGeneratedCases: false are NOT deductions):
 
-Files:
-  - <featurePath>
-  - <stepsPath>
-  - <planPath>
+  Config processing failures:
+    -15 per config entry that failed to process (parse error, missing Jira ticket, etc.)
+
+  BDD generation failures:
+    -20 if expected .feature or steps.js files were not created
+
+  Test execution (only if runGeneratedCases: true):
+    -5  if healing was required but all tests ended up passing (auto-resolved)
+    -15 per test that is still failing after max healing iterations
+    -10 if test run could not start (bddgen failed, project misconfigured, etc.)
+
+  Phase errors (not config-driven skips):
+    -10 if any phase aborted unexpectedly
+
+Minimum score: 0. Cap deductions at -60 so the score is always meaningful.
+```
+
+**Scoring is deduction-only — a clean run with no failures always scores 100, regardless of which phases ran.**
+
+**Rating:** 100 Perfect ⭐⭐⭐⭐⭐ | 90-99 Excellent ⭐⭐⭐⭐⭐ | 75-89 Good ⭐⭐⭐⭐ | 60-74 Fair ⭐⭐⭐ | 0-59 Poor ⭐⭐
+
+**Status:**
+- score = 100  → "PRODUCTION READY"
+- score 90–99  → "PRODUCTION READY — issues detected and auto-resolved"
+- score 75–89  → "READY — manual review recommended"
+- score 60–74  → "REQUIRES ATTENTION"
+- score < 60   → "SIGNIFICANT ISSUES"
+
+**Display format (use markdown sections):**
+
+```markdown
+# E2E AUTOMATION FINAL REVIEW
+**{module name}** — {current date}
+
+---
+
+## 📊 Quality Score: {score}/100 {stars}
+**{status}**
+
+{ONLY if score < 90 — list what caused deductions as a diagnosis:}
+| Issue | Deduction |
+|---|---|
+| {description of what failed} | -{n} |
+
+---
+
+## 🎯 Generation Summary
+- **Configs Processed:** {successful}/{total}
+- **Feature Files:** {count} created
+- **Step Definitions:** {count} files ({totalSteps} steps)
+- **Scenarios:** {count} total
+
+---
+
+## 📁 Generated Files
+- `{path_to_feature_file}`
+- `{path_to_steps_file}`
+
+---
+
+## 🧪 Test Execution
+{if tests ran: **Passed:** X/Y (Z%)}
+{if skipped: Skipped — `runGeneratedCases: false`}
+
+---
+
+## 🔧 Healing
+{if healing ran: **Attempts:** N | **Auto-fixed:** N | **Success Rate:** N%}
+{if skipped: Skipped — no test failures or execution skipped}
+
+---
+
+## ⏭️ Skipped Phases
+{list each: Phase N — reason (config flag)}
+
+---
+
+## 📋 Next Steps
+- Run tests: `pnpm test:bdd --grep "@{moduleName-lowercase}"`
+- Fix failures: `/e2e-heal`
+- View report: `pnpm report:playwright`
+
+---
+
+**STATUS: {overallStatus}**
 ```
 
 ---

@@ -24,3 +24,5 @@ reports/screenshots/*
 # Agent memory backups (cleanup.sh)
 .agent-memory-backup/
 .bootstrapping
+.specwright/*
+!.specwright/.gitkeep

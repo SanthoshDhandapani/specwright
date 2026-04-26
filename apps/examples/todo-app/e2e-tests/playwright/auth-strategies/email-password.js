@@ -1,51 +1,67 @@
 /**
- * Auth Strategy: Email + Password — @specwright/plugin-mui override
+ * Auth Strategy: Email + Password
  *
- * Single-form login (both fields on one page) — for apps that don't use
- * a two-step email → password flow. Both fields are visible simultaneously.
+ * Two-step login flow:
+ * 1. Navigate to /signin
+ * 2. Fill email → click submit
+ * 3. Fill password → click login
+ * 4. Handle 2FA if present
+ * 5. Wait for redirect to /home
+ * 6. Save storageState
  *
- * Reads credentials from env vars:
- *   TEST_USER_EMAIL     — login email
- *   TEST_USER_PASSWORD  — login password
- *
- * Reads locators from authenticationData.js (testIds must match the app):
- *   locators.emailInput.testId       — e.g. 'input-email'
- *   locators.passwordInput.testId    — e.g. 'input-password'
- *   locators.loginSubmitButton.testId — e.g. 'btn-signin'
- *
- * After success: waits for URL to contain /todos (or /home), saves storageState.
+ * Reads locators and credentials from authenticationData.js
  */
 import { authenticationData } from '../../data/authenticationData.js';
 
 export async function authenticate(page, authFile, _config = {}) {
-  console.log('[auth:email-password:mui] Starting authentication...');
+  console.log('[auth:email-password] Starting authentication...');
 
-  const { validCredentials, locators, timeouts } = authenticationData;
+  const { validCredentials, locators, timeouts, twoFactor } = authenticationData;
 
-  // Navigate to sign-in page
+  // Step 1: Navigate to sign-in page
   await page.goto(`${authenticationData.baseUrl}/signin`);
   await page.waitForLoadState('networkidle', { timeout: timeouts.loadState });
+  console.log('[auth:email-password] Navigated to /signin');
 
-  // Fill both fields (single-form — both visible at once)
+  // Step 2: Fill email and submit
   const emailInput = page.getByTestId(locators.emailInput.testId);
   await emailInput.waitFor({ state: 'visible', timeout: timeouts.elementWait });
   await emailInput.fill(validCredentials.email);
+  console.log(`[auth:email-password] Filled email: ${validCredentials.email}`);
 
+  const emailSubmit = page.getByTestId(locators.emailSubmitButton.testId);
+  await emailSubmit.click();
+  console.log('[auth:email-password] Clicked email submit');
+
+  // Step 3: Wait for password field, fill, and submit
   const passwordInput = page.getByTestId(locators.passwordInput.testId);
+  await passwordInput.waitFor({ state: 'visible', timeout: timeouts.elementWait });
   await passwordInput.fill(validCredentials.password);
-  console.log(`[auth:email-password:mui] Filled email + password`);
+  console.log('[auth:email-password] Filled password');
 
-  // Submit — single button (no two-step)
-  const submitButton = page.getByTestId(locators.loginSubmitButton.testId);
-  await submitButton.click();
-  console.log('[auth:email-password:mui] Clicked sign in');
+  const loginSubmit = page.getByTestId(locators.loginSubmitButton.testId);
+  await loginSubmit.click();
+  console.log('[auth:email-password] Clicked login submit');
 
-  // Wait for redirect — MUI apps typically land on /todos or /home or /dashboard
-  await page.waitForURL(/\/(todos|home|dashboard)/, { timeout: timeouts.login });
+  // Step 4: Handle 2FA if it appears
+  try {
+    const twoFactorInput = page.getByTestId(twoFactor.locators.codeInput.testId);
+    await twoFactorInput.waitFor({ state: 'visible', timeout: 5000 });
+    console.log('[auth:email-password] 2FA detected, entering code...');
+    await twoFactorInput.fill(twoFactor.code);
+    const proceedButton = page.getByTestId(twoFactor.locators.proceedButton.testId);
+    await proceedButton.click();
+    console.log('[auth:email-password] 2FA code submitted');
+  } catch {
+    console.log('[auth:email-password] No 2FA prompt detected, continuing...');
+  }
+
+  // Step 5: Wait for redirect to /todos
+  await page.waitForURL('**/todos**', { timeout: timeouts.login });
   await page.waitForLoadState('networkidle', { timeout: timeouts.loadState });
-  console.log('[auth:email-password:mui] Login successful');
+  console.log('[auth:email-password] Login successful');
 
-  // Save authentication state (localStorage token + cookies)
+  // Step 6: Save authentication state
   await page.context().storageState({ path: authFile });
-  console.log(`[auth:email-password:mui] State saved to: ${authFile}`);
+  console.log(`[auth:email-password] State saved to: ${authFile}`);
 }

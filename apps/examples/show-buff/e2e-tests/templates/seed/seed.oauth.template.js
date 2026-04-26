@@ -1,15 +1,16 @@
 import { test, expect } from '@playwright/test';
 
 // ---------------------------------------------------------------------------
-// Seed template — ShowBuff OAuth (localStorage injection)
-// Auth strategy: oauth | OAUTH_STORAGE_KEY=specwright-show-user
+// Seed template — OAuth (localStorage injection)
+// Auth strategy: oauth
 //
 // This file is OVERWRITTEN on every /e2e-plan run. The pre-cleanup step
-// copies this to e2e-tests/playwright/generated/seed.spec.js before exploration.
-// Customize this file if the ShowBuff auth shape changes.
+// selects this template based on AUTH_STRATEGY=oauth in .env.testing and
+// copies it to e2e-tests/playwright/generated/seed.spec.js.
+// Customize the authenticate() function for your OAuth storage key / user shape.
 // ---------------------------------------------------------------------------
 
-const BASE_URL = process.env.BASE_URL || 'https://specwright-show-buff.vercel.app';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
 const OAUTH_STORAGE_KEY = process.env.OAUTH_STORAGE_KEY; // NO fallback — fail loud if missing
 const TEST_USER_NAME = process.env.TEST_USER_NAME || '';
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || '';

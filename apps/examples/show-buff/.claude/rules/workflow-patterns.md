@@ -15,7 +15,7 @@ npx playwright test --project setup --project precondition --project workflow-co
 
 The project chain is:
 - `setup` — creates auth session (runs once, all projects consume it via storageState)
-- `precondition` — runs `@precondition @cross-feature-data` tests, `fullyParallel: false` (sequential within each Phase 0 file), each workflow's Phase 0 spec gets its own fresh worker
+- `precondition` — runs `@precondition @cross-feature-data` tests, `workers: 1`, fresh worker
 - `workflow-consumers` — runs `@workflow-consumer` tests, `fullyParallel: true`, each file gets its own worker
 
 **Reasoning:** Each Playwright project runs in its own worker pool. Moving across projects guarantees a clean process — no `$bddContext` leakage between `@0-*` and `@1-*` spec files.

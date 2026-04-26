@@ -178,12 +178,14 @@ export default defineConfig({
     },
 
     // Run single workflow — serial (1 worker), filesystem ordering via @0-/@1- prefixes.
-    // ONLY used via explicit targeted scripts (e.g. pnpm test:bdd:workflow).
+    // ONLY used via explicit targeted scripts (e.g. pnpm test:bdd:bookings).
     // NOT included in pnpm test:bdd — the full run uses precondition → workflow-consumers instead.
+    // fullyParallel: true prevents cross-file $bddFileData fixture contamination (bddTestData not found).
+    // Workers: 1 keeps execution sequential, preserving @0-/@1- filesystem ordering.
     {
       name: 'run-workflow',
       testMatch: '**/@Workflows/**/*.spec.js',
-      fullyParallel: false,
+      fullyParallel: true,
       workers: 1,
       use: {
         ...devices['Desktop Chrome'],

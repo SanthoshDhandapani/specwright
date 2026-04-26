@@ -5,6 +5,32 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.4.5] — 2026-04-27
+
+### Changed
+
+- **`playwright-test-planner.md` — simplified tool sequence and added filesystem tools.** Added `Glob`, `Grep`, `LS` to the agent's allowed tools so it can scan source files for `data-testid` attributes without a browser session. Removed `browser_close` as a mandatory second tool call — it was a defensive reset that added latency with no benefit when no prior session exists. Removed the `.playwright-mcp/page-*.yml` self-verification step (Step 9) — this was brittle on CI where the output dir may not be writable. Removed the `[SNAPSHOT]` log entry requirement for anti-fabrication; the mandatory live `browser_navigate` + `browser_snapshot` rule is sufficient.
+
+- **`e2e-desktop-automate/SKILL.md` (show-buff) — Phase 10 synced with plugin.** Show-buff's copy of the desktop skill now matches the quality score format committed in 0.4.4.
+
+- **`seed.oauth.template.js` (show-buff) — generalized from ShowBuff-specific to generic.** Removed hardcoded `BASE_URL` fallback (`specwright-show-buff.vercel.app`) and ShowBuff-specific comments. Template is now suitable as a base for any OAuth project.
+
+- **`MEMORY.template.md` (show-buff) — generalized app name/auth placeholders.** Replaced hardcoded `App: ShowBuff` and `Auth: oauth (OAUTH_STORAGE_KEY=specwright-show-user)` with `{AppName}`, `{BASE_URL}`, `{AUTH_STRATEGY}` placeholders.
+
+### Fixed
+
+- **`todo-app/stepHelpers.js` — reverted MUI overlay types to base plugin.** `MUI_SELECT`, `MUI_AUTOCOMPLETE`, `MUI_DATE_PICKER`, `MUI_CHECKBOX`, `MUI_DIALOG_CONFIRM`, and `MUI_TEXT_VISIBLE` were incorrectly applied in the base todo-app example (which uses standard HTML inputs, not MUI components). Reverted to the base plugin `FIELD_TYPES` (`FILL`, `DROPDOWN`, `CLICK`, etc.).
+
+- **`todo-app/email-password.js` — reverted to two-step auth flow.** The auth strategy was overwritten with a single-form variant (MUI plugin pattern) that doesn't match the todo-app's two-step sign-in (email → submit → password → submit). Restored the standard two-step flow.
+
+- **`todo-app/@0-Precondition/steps.js` — corrected FIELD_TYPES for Priority and Category.** `MUI_SELECT` → `DROPDOWN` and `MUI_AUTOCOMPLETE` → `FILL` to match the actual input components in the todo-app.
+
+- **`show-buff/package.json` — workflow scripts use `precondition`/`workflow-consumers` projects.** `test:bdd:favorites-workflow` and `test:bdd:list-workflow` were using `--project run-workflow`, which reuses a single worker across phase spec files and causes `bddTestData not found` errors. Corrected to `--project precondition --project workflow-consumers`. `test:bdd:all` also fixed to list projects explicitly rather than running all (which includes `run-workflow`).
+
+- **`show-buff/playwright.config.ts` — `run-workflow` set to `fullyParallel: true`.** Matches the fix from 0.3.1: `fullyParallel: false` + `workers: 1` causes `$bddFileData` fixture leakage across spec files. `fullyParallel: true` with `workers: 1` keeps execution sequential while giving each spec file a fresh worker process.
+
+---
+
 ## [0.4.4] — 2026-04-27
 
 ### Added

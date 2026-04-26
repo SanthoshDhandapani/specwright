@@ -14,8 +14,7 @@ Given('I am on the {string} page', async ({ page, testConfig }, pageName) => {
 });
 
 When('I navigate to {string}', async ({ page, testConfig }, urlPath) => {
-  // Support named routes (e.g. "TodoList") as well as raw paths (e.g. "/todos")
-  const resolvedPath = testConfig.routes[urlPath] || urlPath;
+  const resolvedPath = testConfig.routes?.[urlPath] ?? urlPath;
   await page.goto(resolvedPath);
   await page.waitForLoadState('networkidle', { timeout: testConfig.timeout.loadState });
 });

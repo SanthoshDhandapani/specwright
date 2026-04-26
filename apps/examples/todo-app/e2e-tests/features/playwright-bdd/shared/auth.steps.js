@@ -4,6 +4,15 @@
  */
 import { Given, When, Then, expect } from '../../../playwright/fixtures.js';
 
+Given('I am authenticated', async ({ page, authData }) => {
+  const currentUrl = page.url();
+  if (currentUrl && currentUrl !== 'about:blank' && !currentUrl.includes('/signin')) {
+    return;
+  }
+  await page.goto('/home');
+  await page.waitForLoadState('networkidle', { timeout: authData.timeouts.loadState });
+});
+
 Given('I am logged in', async ({ page, authData }) => {
   // When using storageState from auth.setup, the user is already authenticated.
   // In serial-execution mode, skip navigation if the page is already on an
@@ -14,17 +23,6 @@ Given('I am logged in', async ({ page, authData }) => {
     return;
   }
   await page.goto('/home');
-  await page.waitForLoadState('networkidle', { timeout: authData.timeouts.loadState });
-});
-
-// Alias: some feature files use "I am authenticated" instead of "I am logged in".
-// With storageState from auth.setup the session is already active — this is a no-op.
-Given('I am authenticated', async ({ page, authData }) => {
-  const currentUrl = page.url();
-  if (currentUrl && currentUrl !== 'about:blank' && !currentUrl.includes('/signin')) {
-    return;
-  }
-  await page.goto('/todos');
   await page.waitForLoadState('networkidle', { timeout: authData.timeouts.loadState });
 });
 

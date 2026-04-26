@@ -389,6 +389,20 @@ AUTH_STRATEGY=none
 
 Configure in `e2e-tests/instructions.js` (see `instructions.example.js` for examples).
 
+**Key `instructions.js` fields:**
+
+| Field                | Description                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| `moduleName`         | Target module directory (e.g. `"@HomePage"`)                                                   |
+| `category`           | `"@Modules"` or `"@Workflows"`                                                                 |
+| `fileName`           | Output filename stem (e.g. `"homepage"` → `homepage.feature`)                                  |
+| `pageURL`            | Starting URL for browser exploration                                                           |
+| `instructions`       | Free-text test scenario descriptions                                                           |
+| `explore`            | Enable live browser exploration (Phase 4)                                                      |
+| `autoApprove`        | `true` skips the Phase 6 user approval prompt and proceeds to BDD generation automatically. Default: `false` |
+| `runExploredCases`   | Run seed tests before BDD generation (Phase 5)                                                 |
+| `runGeneratedCases`  | Run generated BDD tests after creation (Phase 8)                                               |
+
 **Tip:** Set `PIPELINE_TICKET_ID` in `.env.testing` to automatically prepend your org's ticket ID to all pipeline runs (useful when hooks require a Jira reference).
 
 ## Troubleshooting

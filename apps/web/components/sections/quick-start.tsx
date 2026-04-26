@@ -6,6 +6,26 @@ import { cn } from "../ui/cn";
 const TABS = ["Plugin CLI", "Desktop App", "Claude Desktop"] as const;
 type Tab = typeof TABS[number];
 
+const BASE_URL = "https://github.com/SanthoshDhandapani/specwright/releases/download/demo-videos-v1";
+
+const VIDEOS: Partial<Record<Tab, { src: string; poster: string; label: string }>> = {
+  "Plugin CLI": {
+    src: `${BASE_URL}/Cli_Execution.mp4`,
+    poster: `${BASE_URL}/cli-thumb.jpg`,
+    label: "See the CLI pipeline run end-to-end",
+  },
+  "Desktop App": {
+    src: `${BASE_URL}/Bootstrapping%2BExploration.mp4`,
+    poster: `${BASE_URL}/desktop-thumb.jpg`,
+    label: "See the Desktop app bootstrap and explore",
+  },
+  "Claude Desktop": {
+    src: `${BASE_URL}/Claude_Desktop_Favourite_Workflow.mp4`,
+    poster: `${BASE_URL}/claude-desktop-thumb.jpg`,
+    label: "See the full Favorites workflow run in Claude Desktop",
+  },
+};
+
 const STEPS: Record<Tab, { title: string; code: string; note?: string }[]> = {
   "Plugin CLI": [
     {
@@ -67,45 +87,53 @@ export default [
     {
       title: "Install the plugin (scaffolds the skill automatically)",
       code: "npx @specwright/plugin init",
-      note: "Installs @specwright/mcp and adds e2e-desktop-automate skill to .claude/skills/",
+      note: "Adds /e2e-desktop-automate skill to .claude/skills/ and wires up @specwright/mcp",
     },
     {
       title: "Add @specwright/mcp to Claude Desktop config",
-      code: `# ~/Library/Application Support/Claude/claude_desktop_config.json
+      code: `# 1. Get your Node.js bin path:
+$ dirname $(which node)
+# → e.g. /Users/you/.nvm/versions/node/v22.x.x/bin
+
+# 2. Add to ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "specwright": {
       "command": "npx",
-      "args": ["-y", "@specwright/mcp"],
-      "env": { "PROJECT_PATH": "/path/to/your-project" }
+      "args": ["@specwright/mcp@latest"],
+      "env": {
+        "PATH": "/Users/you/.nvm/.../bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+      }
     }
   }
 }`,
-      note: "Replace /path/to/your-project with your actual project root",
+      note: "Paste the dirname output as the first entry in PATH — Claude Desktop needs it to find npx",
     },
     {
-      title: "Add the skill to Claude Desktop",
-      code: `# The skill is already in .claude/skills/e2e-desktop-automate/
-# Open your project folder in Claude Desktop — the skill is auto-discovered
+      title: "Open your project folder in Claude Desktop",
+      code: `# File → Open Folder → select your project root
+# Claude Desktop auto-discovers .claude/skills/e2e-desktop-automate/
 
-# Available pipeline tools (via @specwright/mcp):
-e2e_automate   — Read instructions.js and build pipeline plan
-e2e_explore    — Spawn browser exploration agent
-e2e_generate   — Spawn BDD + step generator agents
-e2e_heal       — Spawn test healer agent
-e2e_execute    — Run tests (seed or bdd mode)`,
+# Configure your test target in e2e-tests/instructions.js:
+export default [{
+  moduleName: '@FavoritesWorkflow',
+  category: '@Workflows',
+  pageURL: 'https://your-app.vercel.app',
+  instructions: ['...'],
+}];`,
     },
     {
-      title: "Type a natural language prompt — pipeline runs automatically",
-      code: `# In Claude Desktop chat (project open):
-Generate E2E tests for the login page at http://localhost:3000/login
+      title: "Run /e2e-desktop-automate — 10-phase pipeline executes",
+      code: `# Type in Claude Desktop chat:
+/e2e-desktop-automate
 
-# Claude Desktop will:
-# 1. Load the e2e-desktop-automate skill
-# 2. Call @specwright/mcp tools to run the 10-phase pipeline
-# 3. Open a browser, explore your app, write BDD tests
-# 4. Ask for your approval before generating test files`,
-      note: "No /slash command needed — Claude detects the intent and invokes the skill",
+# Phases run automatically:
+# Phase 4 — Browser opens, explores your app
+# Phase 6 — Pauses for your approval
+# Phase 7 — Generates .feature + steps.js
+# Phase 8 — Runs tests, auto-heals failures
+# Phase 10 — Quality score report`,
+      note: "Pause at Phase 6 to review the test plan before files are written",
     },
   ],
 };
@@ -184,6 +212,30 @@ export function QuickStartSection() {
                 </div>
               </motion.div>
             ))}
+
+            {/* Demo video */}
+            {VIDEOS[activeTab] && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: STEPS[activeTab].length * 0.08 + 0.1 }}
+                className="mt-6"
+              >
+                <p className="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-3">
+                  {VIDEOS[activeTab]!.label}
+                </p>
+                <div className="rounded-2xl overflow-hidden border border-slate-700/60 bg-slate-900">
+                  <video
+                    key={VIDEOS[activeTab]!.src}
+                    src={VIDEOS[activeTab]!.src}
+                    poster={VIDEOS[activeTab]!.poster}
+                    controls
+                    preload="none"
+                    className="w-full"
+                  />
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         </AnimatePresence>
 

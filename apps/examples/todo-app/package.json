@@ -41,9 +41,9 @@
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
-    "@faker-js/faker": "^10.4.0",
+    "@faker-js/faker": "^10.3.0",
     "@playwright/test": "^1.59.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^17.2.0",
     "multiple-cucumber-html-reporter": "^3.10.0",
     "playwright-bdd": "^8.5.0"
   }

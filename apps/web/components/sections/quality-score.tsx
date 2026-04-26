@@ -5,10 +5,10 @@ import { SparklesCore } from "../ui/sparkles";
 
 const SCORE_BARS = [
   { label: "Exploration", score: 100 },
-  { label: "Feature File", score: 98 },
-  { label: "Step Definitions", score: 95 },
+  { label: "Feature File", score: 100 },
+  { label: "Step Definitions", score: 97 },
   { label: "Test Execution", score: 100 },
-  { label: "Healing", score: 100 },
+  { label: "Healing", score: 97 },
 ];
 
 function AnimatedCounter({ target, duration = 1.5 }: { target: number; duration?: number }) {
@@ -81,7 +81,7 @@ export function QualityScoreSection() {
           <div className="mb-8">
             <p className="text-slate-500 text-sm mb-1">Quality Score</p>
             <div className="text-8xl font-bold text-white">
-              {isInView ? <AnimatedCounter target={97} duration={1.5} /> : 0}
+              {isInView ? <AnimatedCounter target={99} duration={1.5} /> : 0}
             </div>
             <div className="flex items-center justify-center gap-1 mt-2">
               {"⭐⭐⭐⭐⭐".split("").map((star, i) => (
@@ -102,7 +102,7 @@ export function QualityScoreSection() {
               transition={{ delay: 2 }}
               className="text-emerald-400 font-semibold mt-2 text-sm"
             >
-              READY FOR PRODUCTION
+              PRODUCTION READY — issues auto-resolved
             </motion.p>
           </div>
 

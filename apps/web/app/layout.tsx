@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className="min-h-full bg-slate-950 text-white">{children}</body>
+      <body className="min-h-full bg-slate-950 text-white" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

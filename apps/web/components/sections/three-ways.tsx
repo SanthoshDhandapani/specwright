@@ -25,6 +25,7 @@ const CARDS = [
     glow: "hover:shadow-purple-500/10",
     features: ["Visual phase display", "Live agent output", "Auth config UI", "One-click run"],
     command: "Download for Mac / Windows",
+    href: "https://github.com/SanthoshDhandapani/specwright/releases",
     tag: "Best for: team demos & reviews",
   },
   {
@@ -64,53 +65,86 @@ export function ThreeWaysSection() {
 
         {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {CARDS.map((card, idx) => (
-            <motion.div
-              key={card.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: idx * 0.15 }}
-              className={cn(
-                "relative group rounded-2xl border p-6 bg-gradient-to-b transition-all duration-300 cursor-default flex flex-col",
-                card.color,
-                card.border,
-                `hover:shadow-xl ${card.glow}`
-              )}
-            >
-              {/* Moving border on hover */}
-              <div className={cn(
-                "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500",
-                "bg-gradient-to-r from-transparent via-white/5 to-transparent"
-              )} />
+          {CARDS.map((card, idx) => {
+            const inner = (
+              <>
+                {/* Moving border on hover — pointer-events-none so it never blocks clicks */}
+                <div className={cn(
+                  "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none",
+                  "bg-gradient-to-r from-transparent via-white/5 to-transparent"
+                )} />
 
-              {/* Icon */}
-              <div className="text-4xl mb-4">{card.icon}</div>
+                {/* Icon */}
+                <div className="text-4xl mb-4">{card.icon}</div>
 
-              {/* Title */}
-              <h3 className="text-xl font-bold text-white mb-1">{card.title}</h3>
-              <p className="text-sm text-slate-400 mb-4">{card.subtitle}</p>
+                {/* Title */}
+                <h3 className="text-xl font-bold text-white mb-1">{card.title}</h3>
+                <p className="text-sm text-slate-400 mb-4">{card.subtitle}</p>
 
-              {/* Features */}
-              <ul className="space-y-2 mb-6 flex-1">
-                {card.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
-                    <span className="text-emerald-400">✓</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
+                {/* Features */}
+                <ul className="space-y-2 mb-6 flex-1">
+                  {card.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
+                      <span className="text-emerald-400">✓</span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
 
-              {/* Command block */}
-              <div className="rounded-lg bg-slate-900/80 border border-slate-700/50 p-3 font-mono text-xs text-emerald-400">
-                {card.terminal && <span className="text-slate-500">$ </span>}
-                {card.command}
-              </div>
+                {/* Command block */}
+                <div className={cn(
+                  "rounded-lg bg-slate-900/80 border p-3 font-mono text-xs flex items-center justify-between",
+                  card.href
+                    ? "border-purple-500/40 text-purple-300"
+                    : "border-slate-700/50 text-emerald-400"
+                )}>
+                  <span>
+                    {card.terminal && <span className="text-slate-500">$ </span>}
+                    {card.command}
+                  </span>
+                  {card.href && <span className="text-purple-500 ml-2">↗</span>}
+                </div>
 
-              {/* Tag */}
-              <p className="mt-3 text-xs text-slate-500">{card.tag}</p>
-            </motion.div>
-          ))}
+                {/* Tag */}
+                <p className="mt-3 text-xs text-slate-500">{card.tag}</p>
+              </>
+            );
+
+            const sharedClass = cn(
+              "relative group rounded-2xl border p-6 bg-gradient-to-b transition-all duration-300 flex flex-col",
+              card.color,
+              card.border,
+              `hover:shadow-xl ${card.glow}`,
+              card.href ? "cursor-pointer" : "cursor-default"
+            );
+
+            return card.href ? (
+              <motion.a
+                key={card.title}
+                href={card.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: idx * 0.15 }}
+                className={sharedClass}
+              >
+                {inner}
+              </motion.a>
+            ) : (
+              <motion.div
+                key={card.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: idx * 0.15 }}
+                className={sharedClass}
+              >
+                {inner}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>

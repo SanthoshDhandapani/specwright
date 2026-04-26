@@ -47,7 +47,7 @@ export default [
   "Desktop App": [
     {
       title: "Download Specwright Desktop",
-      code: "# Download for Mac (Apple Silicon / Intel) or Windows\n# From: specwright.dev/download",
+      code: "# Download for Mac (Apple Silicon / Intel) or Windows\n# github.com/SanthoshDhandapani/specwright/releases",
       note: "Electron app — no separate install needed",
     },
     {

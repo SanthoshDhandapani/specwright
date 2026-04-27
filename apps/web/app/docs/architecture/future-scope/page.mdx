@@ -8,33 +8,36 @@ Specwright is designed to evolve. This page covers planned directions — multi-
 
 ## Multi-LLM Support
 
-The Specwright agent pipeline is **model-agnostic**. Every agent and skill is defined in plain Markdown files (`.md`, `.mdx`) with a frontmatter `model:` field. Switching models requires changing that field — no pipeline code changes needed.
+The Specwright agent pipeline is **model-agnostic** by design. Every agent and skill is defined in plain Markdown files (`.md`, `.mdx`) with a frontmatter `model:` field. Switching models requires changing that field — no pipeline code changes needed.
 
-### Models compatible today
+### Models in use today
 
-| Model | Status | Notes |
+Specwright runs on top of **Claude Code CLI**, which means it inherits whatever Claude models Anthropic makes available through the CLI. In the **Specwright Desktop app**, the pipeline currently runs on `claude-sonnet-4-6` (Claude Sonnet 4.6).
+
+| Model | Where used | Notes |
 |---|---|---|
-| Claude Sonnet 4.x | ✅ Default | Recommended for generation (speed + quality) |
-| Claude Opus 4.x | ✅ Supported | Used for healing — stronger reasoning |
-| GPT-4o / GPT-4.1 | ⚠️ Possible | Requires Claude Code model override or SDK swap |
-| Gemini 2.5 Pro | ⚠️ Possible | Browser MCP tool format adapter needed |
-| Local models (Ollama, LM Studio) | ⚠️ Experimental | Works for generation phases; browser exploration requires strong tool-use capability |
+| `claude-sonnet-4-6` | Desktop app pipeline | Default — generation, exploration, and healing |
+| Any Claude model | Plugin + CLI | Inherits from Claude Code CLI; change `model:` in agent frontmatter to switch |
 
-### What switching requires
+### What switching requires (Plugin + CLI)
 
-To run an agent on a different model, change its frontmatter:
+To run a specific agent on a different Claude model, change its frontmatter:
 
 ```yaml
 ---
 name: code-generator
-model: gpt-4o      # was claude-sonnet-4-6
+model: claude-opus-4-7
 tools: Read, Write, Edit
 ---
 ```
 
 No changes to skills, the pipeline orchestration, or Playwright BDD are needed. The agent contract (inputs, outputs, file paths) is model-independent.
 
-> **Note:** Browser exploration (Phase 4) is the most model-sensitive phase. It requires strong tool-use, multi-step reasoning, and accurate Playwright selector generation. Weaker models may produce incorrect selectors that fail the seed validation step.
+> **Note:** Browser exploration (Phase 4) is the most model-sensitive phase. It requires strong tool-use, multi-step reasoning, and accurate Playwright selector generation.
+
+### Future: broader model support
+
+Support for non-Claude models (GPT-4.1, Gemini, local models via Ollama) is on the roadmap but not currently implemented. It would require either a Claude Code model override layer or a separate agent runner that speaks each provider's SDK.
 
 ---
 

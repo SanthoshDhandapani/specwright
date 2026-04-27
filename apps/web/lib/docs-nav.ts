@@ -12,6 +12,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: "Your First Test", href: "/docs/getting-started/first-test" },
       { label: "Choosing Your Interface", href: "/docs/getting-started/choosing-interface" },
       { label: "Updating Specwright", href: "/docs/getting-started/updating-specwright" },
+      { label: "Built With", href: "/docs/getting-started/built-with" },
     ],
   },
   {

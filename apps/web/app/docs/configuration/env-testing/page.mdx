@@ -144,4 +144,22 @@ Used when `AUTH_STRATEGY=oauth`. Specwright bypasses the OAuth popup entirely by
 > - OAuth fields are injected as a structured object into localStorage — the shape must exactly match what your app reads. If your app expects `{ email, name, picture }` under `user`, the injected object uses `TEST_USER_EMAIL`, `TEST_USER_NAME`, and `TEST_USER_PICTURE` for those fields.
 > - `PIPELINE_TICKET_ID` is read by the pipeline agent, not by Playwright directly. It does not affect test execution — only run naming and org hook validation.
 
+---
+
+## Playwright & playwright-bdd Configuration
+
+Specwright is built on [Playwright](https://playwright.dev) and [playwright-bdd](https://vitalets.github.io/playwright-bdd/). Any environment variable supported by either library also works in `.env.testing`.
+
+**Common Playwright env vars:**
+
+| Variable | Example | Description |
+|---|---|---|
+| `PWDEBUG` | `console` | Enable Playwright inspector. `PWDEBUG=1` opens the full inspector; `PWDEBUG=console` logs to console. |
+| `PLAYWRIGHT_HTML_REPORT` | `reports/playwright` | Override the HTML report output directory. |
+| `PLAYWRIGHT_JSON_OUTPUT_NAME` | `reports/json/results.json` | Override the JSON report output path. |
+| `CI` | `true` | When set, Playwright automatically runs in headless mode and adjusts retry/timeout defaults for CI environments. |
+| `PLAYWRIGHT_BROWSERS_PATH` | `/path/to/browsers` | Override the directory where Playwright looks for installed browser binaries. Useful in offline or cached CI environments. |
+
+> For the full list of Playwright environment variables, see the [Playwright configuration docs](https://playwright.dev/docs/test-configuration) and [playwright-bdd configuration](https://vitalets.github.io/playwright-bdd/configuration/).
+
 <DocsPrevNext />

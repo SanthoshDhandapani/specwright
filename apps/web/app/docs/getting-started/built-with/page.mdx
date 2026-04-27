@@ -1,0 +1,57 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Built With
+
+Specwright is built on the shoulders of excellent open-source projects. This page lists the core libraries that power the framework and the documentation site.
+
+---
+
+## E2E Framework (Plugin)
+
+These packages are installed in your project when you run `npx @specwright/plugin init`:
+
+| Package | Version | Role |
+|---|---|---|
+| [`@playwright/test`](https://playwright.dev) | `^1.59.1` | Browser automation engine — runs your tests across Chromium, Firefox, and WebKit |
+| [`playwright-bdd`](https://vitalets.github.io/playwright-bdd/) | `^8.5.0` | Gherkin BDD layer on top of Playwright — compiles `.feature` files into Playwright specs via `bddgen` |
+| [`@faker-js/faker`](https://fakerjs.dev) | `^10.3.0` | Realistic test data generation — names, emails, phone numbers, addresses, and more |
+| [`multiple-cucumber-html-reporter`](https://github.com/wswebcreation/multiple-cucumber-html-reporter) | `^3.10.0` | Generates the BDD HTML report from Cucumber JSON output |
+| [`dotenv`](https://github.com/motdotla/dotenv) | `^17.2.0` | Loads `.env.testing` into `process.env` at test startup |
+
+---
+
+## AI Pipeline
+
+The agent pipeline that generates and heals tests is powered by:
+
+| Tool | Role |
+|---|---|
+| [Claude (Anthropic)](https://anthropic.com) | The AI model driving all agents — exploration, generation, healing, and review |
+| [Claude Code](https://claude.ai/code) | CLI and SDK that runs the multi-agent pipeline via skills and agents |
+| [`claude-runner`](https://www.npmjs.com/package/claude-runner) | Lightweight SDK used by the Desktop app to spawn and stream Claude agents programmatically |
+| [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp) | MCP server that gives agents live browser access during exploration |
+
+---
+
+## Documentation Site
+
+The docs you're reading are built with:
+
+| Package | Role |
+|---|---|
+| [Next.js](https://nextjs.org) | React framework powering the docs site |
+| [Tailwind CSS](https://tailwindcss.com) | Utility-first CSS framework |
+| [Framer Motion](https://www.framer.com/motion/) | Animations and transitions |
+| [MDX](https://mdxjs.com) | Markdown with React components — how these pages are written |
+
+---
+
+## Acknowledgements
+
+A huge thank you to the maintainers of [playwright-bdd](https://vitalets.github.io/playwright-bdd/) — the Gherkin-to-Playwright bridge is what makes the BDD experience in Specwright possible. If you find it useful, consider [sponsoring the project](https://github.com/sponsors/vitalets).
+
+And to the [Playwright](https://playwright.dev) team at Microsoft — reliable, fast, and cross-browser test automation out of the box.
+
+---
+
+<DocsPrevNext />

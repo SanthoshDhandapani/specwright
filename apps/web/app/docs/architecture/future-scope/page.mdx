@@ -76,6 +76,16 @@ Phase 8 healing could optionally run `expect(page).toHaveScreenshot()` assertion
 
 A shared layer for teams — agent memory, generated test files, and quality score history synced across developers. Local-first by default; cloud sync is entirely opt-in and self-hostable.
 
+### Migration from existing test frameworks
+
+Specwright will support importing and converting existing test suites written in other frameworks into Playwright BDD:
+
+- **Selenium** (Java/Python/JS) — parse existing test classes and map `driver.findElement` / `driver.click` calls to equivalent Playwright locators and BDD steps
+- **Cypress** — convert `cy.get`, `cy.click`, `cy.type`, and `cy.intercept` chains to Playwright BDD step definitions
+- **WebdriverIO**, **TestCafe**, **Nightwatch**, and other frameworks — extract test intent from existing spec files and regenerate as `.feature` + `steps.js` pairs
+
+The migration agent will analyse the source test file, infer the user intent behind each action, and produce idiomatic Gherkin scenarios backed by Playwright step definitions — rather than a line-by-line mechanical translation. This preserves readability and allows the healing pipeline to maintain the migrated tests going forward.
+
 ---
 
 <DocsPrevNext href="/docs/architecture/future-scope" />

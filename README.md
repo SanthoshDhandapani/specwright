@@ -37,6 +37,10 @@ It explores your web app in a real browser, discovers UI elements and selectors,
 **100% local.** Specwright runs entirely on your machine using your own Claude session. No data leaves your environment — no remote servers, no telemetry, no code capture.
 
 <p align="center">
+  <img src="assets/images/short_intro.gif" alt="Specwright in action — explore, plan, generate, heal" width="100%">
+</p>
+
+<p align="center">
   <img src="apps/web/public/screenshots/desktop-explore.webp" alt="Specwright Desktop — live browser exploration discovering selectors" width="100%">
   <br>
   <em>Specwright Desktop: live browser exploration — discovering selectors and building the test plan</em>

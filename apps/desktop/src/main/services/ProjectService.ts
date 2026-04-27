@@ -28,6 +28,7 @@ export interface InstructionCard {
   explore: boolean;
   runExploredCases: boolean;
   runGeneratedCases: boolean;
+  autoApprove: boolean;
 }
 
 export type ProjectState = "none" | "bootstrapping" | "ready" | "error";
@@ -365,6 +366,7 @@ export class ProjectService {
         explore: entry.explore === true,
         runExploredCases: entry.runExploredCases === true,
         runGeneratedCases: entry.runGeneratedCases === true,
+        autoApprove: entry.autoApprove === true,
       }));
     } catch (err) {
       console.error("[ProjectService] Failed to read instructions:", err);
@@ -423,6 +425,7 @@ export class ProjectService {
       lines.push(`    explore: ${card.explore},`);
       lines.push(`    runExploredCases: ${card.runExploredCases},`);
       lines.push(`    runGeneratedCases: ${card.runGeneratedCases},`);
+      lines.push(`    autoApprove: ${card.autoApprove ?? false},`);
       lines.push(`  }`);
       return lines.join("\n");
     });
@@ -677,6 +680,7 @@ export class ProjectService {
       lines.push(`    explore: ${tmpl.explore},`);
       lines.push(`    runExploredCases: ${tmpl.runExploredCases},`);
       lines.push(`    runGeneratedCases: ${tmpl.runGeneratedCases},`);
+      lines.push(`    autoApprove: ${tmpl.autoApprove ?? false},`);
       lines.push(`  }`);
       return lines.join("\n");
     });
@@ -716,6 +720,7 @@ export class ProjectService {
         explore: entry.explore === true,
         runExploredCases: entry.runExploredCases === true,
         runGeneratedCases: entry.runGeneratedCases === true,
+        autoApprove: entry.autoApprove === true,
       }));
     } catch (err) {
       console.error(`[ProjectService] Failed to parse template file ${filePath}:`, err);

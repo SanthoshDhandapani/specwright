@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "rootDirectory": "apps/web",
+  "installCommand": "echo 'Dependencies installed by CI'",
+  "buildCommand": "next build"
+}

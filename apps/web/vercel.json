@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "installCommand": "pnpm install --frozen-lockfile",
+  "installCommand": "echo 'Dependencies installed by CI'",
   "buildCommand": "next build"
 }

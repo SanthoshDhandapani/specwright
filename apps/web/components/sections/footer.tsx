@@ -33,9 +33,9 @@ export function Footer() {
           <div>
             <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Links</p>
             <ul className="space-y-2 text-xs text-slate-500">
-              <li><a href="https://github.com/specwright/specwright" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">GitHub ↗</a></li>
+              <li><a href="https://github.com/SanthoshDhandapani/specwright" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">GitHub ↗</a></li>
               <li><a href="/changelog" className="hover:text-slate-300 transition-colors">Changelog</a></li>
-              <li><a href="https://github.com/specwright/specwright/issues" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">Report Issue ↗</a></li>
+              <li><a href="https://github.com/SanthoshDhandapani/specwright/issues" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">Report Issue ↗</a></li>
             </ul>
           </div>
         </div>
@@ -69,7 +69,7 @@ export function Footer() {
               Get Started →
             </a>
             <a
-              href="https://github.com/specwright/specwright"
+              href="https://github.com/SanthoshDhandapani/specwright"
               target="_blank"
               rel="noopener noreferrer"
               className="px-6 py-2.5 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-300 text-sm font-semibold hover:border-slate-500 hover:text-white transition-all duration-200"

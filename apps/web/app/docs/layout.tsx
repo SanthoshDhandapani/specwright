@@ -27,7 +27,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               Pipeline
             </Link>
             <a
-              href="https://github.com/specwright/specwright"
+              href="https://github.com/SanthoshDhandapani/specwright"
               target="_blank"
               rel="noopener noreferrer"
               className="text-slate-400 hover:text-slate-200 transition-colors"

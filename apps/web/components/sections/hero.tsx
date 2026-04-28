@@ -95,7 +95,7 @@ export function HeroSection() {
             Get Started →
           </a>
           <a
-            href="https://github.com/specwright/specwright"
+            href="https://github.com/SanthoshDhandapani/specwright"
             target="_blank"
             rel="noopener noreferrer"
             className="px-8 py-3.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 font-semibold text-base hover:border-slate-500 hover:text-white transition-all duration-200"

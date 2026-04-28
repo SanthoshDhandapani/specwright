@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   description:
     "Specwright explores your app, writes production-grade BDD tests, and self-heals failures — all running locally inside Claude Code.",
   keywords: ["playwright", "bdd", "e2e testing", "claude", "ai testing", "specwright"],
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
   openGraph: {
     title: "Specwright — AI-powered E2E tests",
     description: "10-phase AI pipeline. Production BDD tests. Self-healing. Zero SaaS.",

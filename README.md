@@ -21,7 +21,7 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#three-interfaces">Interfaces</a> &bull;
   <a href="#the-10-phase-pipeline">Pipeline</a> &bull;
-  <a href="#showbuff-demo">Demo</a> &bull;
+  <a href="#examples">Examples</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="https://specwright-e2e-test-automator.vercel.app/docs">Documentation</a>
 </p>
@@ -183,19 +183,31 @@ e2e-tests/features/playwright-bdd/
 
 ---
 
-## ShowBuff Demo
+## Examples
 
-**ShowBuff** (`apps/examples/show-buff/`) is the primary demo app — a TV show discovery app with OAuth, custom Watchlists, and Favorites.
+### ShowBuff
+
+**ShowBuff** (`apps/examples/show-buff/`) is the primary demo — a TV show discovery app with OAuth, custom Watchlists, and Favorites.
 
 **Live app:** [ShowBuff TV Shows](https://specwright-show-buff.vercel.app/)
 
 ```bash
-# Run locally
 cd apps/examples/show-buff
 pnpm install && pnpm dev
 # Open http://localhost:5173
 
-# Run the pipeline against it
+claude
+> /e2e-automate
+```
+
+### Todo App
+
+**Todo App** (`apps/examples/todo-app/`) is a simpler demo — a CRUD todo app using email-password auth. Good starting point for learning the pipeline without OAuth complexity.
+
+```bash
+cd apps/examples/todo-app
+pnpm install && pnpm dev
+
 claude
 > /e2e-automate
 ```
@@ -207,17 +219,19 @@ claude
 ```
 specwright/
 ├── apps/
-│   ├── desktop/          Electron desktop app (main / preload / renderer)
+│   ├── desktop/              Electron desktop app (main / preload / renderer)
 │   ├── examples/
-│   │   └── show-buff/    ShowBuff demo app (TVMaze + OAuth)
-│   └── web/              Documentation site (Next.js)
+│   │   ├── show-buff/        ShowBuff demo — TV show discovery app (TVMaze + OAuth)
+│   │   └── todo-app/         Todo demo — simple CRUD app (email-password auth)
+│   └── web/                  Documentation site (Next.js)
 │
 └── packages/
-    ├── plugin/            @specwright/plugin — E2E framework scaffolded into your project
-    └── mcp/               @specwright/mcp — MCP server for Claude Desktop (optional)
+    ├── plugin/               @specwright/plugin — E2E framework scaffolded into your project
+    ├── plugin-mui/           @specwright/plugin-mui — MUI v6 overlay (extends base plugin)
+    └── mcp-server/           @specwright/mcp — MCP server for Claude Desktop (optional)
 ```
 
-**Tech stack:** Electron 33, React 18, Zustand, Tailwind CSS, `@anthropic-ai/claude-agent-sdk`, `playwright-bdd`, `@playwright/mcp`
+**Tech stack:** Electron 33, React 18, Zustand, Tailwind CSS, `claude-runner`, `playwright-bdd`, `@playwright/mcp`
 
 ---
 

@@ -34,6 +34,6 @@
     "eslint-config-next": "16.2.4",
     "pagefind": "^1.5.2",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

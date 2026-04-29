@@ -91,7 +91,7 @@ jobs:
         run: ${{ matrix.dist_cmd }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: specwright-${{ matrix.platform }}
           path: ${{ matrix.artifacts }}
@@ -111,7 +111,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-artifacts
           merge-multiple: true

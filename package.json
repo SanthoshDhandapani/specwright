@@ -27,9 +27,9 @@
   },
   "engines": {
     "node": ">=20.20.2",
-    "pnpm": ">=9.0.0"
+    "pnpm": ">=10.33.3"
   },
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.33.3",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.101",
     "@specwright/mcp": "workspace:*",

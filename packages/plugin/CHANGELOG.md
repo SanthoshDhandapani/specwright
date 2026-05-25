@@ -5,6 +5,34 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.1] — 2026-05-25
+
+### Fixed
+
+- **`install.sh` now copies `run-coverage.js` and `extract-generate-context.js`.** The 0.5.0 release added these scripts to `e2e-tests/scripts/` and wired `test:bdd:coverage` to invoke `run-coverage.js`, but `install.sh` line 120 only copied `generate-bdd-report.js`. Existing projects updating to 0.5.0 ended up with the script reference in `package.json` but the file missing — `pnpm test:bdd:coverage` crashed with `Cannot find module 'e2e-tests/scripts/run-coverage.js'`. Fix: extend the install step to copy all three scripts. `cli.js update` reuses `install.sh`, so the fix propagates to both `init` and `update` paths.
+
+---
+
+## [0.5.0] — 2026-05-25
+
+### Added
+
+- **Functional E2E code coverage** — Chrome DevTools Protocol V8 coverage API records execution during test runs; `global.teardown.js` merges per-scenario data via `monocart-coverage-reports` into one HTML + LCOV + JSON output at `reports/coverage/`. No instrumentation needed (no Babel/Vite/webpack plugin). Build-tool agnostic — works for Vite, webpack, Next.js, Turbopack, esbuild, Parcel.
+- **Configurable source roots** — new `COVERAGE_SOURCE_ROOTS` env var (default `src`). Supports Next.js App Router (`app`), multi-root layouts (`src,lib`), monorepos (`packages/web/src`).
+- **Coverage exclusions** — new `COVERAGE_EXCLUDE` env var; comma-separated substring patterns. Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `*.css`, external hosts.
+- **Language-agnostic** — walker indexes `.ts/.tsx/.js/.jsx/.mjs/.cjs/.vue/.svelte/.astro` for path reconstruction.
+- **Localhost-only guard** — coverage refuses to run against non-localhost `BASE_URL` because deployed builds usually strip source maps. Override with `COVERAGE_ALLOW_REMOTE=true`.
+- New scripts in `package.json.snippet`: `test:bdd:coverage`, `report:coverage`.
+- New dev dependency in `package.json.snippet`: `monocart-coverage-reports@^2.12.0`.
+- `.gitignore.snippet` additions: `reports/coverage/*`, `.raw-coverage/`.
+
+### Fixed
+
+- **`global.setup.js`** — always ensures report directories exist on every run (was previously gated on the `.cleanup-done` marker). Fixes `ENOENT: reports/cucumber-bdd/report.json` after `rm -rf reports/`.
+- **`test:clean` script** — now also removes `.raw-coverage/`.
+
+---
+
 ## [0.4.5] — 2026-04-27
 
 ### Changed

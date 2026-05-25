@@ -6,9 +6,34 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Raw V8 coverage accumulator — each scenario writes one JSON file here.
+// globalTeardown reads all of them and runs monocart-coverage-reports
+// to produce ONE merged report at reports/coverage/.
+const RAW_COVERAGE_DIR = '.raw-coverage';
+let _rawCoverageDirReady = false;
+async function ensureCoverageDir() {
+  if (_rawCoverageDirReady) return;
+  const fsMod = await import('node:fs');
+  if (!fsMod.existsSync(RAW_COVERAGE_DIR)) {
+    fsMod.mkdirSync(RAW_COVERAGE_DIR, { recursive: true });
+  }
+  _rawCoverageDirReady = true;
+}
+
+// Capture env vars that should win over .env.testing values
+// (e.g. ENABLE_COVERAGE set by run-coverage.js wrapper script — must not be overridden)
+const _preservedEnv = {
+  ENABLE_COVERAGE: process.env.ENABLE_COVERAGE,
+};
+
 // Load environment variables from e2e-tests/.env.testing (canonical source of truth)
 dotenv.config({ path: 'e2e-tests/.env.testing', override: true });
 dotenv.config({ override: false });
+
+// Restore preserved env vars so wrapper-script values take precedence
+for (const [key, value] of Object.entries(_preservedEnv)) {
+  if (value !== undefined && value !== '') process.env[key] = value;
+}
 
 // Get current directory for resolving test data path
 const __filename = fileURLToPath(import.meta.url);
@@ -196,6 +221,14 @@ export const test = base.extend({
       ...(video && video !== 'off' ? { recordVideo: { dir: testInfo.outputDir } } : {}),
     };
 
+    // Coverage collection — V8 native, Chromium only, build-tool agnostic.
+    // Skipped for @serial-execution projects (browser reuse breaks per-scenario start/stop).
+    const collectCoverage =
+      process.env.ENABLE_COVERAGE === 'true' &&
+      !REUSABLE_PROJECTS.includes(testInfo.project.name) &&
+      testInfo.project.use?.browserName !== 'firefox' &&
+      testInfo.project.use?.browserName !== 'webkit';
+
     if (REUSABLE_PROJECTS.includes(testInfo.project.name)) {
       const currentFile = testInfo.file;
 
@@ -238,7 +271,28 @@ export const test = base.extend({
       // Default: fresh context + page per scenario (standard Playwright behavior)
       const context = await browser.newContext(contextOptions);
       const page = await context.newPage();
+
+      if (collectCoverage) {
+        await page.coverage.startJSCoverage({ resetOnNavigation: false }).catch(() => {});
+      }
+
       await use(page);
+
+      if (collectCoverage) {
+        try {
+          const coverage = await page.coverage.stopJSCoverage();
+          if (coverage?.length) {
+            await ensureCoverageDir();
+            const fsMod = await import('node:fs');
+            const pathMod = await import('node:path');
+            const safeName = testInfo.title.replace(/[^a-z0-9]/gi, '_').slice(0, 60);
+            const file = pathMod.join(RAW_COVERAGE_DIR, `${safeName}-${Date.now()}.json`);
+            fsMod.writeFileSync(file, JSON.stringify(coverage));
+          }
+        } catch (err) {
+          console.log(`[Coverage] Could not collect coverage: ${err.message}`);
+        }
+      }
 
       const videoObj = video && video !== 'off' ? page.video() : null;
       await context.close();

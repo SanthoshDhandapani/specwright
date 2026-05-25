@@ -17,6 +17,7 @@ export default [
   "inputs": {},
   "explore": true,
   "runExploredCases": false,
-  "runGeneratedCases": false
+  "runGeneratedCases": false,
+  "autoApprove": false,
 },
 ];

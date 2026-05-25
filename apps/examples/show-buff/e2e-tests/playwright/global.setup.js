@@ -24,6 +24,16 @@ export default async function globalSetup() {
     console.log('[global.setup] Created auth-storage/.auth directory.');
   }
 
+  // Always ensure report directories exist — playwright reporters open files
+  // immediately and crash if the parent dir is missing (e.g. after `rm -rf reports/`).
+  const requiredReportDirs = ['json', 'cucumber-bdd', 'playwright', 'screenshots'];
+  for (const dir of requiredReportDirs) {
+    const dirPath = path.join(reportsDir, dir);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  }
+
   if (!fs.existsSync(markerFile)) {
     // New run — clean previous data
     console.log('[global.setup] Fresh run detected. Cleaning previous data...');

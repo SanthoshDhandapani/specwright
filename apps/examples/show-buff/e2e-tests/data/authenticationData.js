@@ -10,11 +10,17 @@
  */
 
 const getCredentials = () => {
-  const email = process.env.TEST_USER_EMAIL;
-  const password = process.env.TEST_USER_PASSWORD;
+  const strategy = process.env.AUTH_STRATEGY || 'email-password';
+  const email = process.env.TEST_USER_EMAIL || '';
+  const password = process.env.TEST_USER_PASSWORD || '';
 
-  if (!email || !password) {
-    throw new Error('E2E credentials not configured. Set TEST_USER_EMAIL and TEST_USER_PASSWORD in your .env file.');
+  // Only enforce credentials when email-password strategy is active.
+  // For oauth / none strategies, missing credentials are fine.
+  if (strategy === 'email-password' && (!email || !password)) {
+    throw new Error(
+      'E2E credentials not configured for email-password strategy. ' +
+      'Set TEST_USER_EMAIL and TEST_USER_PASSWORD in e2e-tests/.env.testing.'
+    );
   }
 
   return { email, password };
@@ -25,7 +31,11 @@ export const authenticationData = {
 
   environment: process.env.BASE_ENV || '',
 
-  validCredentials: getCredentials(),
+  // Lazy getter — only validates credentials when actually accessed,
+  // not at module load. Prevents throws when AUTH_STRATEGY=none/oauth.
+  get validCredentials() {
+    return getCredentials();
+  },
 
   invalidCredentials: {
     email: 'invalid@email.com',

@@ -55,11 +55,36 @@ export function PluginPickerModal({
     }
   };
 
+  // Only close on backdrop CLICK (not mousedown / mouseup / drag-release).
+  // Prevents accidental dismissal when a click started inside the modal
+  // but the mouse drifted onto the backdrop before release.
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  // Stop keyboard events (Backspace, Delete, etc.) from bubbling out of the
+  // modal — defensive guard against any parent / global key handlers that
+  // might interpret unhandled keystrokes as a close action.
+  // Escape inside the modal closes it explicitly.
+  const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    e.stopPropagation();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onMouseDown={handleBackdropClick}
+    >
       <div
         className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-[380px]"
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleModalKeyDown}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <div>

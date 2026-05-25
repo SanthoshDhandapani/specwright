@@ -139,6 +139,18 @@ Used when `AUTH_STRATEGY=oauth`. Specwright bypasses the OAuth popup entirely by
 
 ---
 
+## Code Coverage
+
+| Field | Default | Description |
+|---|---|---|
+| `ENABLE_COVERAGE` | `false` | Capture V8 code coverage during the test run. Automatically set to `true` by `pnpm test:bdd:coverage`. Set globally if you want coverage on every `pnpm test:bdd` run. |
+| `COVERAGE_EXCLUDE` | (empty) | Comma-separated substring patterns to exclude from coverage measurement. Example: `src/api/,src/store/,.stories.,/__mocks__/`. Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `*.css`, and external hosts. |
+| `COVERAGE_ALLOW_REMOTE` | `false` | Override the localhost-only guard. Set to `true` only if your deployed build ships source maps. Default behaviour refuses to run against non-localhost URLs because deployed bundles usually strip source maps, producing useless reports. |
+
+See [Code Coverage reference](/docs/reference/code-coverage) for full details on output format, LCOV integration, and CI setup.
+
+---
+
 > **Notes:**
 > - Never commit `.env.testing` to source control. It contains credentials. The plugin's `.gitignore` excludes it automatically.
 > - OAuth fields are injected as a structured object into localStorage — the shape must exactly match what your app reads. If your app expects `{ email, name, picture }` under `user`, the injected object uses `TEST_USER_EMAIL`, `TEST_USER_NAME`, and `TEST_USER_PICTURE` for those fields.

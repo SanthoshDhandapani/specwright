@@ -19,6 +19,7 @@ reports/cucumber-bdd/*
 reports/playwright/*
 reports/json/*
 reports/screenshots/*
+reports/coverage/*
 .playwright-mcp/
 
 # Agent memory backups (cleanup.sh)

@@ -101,5 +101,19 @@ pnpm report:playwright  # open Playwright HTML report
 | Failure screenshots | `reports/screenshots/` | Named `failure-{scenario-name}.png` |
 | Traces | `test-results/` | `.zip` files — view with `npx playwright show-trace` |
 | Videos | `test-results/` | `video.webm` per test (when enabled) |
+| Code coverage | `reports/coverage/` | Merged V8 coverage — see [Code Coverage](/docs/reference/code-coverage) |
+
+---
+
+## Code Coverage Report
+
+Run `pnpm test:bdd:coverage` to also produce a **functional code coverage report** alongside the regular run. It tells you what percentage of `src/*` actually executes during your E2E tests, with file-by-file drill-down.
+
+```bash
+pnpm test:bdd:coverage   # runs tests + writes reports/coverage/
+pnpm report:coverage     # opens the merged HTML report
+```
+
+This uses V8's native coverage API (no instrumentation needed), works with any build tool, and outputs LCOV for Codecov / Coveralls integration. Full details in the [Code Coverage reference](/docs/reference/code-coverage).
 
 <DocsPrevNext />

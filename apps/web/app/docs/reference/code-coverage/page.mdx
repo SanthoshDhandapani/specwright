@@ -1,0 +1,187 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Functional Test Code Coverage
+
+Specwright measures how much of your application's source code is exercised by your E2E test suite — line-level, branch-level, and function-level — and produces a merged HTML report you can drill into.
+
+This is **functional coverage**, not unit-test coverage: it reflects which lines of `src/*.tsx` actually executed in a real browser during your BDD scenarios. Files that load but whose components never render show as low-coverage — accurately telling you which routes and features still need test scenarios.
+
+---
+
+## How it works
+
+| Mechanism | Detail |
+| --- | --- |
+| **Source data** | Chrome DevTools Protocol's native **V8 coverage API** (`page.coverage.startJSCoverage` / `stopJSCoverage`) |
+| **Instrumentation required?** | **No.** V8 records execution natively — no Babel plugin, no Vite/webpack plugin, no special build mode. Same source code, same bundles. |
+| **Source maps** | Required for the report to show `src/components/lists/ListCard.tsx` instead of `assets/index-abc.js`. Dev servers always serve them — production builds usually don't. |
+| **Merging** | Each scenario captures its V8 coverage; `global.teardown.js` merges all of them into one report via [monocart-coverage-reports](https://github.com/cenfun/monocart-coverage-reports) |
+| **Build tool** | **Agnostic.** Works for Vite, webpack, Next.js, esbuild, Parcel, Turbopack, or any framework that serves source maps. No per-project build config required. |
+
+---
+
+## Quick start
+
+In your project (with the plugin installed):
+
+```bash
+# 1. Point at your local dev server
+# In e2e-tests/.env.testing:
+#   BASE_URL=http://localhost:5173
+
+# 2. Start the dev server in one terminal
+pnpm dev
+
+# 3. Run coverage in another terminal
+pnpm test:bdd:coverage
+
+# 4. Open the merged report
+pnpm report:coverage
+```
+
+You'll see a console summary at the end of the run:
+
+```
+[MCR] Specwright E2E Code Coverage
+┌────────────┬────────────┬─────────┬───────────┬────────┐
+│ Name       │ Coverage % │ Covered │ Uncovered │  Total │
+├────────────┼────────────┼─────────┼───────────┼────────┤
+│ Statements │    85.15 % │     367 │        64 │    431 │
+│ Branches   │    63.64 % │     105 │        60 │    165 │
+│ Functions  │    68.60 % │      83 │        38 │    121 │
+│ Lines      │    76.50 % │     928 │       285 │  1,213 │
+└────────────┴────────────┴─────────┴───────────┴────────┘
+[coverage] Merged report → reports/coverage/index.html
+```
+
+The HTML report mirrors your `src/` directory tree, with line-by-line highlighting and per-file drill-down.
+
+---
+
+## Output files
+
+```
+reports/coverage/
+├── index.html              ← Merged report (open this)
+├── coverage-report.json    ← Machine-readable summary (per file)
+├── lcov.info               ← Standard LCOV format — for Codecov, Coveralls, IDE plugins
+├── lcov-report/            ← LCOV HTML report
+└── coverage-HASH/          ← Per-scenario reports (drill into a single test's coverage)
+```
+
+---
+
+## Localhost only (by design)
+
+Coverage refuses to run unless `BASE_URL` points at `localhost` or `127.0.0.1`. This is deliberate:
+
+- **Dev servers always serve source maps** — the report shows real file paths
+- **Deployed builds usually strip them** — the report would show bundle chunks (`assets/index-abc.js`) instead of `src/components/...`
+- **Specwright stays build-tool agnostic** — no per-project decision about whether to ship source maps to production
+
+If you have enabled source maps in your hosted build and want to override:
+
+```bash
+COVERAGE_ALLOW_REMOTE=true pnpm test:bdd:coverage
+```
+
+---
+
+## Excluding files
+
+Files you don't want measured (generated code, type-only files, legacy dirs) can be excluded via the `COVERAGE_EXCLUDE` env var. Comma-separated substring patterns:
+
+```bash
+# In e2e-tests/.env.testing
+COVERAGE_EXCLUDE=src/api/,src/store/,.stories.,src/legacy/
+```
+
+| Pattern | What it excludes |
+| --- | --- |
+| `src/api/` | Entire `src/api/` directory |
+| `.stories.` | All Storybook files |
+| `/__mocks__/` | Common test-mock directories |
+| `.types.` | Type-only files |
+| `src/generated/` | Codegen output |
+| `serviceWorker.ts` | Specific file by name |
+
+Built-in defaults already exclude `node_modules`, `*.test.tsx`, `*.spec.ts`, `.d.ts`, `*.css`, external hosts (e.g. `accounts.google.com`), and HTML pages.
+
+---
+
+## Interpreting the report
+
+| File state | Lines | Functions | Meaning |
+| --- | --- | --- | --- |
+| ✅ **Well covered** | 80%+ | 80%+ | Component renders during tests, its handlers fire |
+| ⚠️ **Module loaded, not rendered** | 10–30% | **0%** | File is imported (top-level code runs) but the component never mounts — you have no test that visits this route or triggers this state |
+| ⚠️ **Rendered, not interactive** | 50–70% | 30–50% | Component mounts but click/submit/edit handlers aren't triggered |
+| ❌ **Unused** | 0% | 0% | File loaded but no part of it executed — probably a dead import or a feature-flag gated path |
+
+**Function coverage is the truest signal.** Lines can be 80%+ from imports alone; 0% functions means no interaction happened.
+
+---
+
+## What this tells you about your test suite
+
+If a file shows 0% function coverage, you don't have a test that exercises it. The merged report is effectively a **prioritized gap list** for the next batch of E2E tests to write:
+
+- `src/pages/WatchlistPage.tsx` → 0% funcs → add a `/watchlist` navigation scenario
+- `src/components/lists/DeleteListDialog.tsx` → 0% funcs → add a "delete list" scenario
+- `src/components/lists/RenameListInput.tsx` → 28% funcs → add a "rename" scenario
+
+Sort the report by function coverage ascending and you have a ranked TODO list.
+
+---
+
+## CI integration
+
+Coverage works in CI the same way Cypress/Vitest do — start the dev server in the background, run the suite, upload the LCOV:
+
+```yaml
+- name: Start dev server
+  run: pnpm dev &
+
+- name: Wait for dev server
+  run: npx wait-on http://localhost:5173
+
+- name: Run coverage
+  run: pnpm test:bdd:coverage
+
+- name: Upload to Codecov
+  uses: codecov/codecov-action@v4
+  with:
+    files: ./reports/coverage/lcov.info
+```
+
+The `lcov.info` artifact is the standard format accepted by Codecov, Coveralls, SonarQube, and most IDE coverage plugins.
+
+---
+
+## What's tracked vs what's not
+
+| Tracked | Not tracked |
+| --- | --- |
+| Lines / Statements / Branches / Functions | Component prop coverage |
+| Per-file, per-test, merged | Visual diffs |
+| Source-mapped paths (`src/pages/HomePage.tsx`) | Async state coverage beyond what V8 records |
+| Async code reached during the scenario | Code that never gets bundled (dead-stripped at build time) |
+
+Coverage measures **what JavaScript executes in the browser** during your tests. It doesn't replace component tests or visual regression — those measure different things.
+
+---
+
+## Comparison vs unit-test coverage
+
+| Aspect | E2E coverage (this) | Unit-test coverage (Vitest/Jest) |
+| --- | --- | --- |
+| What it measures | Real browser execution of compiled code | Module execution in JSDOM / Node |
+| Build/instrumentation | None — V8 native | Istanbul (Babel plugin) or V8 |
+| Speed | Slow — full browser, real navigation | Fast — milliseconds per file |
+| Catches integration bugs | ✅ Yes — real routing, real fetch, real DOM | ❌ Mocks everything |
+| Per-file granularity | ✅ Yes | ✅ Yes |
+| Best for | Functional / acceptance coverage | Logic / branch coverage |
+
+Both formats output to LCOV, so you can merge them in CI for a single combined report.
+
+<DocsPrevNext />

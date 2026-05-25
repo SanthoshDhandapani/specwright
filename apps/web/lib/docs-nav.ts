@@ -55,6 +55,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: "CLI Commands", href: "/docs/reference/cli-commands" },
       { label: "Performance & Tokens", href: "/docs/reference/performance" },
       { label: "Reports", href: "/docs/reference/reports" },
+      { label: "Code Coverage", href: "/docs/reference/code-coverage" },
     ],
   },
   {

@@ -21,6 +21,7 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#three-interfaces">Interfaces</a> &bull;
   <a href="#the-10-phase-pipeline">Pipeline</a> &bull;
+  <a href="#functional-code-coverage">Coverage</a> &bull;
   <a href="#examples">Examples</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="https://specwright-e2e-test-automator.vercel.app/docs">Documentation</a>
@@ -183,6 +184,55 @@ e2e-tests/features/playwright-bdd/
 
 ---
 
+## Functional Code Coverage
+
+Measure how much of your app's source code your E2E suite actually exercises — line-by-line, function-by-function, merged across all scenarios.
+
+```bash
+# Start your local dev server
+pnpm dev
+
+# In another terminal — runs tests + generates coverage
+pnpm test:bdd:coverage
+pnpm report:coverage   # opens the merged HTML report
+```
+
+Output:
+
+```
+[MCR] Specwright E2E Code Coverage
+┌────────────┬────────────┬─────────┬───────────┬────────┐
+│ Lines      │    76.50 % │     928 │       285 │  1,213 │
+│ Statements │    85.15 % │     367 │        64 │    431 │
+│ Functions  │    68.60 % │      83 │        38 │    121 │
+│ Branches   │    63.64 % │     105 │        60 │    165 │
+└────────────┴────────────┴─────────┴───────────┴────────┘
+```
+
+**How it works:** Chrome DevTools Protocol's native V8 coverage API records execution during your tests, then [monocart-coverage-reports](https://github.com/cenfun/monocart-coverage-reports) merges per-scenario data into one HTML + LCOV report.
+
+**Zero instrumentation.** No Babel plugin, no Vite/webpack plugin, no special build mode. Works with Vite, webpack, Next.js, Turbopack, esbuild, Parcel, or any modern frontend tool.
+
+**Localhost only by design** — dev servers always serve source maps; deployed builds usually don't. Coverage refuses to run against non-localhost URLs to prevent useless reports. Set `COVERAGE_ALLOW_REMOTE=true` to override.
+
+**Exclusions** — comma-separated patterns in `e2e-tests/.env.testing`:
+
+```bash
+COVERAGE_EXCLUDE=src/api/,src/store/,.stories.,src/legacy/
+```
+
+Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `.css`, and external hosts.
+
+**Outputs:**
+- `reports/coverage/index.html` — merged report (open this)
+- `reports/coverage/lcov.info` — for Codecov / Coveralls / IDE plugins
+- `reports/coverage/coverage-report.json` — machine-readable summary
+- `reports/coverage/coverage-HASH/` — per-scenario drill-down
+
+Full reference: [Code Coverage documentation](https://specwright-e2e-test-automator.vercel.app/docs/reference/code-coverage)
+
+---
+
 ## Examples
 
 ### ShowBuff
@@ -287,6 +337,7 @@ Full documentation at **[Specwright Docs](https://specwright-e2e-test-automator.
 - [10-Phase Pipeline](https://specwright-e2e-test-automator.vercel.app/docs/core-concepts/pipeline)
 - [instructions.js reference](https://specwright-e2e-test-automator.vercel.app/docs/configuration/instructions)
 - [Auth Strategies](https://specwright-e2e-test-automator.vercel.app/docs/configuration/auth-strategies)
+- [Code Coverage](https://specwright-e2e-test-automator.vercel.app/docs/reference/code-coverage)
 - [Troubleshooting](https://specwright-e2e-test-automator.vercel.app/docs/troubleshooting/common-errors)
 
 ---

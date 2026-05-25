@@ -4,7 +4,9 @@ import { DocsPrevNext } from "@/components/docs/docs-prev-next";
 
 Specwright measures how much of your application's source code is exercised by your E2E test suite — line-level, branch-level, and function-level — and produces a merged HTML report you can drill into.
 
-This is **functional coverage**, not unit-test coverage: it reflects which lines of `src/*.tsx` actually executed in a real browser during your BDD scenarios. Files that load but whose components never render show as low-coverage — accurately telling you which routes and features still need test scenarios.
+This is **functional coverage**, not unit-test coverage: it reflects which lines of your source code actually executed in a real browser during your BDD scenarios. Files that load but whose components never render show as low-coverage — accurately telling you which routes and features still need test scenarios.
+
+Works across JS/TS frameworks: TypeScript, JavaScript, JSX/TSX, ESM (`.mjs`), CommonJS (`.cjs`), and SFC formats (`.vue`, `.svelte`, `.astro`).
 
 ---
 
@@ -105,7 +107,55 @@ COVERAGE_EXCLUDE=src/api/,src/store/,.stories.,src/legacy/
 | `src/generated/` | Codegen output |
 | `serviceWorker.ts` | Specific file by name |
 
-Built-in defaults already exclude `node_modules`, `*.test.tsx`, `*.spec.ts`, `.d.ts`, `*.css`, external hosts (e.g. `accounts.google.com`), and HTML pages.
+Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `*.css`, external hosts (e.g. `accounts.google.com`), and HTML pages.
+
+---
+
+## Source roots & file extensions
+
+The coverage system walks one or more **source roots** to build a basename → full-path lookup. This is what reconstructs `src/components/lists/ListCard.tsx` in the report when build tools (especially Vite dev) strip directory info from source maps.
+
+### Default: `src/`
+
+If your project keeps source under `src/`, no configuration is needed. The walker picks it up automatically.
+
+### Custom roots — `COVERAGE_SOURCE_ROOTS`
+
+For projects with different layouts, set this env var in `e2e-tests/.env.testing`:
+
+```bash
+# Next.js App Router
+COVERAGE_SOURCE_ROOTS=app
+
+# Multiple roots (e.g. src + lib)
+COVERAGE_SOURCE_ROOTS=src,lib
+
+# Monorepo
+COVERAGE_SOURCE_ROOTS=packages/web/src,packages/shared/src
+```
+
+Comma-separated, no spaces. Each entry is resolved from the project root.
+
+### Supported extensions
+
+The walker indexes any file matching:
+
+```
+.ts  .tsx  .js  .jsx  .mjs  .cjs  .vue  .svelte  .astro
+```
+
+| Project type | Works out of the box? |
+| --- | --- |
+| Pure TypeScript / TSX (React, Solid, etc.) | ✅ |
+| Pure JavaScript / JSX (CRA, classic React) | ✅ |
+| ESM with `.mjs` | ✅ |
+| CommonJS with `.cjs` | ✅ |
+| Vue SFCs | ✅ |
+| Svelte SFCs | ✅ |
+| Astro components | ✅ |
+| Mixed (TS + JS + SFCs) | ✅ |
+
+> If your project uses an extension not listed (e.g. `.qwik`, `.lit.ts`), the walker won't recognise it. Open an issue or extend the `SOURCE_EXT_RE` regex in `e2e-tests/playwright/global.teardown.js`.
 
 ---
 

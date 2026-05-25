@@ -213,6 +213,10 @@ Output:
 
 **Zero instrumentation.** No Babel plugin, no Vite/webpack plugin, no special build mode. Works with Vite, webpack, Next.js, Turbopack, esbuild, Parcel, or any modern frontend tool.
 
+**Language-agnostic.** Indexes `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.vue`, `.svelte`, `.astro` — works for TypeScript, JavaScript, React, Vue, Svelte, and Astro projects.
+
+**Configurable source roots.** Defaults to `src/`; override via `COVERAGE_SOURCE_ROOTS=app` (Next.js App Router), `COVERAGE_SOURCE_ROOTS=src,lib` (multi-root), or `COVERAGE_SOURCE_ROOTS=packages/web/src` (monorepo).
+
 **Localhost only by design** — dev servers always serve source maps; deployed builds usually don't. Coverage refuses to run against non-localhost URLs to prevent useless reports. Set `COVERAGE_ALLOW_REMOTE=true` to override.
 
 **Exclusions** — comma-separated patterns in `e2e-tests/.env.testing`:

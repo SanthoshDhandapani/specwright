@@ -145,6 +145,7 @@ Used when `AUTH_STRATEGY=oauth`. Specwright bypasses the OAuth popup entirely by
 |---|---|---|
 | `ENABLE_COVERAGE` | `false` | Capture V8 code coverage during the test run. Automatically set to `true` by `pnpm test:bdd:coverage`. Set globally if you want coverage on every `pnpm test:bdd` run. |
 | `COVERAGE_EXCLUDE` | (empty) | Comma-separated substring patterns to exclude from coverage measurement. Example: `src/api/,src/store/,.stories.,/__mocks__/`. Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `*.css`, and external hosts. |
+| `COVERAGE_SOURCE_ROOTS` | `src` | Comma-separated source root directories used to reconstruct full file paths in the report (when build tools emit bare basenames). Examples: `app` for Next.js App Router, `src,lib` for multi-root layouts, `packages/web/src` for monorepos. Walker indexes `.ts/.tsx/.js/.jsx/.mjs/.cjs/.vue/.svelte/.astro`. |
 | `COVERAGE_ALLOW_REMOTE` | `false` | Override the localhost-only guard. Set to `true` only if your deployed build ships source maps. Default behaviour refuses to run against non-localhost URLs because deployed bundles usually strip source maps, producing useless reports. |
 
 See [Code Coverage reference](/docs/reference/code-coverage) for full details on output format, LCOV integration, and CI setup.

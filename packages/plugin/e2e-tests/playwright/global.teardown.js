@@ -12,29 +12,38 @@ const __dirname = path.dirname(__filename);
 
 const markerFile = path.join(__dirname, '.cleanup-done');
 
+// Source file extensions the walker indexes — covers TS/JS variants and
+// common single-file-component formats (Vue, Svelte, Astro).
+const SOURCE_EXT_RE = /\.(tsx?|jsx?|mjs|cjs|vue|svelte|astro)$/;
+
 /**
- * Walk src/ and build a map: basename → full relative path.
- * Vite dev source maps often emit just basenames (e.g. "ListCard.tsx"),
+ * Walk one or more source roots and build a map: basename → full relative path.
+ * Build tools' dev source maps often emit just basenames (e.g. "ListCard.tsx"),
  * losing the directory structure. This map lets us reconstruct paths
  * like "src/components/lists/ListCard.tsx" in the coverage report.
  *
+ * @param {string[]} rootDirs - List of source root directories to walk.
+ *   Configurable via COVERAGE_SOURCE_ROOTS env var (comma-separated).
+ *   Defaults to ['src']; common alternatives: 'app', 'lib', 'packages/web/src'.
+ *
  * Handles duplicates by keeping the LAST match (rare in practice).
  */
-function buildSrcPathMap(rootDir = 'src') {
+function buildSrcPathMap(rootDirs = ['src']) {
   const map = {};
-  if (!fs.existsSync(rootDir)) return map;
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
         walk(full);
-      } else if (/\.(tsx?|jsx?|mjs|cjs)$/.test(entry.name)) {
+      } else if (SOURCE_EXT_RE.test(entry.name)) {
         map[entry.name] = full;
       }
     }
   };
-  walk(rootDir);
+  for (const root of rootDirs) {
+    if (fs.existsSync(root)) walk(root);
+  }
   return map;
 }
 
@@ -52,9 +61,15 @@ async function generateMergedCoverage() {
 
   const { CoverageReport } = await import('monocart-coverage-reports');
 
-  // Build basename → full path lookup so the report tree matches src/ structure
-  const srcMap = buildSrcPathMap('src');
-  console.log(`[coverage] Indexed ${Object.keys(srcMap).length} source files for path mapping.`);
+  // Build basename → full path lookup so the report tree matches the source structure.
+  // Configurable via COVERAGE_SOURCE_ROOTS (comma-separated). Defaults to 'src'.
+  // Common alternatives: 'app' (Next.js App Router), 'lib', 'packages/web/src'.
+  const sourceRoots = (process.env.COVERAGE_SOURCE_ROOTS || 'src')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const srcMap = buildSrcPathMap(sourceRoots);
+  console.log(`[coverage] Indexed ${Object.keys(srcMap).length} source files from [${sourceRoots.join(', ')}].`);
 
   // ─── Coverage Exclusions ─────────────────────────────────────────────────
   // Add patterns here to exclude files/directories from coverage measurement.
@@ -133,20 +148,20 @@ async function generateMergedCoverage() {
       ['lcov'],
       ['v8-json'],
     ],
-    // Normalize source paths — reconstruct full src/ tree from basenames.
-    // Vite dev source maps drop the directory structure; we look up the
-    // basename in srcMap (built from walking the actual src/ tree) and
+    // Normalize source paths — reconstruct the full source tree from basenames.
+    // Dev-server source maps often drop directory structure; we look up the
+    // basename in srcMap (built from walking the configured source roots) and
     // substitute the real path.
     sourcePath: (filePath) => {
-      // Skip non-app paths (already-correct paths, node_modules, etc.)
-      if (filePath.startsWith('src/')) return filePath;
+      // Skip paths already under a configured source root or in node_modules
+      if (sourceRoots.some((r) => filePath.startsWith(`${r}/`))) return filePath;
       if (filePath.includes('node_modules')) return filePath;
-      // Try to resolve basename → full src/ path
+      // Try to resolve basename → full source path via the indexed map
       const basename = filePath.split('/').pop();
       if (srcMap[basename]) return srcMap[basename];
-      // Fallback: prepend src/ for .tsx/.ts/.jsx/.js if it has no directory
-      if (!filePath.includes('/') && /\.(tsx?|jsx?)$/.test(filePath)) {
-        return `src/${filePath}`;
+      // Fallback: prepend the first source root for any recognised source extension
+      if (!filePath.includes('/') && SOURCE_EXT_RE.test(filePath)) {
+        return `${sourceRoots[0]}/${filePath}`;
       }
       return filePath;
     },

@@ -128,6 +128,32 @@ safe_copy "$PLUGIN_DIR/e2e-tests/instructions.js" "$TARGET_DIR/e2e-tests/instruc
 safe_copy "$PLUGIN_DIR/e2e-tests/instructions.example.js" "$TARGET_DIR/e2e-tests/instructions.example.js"
 safe_copy "$PLUGIN_DIR/e2e-tests/.env.testing" "$TARGET_DIR/e2e-tests/.env.testing"
 
+# Append any env vars that exist in the plugin template but are missing
+# from the user's .env.testing. Idempotent — safe to run on every update.
+# Without this, projects installed before a new env var was added (e.g.
+# ENABLE_COVERAGE in 0.5.0) never pick up the new keys.
+env_file="$TARGET_DIR/e2e-tests/.env.testing"
+template_file="$PLUGIN_DIR/e2e-tests/.env.testing"
+missing_keys=""
+while IFS= read -r line; do
+  # Skip comments and blank lines; extract KEY from KEY=VALUE
+  case "$line" in
+    \#*|"") continue ;;
+  esac
+  key="${line%%=*}"
+  if [ -n "$key" ] && ! grep -q "^${key}=" "$env_file" 2>/dev/null; then
+    if [ -z "$missing_keys" ]; then
+      echo "" >> "$env_file"
+      echo "# Added by Specwright update — new template keys" >> "$env_file"
+    fi
+    echo "$line" >> "$env_file"
+    missing_keys="$missing_keys $key"
+  fi
+done < "$template_file"
+if [ -n "$missing_keys" ]; then
+  echo "  ➕ .env.testing extended with new keys:$missing_keys"
+fi
+
 # Update BASE_URL in .env.testing with user-provided value (only on fresh install)
 if [ "$BASE_URL" != "http://localhost:5173" ]; then
   sed -i.bak "s|^BASE_URL=.*|BASE_URL=$BASE_URL|" "$TARGET_DIR/e2e-tests/.env.testing"

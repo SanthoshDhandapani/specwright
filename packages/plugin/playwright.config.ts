@@ -2,10 +2,23 @@ import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig, cucumberReporter } from 'playwright-bdd';
 import dotenv from 'dotenv';
 
+// Capture env vars that wrapper scripts (e.g. run-coverage.js) set on the
+// command line so they survive the dotenv reload that follows. Without this
+// step, ENABLE_COVERAGE=true from the wrapper would be overridden by the
+// default false in .env.testing, and coverage would silently never run.
+const _preservedEnv = {
+  ENABLE_COVERAGE: process.env.ENABLE_COVERAGE,
+};
+
 // Load environment variables from e2e-tests/.env.testing (canonical source of truth)
 // Falls back to root .env for any vars not set above (e.g. CI overrides)
 dotenv.config({ path: 'e2e-tests/.env.testing', override: true });
 dotenv.config({ override: false });
+
+// Restore preserved env vars so wrapper-script values take precedence
+for (const [key, value] of Object.entries(_preservedEnv)) {
+  if (value !== undefined && value !== '') process.env[key] = value;
+}
 
 // Auth strategy: determines whether to run auth setup and use storageState
 const authStrategy = process.env.AUTH_STRATEGY || 'email-password';

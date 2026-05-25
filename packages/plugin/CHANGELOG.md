@@ -5,6 +5,15 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.2] — 2026-05-25
+
+### Fixed
+
+- **`playwright.config.ts` now preserves `ENABLE_COVERAGE` through the dotenv reload.** The wrapper script (`run-coverage.js`) sets `ENABLE_COVERAGE=true` before spawning Playwright, but `dotenv.config({ override: true })` at the top of `playwright.config.ts` was overriding it back to whatever `.env.testing` says (default `false`). The fixture already had this preservation block; the config file was missing it. Without it, `pnpm test:bdd:coverage` ran tests but never collected V8 coverage — `reports/coverage/` ended up empty.
+- **`install.sh` now appends missing env-template keys to user `.env.testing` on update.** Previously, `safe_copy` skipped `.env.testing` entirely if the file already existed, so projects installed before `ENABLE_COVERAGE` / `COVERAGE_EXCLUDE` / `COVERAGE_SOURCE_ROOTS` were added to the template (0.5.0) never picked them up on update — `pnpm test:bdd:coverage` couldn't function because the runtime env vars were unset. Update now diffs the template against the user file and appends only the missing keys (idempotent).
+
+---
+
 ## [0.5.1] — 2026-05-25
 
 ### Fixed

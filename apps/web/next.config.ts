@@ -9,17 +9,16 @@ const withMDX = createMDX({
   },
 });
 
-// Monorepo root — pnpm hoists `next` here, so Turbopack must scan from this
-// path to resolve next/package.json. `outputFileTracingRoot` must match
-// turbopack.root or Next.js refuses to build (silent auto-inference picks
-// apps/web otherwise, which conflicts with the explicit turbopack.root).
-const monorepoRoot = path.resolve(__dirname, "../..");
-
+// Turbopack must scan from the monorepo root to find `next` (pnpm hoists
+// it there). DO NOT set `outputFileTracingRoot` — when both are set Next 16
+// requires them to match, and pointing tracing at the monorepo causes
+// Vercel `--prebuilt` deploy to look for .next at apps/web/apps/web/
+// (path duplication). Letting Next auto-infer the tracing root keeps Vercel
+// happy while turbopack.root keeps the build resolving correctly.
 const nextConfig: NextConfig = {
   pageExtensions: ["ts", "tsx", "md", "mdx"],
-  outputFileTracingRoot: monorepoRoot,
   turbopack: {
-    root: monorepoRoot,
+    root: path.resolve(__dirname, "../.."),
   },
 };
 

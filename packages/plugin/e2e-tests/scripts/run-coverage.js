@@ -12,7 +12,14 @@
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+
+// Anchor all paths to the project root (two levels up from this script at
+// e2e-tests/scripts/run-coverage.js) so the script works regardless of the
+// directory it was invoked from (IDE, monorepo subapp, etc.).
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 // Capture CLI-provided env vars BEFORE dotenv.config() overrides them with .env.testing values.
 // Lets ad-hoc `BASE_URL=... pnpm test:bdd:coverage` work without editing .env.testing.
@@ -21,11 +28,12 @@ const cliBaseUrl = process.env.BASE_URL;
 // Reporters initialise BEFORE global.setup.js — ensure report dirs exist NOW
 // so cucumber-reporter's createWriteStream doesn't crash with ENOENT.
 for (const dir of ['reports/json', 'reports/cucumber-bdd', 'reports/playwright', 'reports/screenshots', 'reports/coverage']) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const full = path.join(PROJECT_ROOT, dir);
+  if (!fs.existsSync(full)) fs.mkdirSync(full, { recursive: true });
 }
 
-dotenv.config({ path: 'e2e-tests/.env.testing', override: true });
-dotenv.config({ override: false });
+dotenv.config({ path: path.join(PROJECT_ROOT, 'e2e-tests/.env.testing'), override: true });
+dotenv.config({ path: path.join(PROJECT_ROOT, '.env'), override: false });
 
 const authStrategy = process.env.AUTH_STRATEGY || 'email-password';
 const hasAuth = authStrategy !== 'none';
@@ -80,16 +88,18 @@ const projectArgs = projects.flatMap((p) => ['--project', p]);
 
 console.log(`[coverage] auth=${authStrategy}, projects: ${projects.join(', ')}`);
 
-// Step 1: compile features → specs
-const bddgen = spawnSync('npx', ['bddgen'], {
+// Always run sub-processes from PROJECT_ROOT so bddgen finds the config
+// and Playwright uses the same cwd everyone else writes to.
+const spawnOpts = {
   stdio: 'inherit',
+  cwd: PROJECT_ROOT,
   env: { ...process.env, ENABLE_COVERAGE: 'true' },
-});
+};
+
+// Step 1: compile features → specs
+const bddgen = spawnSync('npx', ['bddgen'], spawnOpts);
 if (bddgen.status !== 0) process.exit(bddgen.status ?? 1);
 
 // Step 2: run playwright with coverage on
-const test = spawnSync('npx', ['playwright', 'test', ...projectArgs], {
-  stdio: 'inherit',
-  env: { ...process.env, ENABLE_COVERAGE: 'true' },
-});
+const test = spawnSync('npx', ['playwright', 'test', ...projectArgs], spawnOpts);
 process.exit(test.status ?? 1);

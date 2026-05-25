@@ -10,6 +10,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Project root = two levels up from this file (e2e-tests/playwright/global.teardown.js).
+// All coverage I/O paths anchor to this so they're consistent with what the
+// page fixture wrote, regardless of where the test command was invoked from.
+const PROJECT_ROOT = path.resolve(__dirname, '../..');
+
 const markerFile = path.join(__dirname, '.cleanup-done');
 
 // Source file extensions the walker indexes — covers TS/JS variants and
@@ -48,7 +53,7 @@ function buildSrcPathMap(rootDirs = ['src']) {
 }
 
 async function generateMergedCoverage() {
-  const rawDir = '.raw-coverage';
+  const rawDir = path.join(PROJECT_ROOT, '.raw-coverage');
   if (!fs.existsSync(rawDir)) {
     console.log('[coverage] No raw coverage data — skipping merged report.');
     return;
@@ -67,9 +72,10 @@ async function generateMergedCoverage() {
   const sourceRoots = (process.env.COVERAGE_SOURCE_ROOTS || 'src')
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((p) => path.resolve(PROJECT_ROOT, p));   // anchor to project root
   const srcMap = buildSrcPathMap(sourceRoots);
-  console.log(`[coverage] Indexed ${Object.keys(srcMap).length} source files from [${sourceRoots.join(', ')}].`);
+  console.log(`[coverage] Indexed ${Object.keys(srcMap).length} source files from [${sourceRoots.map(r => path.relative(PROJECT_ROOT, r) || '.').join(', ')}].`);
 
   // ─── Coverage Exclusions ─────────────────────────────────────────────────
   // Add patterns here to exclude files/directories from coverage measurement.
@@ -122,7 +128,7 @@ async function generateMergedCoverage() {
 
   const report = new CoverageReport({
     name: 'Specwright E2E Code Coverage',
-    outputDir: 'reports/coverage',
+    outputDir: path.join(PROJECT_ROOT, 'reports/coverage'),
     // Filter served scripts — keep only app JS/TS from the local origin
     entryFilter: (entry) => {
       const url = entry.url || '';

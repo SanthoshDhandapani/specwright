@@ -9,7 +9,10 @@ import { fileURLToPath } from 'url';
 // Raw V8 coverage accumulator — each scenario writes one JSON file here.
 // globalTeardown reads all of them and runs monocart-coverage-reports
 // to produce ONE merged report at reports/coverage/.
-const RAW_COVERAGE_DIR = '.raw-coverage';
+// Path anchored to the project root (two levels up from this file at
+// e2e-tests/playwright/fixtures.js) so the directory location is identical
+// regardless of which directory the test command was invoked from.
+const RAW_COVERAGE_DIR = path.resolve(fileURLToPath(import.meta.url), '../../..', '.raw-coverage');
 let _rawCoverageDirReady = false;
 async function ensureCoverageDir() {
   if (_rawCoverageDirReady) return;

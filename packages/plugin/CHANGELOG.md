@@ -5,6 +5,28 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.3] — 2026-05-25
+
+### Fixed
+
+- **All framework paths now anchor to the project root, not cwd.** Developers running tests from a different directory (IDE Playwright extension, monorepo subapp installs, manual `cd e2e-tests && npx ...`) were hitting "0 tests found" / "step file not visible" / "ENOENT" errors. Root cause: `bddgen` wrote `.features-gen/` relative to cwd, while Playwright read `testDir` relative to the config file — they only agreed when cwd happened to be the project root. The peer's workaround of adding `outputDir: 'e2e-tests/.features-gen'` worked because it forced both to the same path, but only on their machine.
+  - `playwright.config.ts` resolves `features`, `steps`, `outputDir`, `globalSetup`, `globalTeardown`, `storageState`, reporter `outputFile`s, and HTML `outputFolder` via `PROJECT_ROOT = __dirname` (falls back to `process.cwd()` in unlikely pure-ESM contexts)
+  - `webServer.cwd` pinned to `PROJECT_ROOT` so `pnpm dev` always starts from the right place
+  - `fixtures.js` `.raw-coverage/` anchored to `import.meta.url` parent (two levels up)
+  - `global.teardown.js` reads `.raw-coverage/`, writes `reports/coverage/`, and resolves `COVERAGE_SOURCE_ROOTS` entries via `PROJECT_ROOT`
+  - `run-coverage.js` resolves report dirs + `.env.testing` via its own `PROJECT_ROOT` and spawns `bddgen`/`playwright` with `cwd: PROJECT_ROOT` so sub-processes inherit the correct directory
+
+### Why this matters for teams
+
+The same project now produces the same `.features-gen/`, `reports/`, `.raw-coverage/` layout regardless of:
+- Whether tests are invoked from the repo root, a subapp dir, or an IDE button
+- Whether the plugin is installed at the workspace root or inside `apps/web/`, `app/`, etc.
+- Whether the user runs `pnpm test:bdd` or `npx playwright test` directly
+
+No more "works on my machine, breaks on yours" because of inconsistent cwd.
+
+---
+
 ## [0.5.2] — 2026-05-25
 
 ### Fixed

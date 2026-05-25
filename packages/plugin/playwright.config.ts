@@ -1,6 +1,21 @@
+import path from 'path';
 import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig, cucumberReporter } from 'playwright-bdd';
 import dotenv from 'dotenv';
+
+// Resolve all framework paths relative to THIS config file, not the current
+// working directory. Without this, running the test command from a different
+// folder (e.g. an IDE invocation, or a developer who installed the plugin
+// inside a subapp like `myrepo/app/`) causes bddgen to write `.features-gen/`
+// at one location while Playwright reads `testDir` at another — resulting in
+// "0 tests found" or "step file not visible" errors.
+//
+// Playwright loads .ts config files via tsx in CommonJS mode by default, so
+// `__dirname` is defined. If a project forces ESM loading (rare — would need
+// "type": "module" + a custom tsx invocation), `__dirname` is undefined and
+// we fall back to cwd (same behaviour as before this fix).
+const PROJECT_ROOT: string = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+const fromRoot = (p: string): string => path.resolve(PROJECT_ROOT, p);
 
 // Capture env vars that wrapper scripts (e.g. run-coverage.js) set on the
 // command line so they survive the dotenv reload that follows. Without this
@@ -12,8 +27,8 @@ const _preservedEnv = {
 
 // Load environment variables from e2e-tests/.env.testing (canonical source of truth)
 // Falls back to root .env for any vars not set above (e.g. CI overrides)
-dotenv.config({ path: 'e2e-tests/.env.testing', override: true });
-dotenv.config({ override: false });
+dotenv.config({ path: fromRoot('e2e-tests/.env.testing'), override: true });
+dotenv.config({ path: fromRoot('.env'), override: false });
 
 // Restore preserved env vars so wrapper-script values take precedence
 for (const [key, value] of Object.entries(_preservedEnv)) {
@@ -37,14 +52,17 @@ const defaultLaunchOptions = {
   args: chromeArgs,
 };
 
-// Define BDD configuration
+// Define BDD configuration. All paths are absolute (via fromRoot) so bddgen
+// and Playwright agree regardless of where the test command was invoked from.
+// outputDir is pinned to the project root's .features-gen/ for the same reason.
 const testDir = defineBddConfig({
-  features: 'e2e-tests/features/playwright-bdd/**/*.feature',
+  features: fromRoot('e2e-tests/features/playwright-bdd/**/*.feature'),
   steps: [
-    'e2e-tests/features/playwright-bdd/**/*.{js,ts}',
-    'e2e-tests/features/playwright-bdd/shared/*.{js,ts}',
-    'e2e-tests/playwright/fixtures.js',
+    fromRoot('e2e-tests/features/playwright-bdd/**/*.{js,ts}'),
+    fromRoot('e2e-tests/features/playwright-bdd/shared/*.{js,ts}'),
+    fromRoot('e2e-tests/playwright/fixtures.js'),
   ],
+  outputDir: fromRoot('.features-gen'),
 });
 
 /**
@@ -53,9 +71,9 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir,
   /* Global setup - runs once before all test projects */
-  globalSetup: './e2e-tests/playwright/global.setup.js',
+  globalSetup: fromRoot('e2e-tests/playwright/global.setup.js'),
   /* Global teardown - runs once after all test projects complete */
-  globalTeardown: './e2e-tests/playwright/global.teardown.js',
+  globalTeardown: fromRoot('e2e-tests/playwright/global.teardown.js'),
   /* Default: run scenarios in parallel. Use @serial-execution tag to opt out. */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -67,13 +85,13 @@ export default defineConfig({
   workers: process.env.CI ? 4 : 5,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
-    ['json', { outputFile: 'reports/json/results.json' }] as const,
-    cucumberReporter('json', { outputFile: 'reports/cucumber-bdd/report.json' }),
+    ['json', { outputFile: fromRoot('reports/json/results.json') }] as const,
+    cucumberReporter('json', { outputFile: fromRoot('reports/cucumber-bdd/report.json') }),
     // Console output: "line" on CI, "list" locally
     ...(process.env.CI ? [['line'] as const] : [['list'] as const]),
     // HTML reporter: always locally, on CI only when GENERATE_REPORTS is set
     ...(!process.env.CI || process.env.GENERATE_REPORTS
-      ? [['html', { outputFolder: process.env.PLAYWRIGHT_REPORT_DIR || 'reports/playwright' }] as const]
+      ? [['html', { outputFolder: process.env.PLAYWRIGHT_REPORT_DIR || fromRoot('reports/playwright') }] as const]
       : []),
   ],
   /* Shared settings for all the projects below. */
@@ -141,7 +159,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
         ...(hasAuth
-          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          ? { storageState: fromRoot('e2e-tests/playwright/auth-storage/.auth/user.json') }
           : {}),
       },
       ...(hasAuth ? { dependencies: ['setup'] } : {}),
@@ -165,7 +183,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
         ...(hasAuth
-          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          ? { storageState: fromRoot('e2e-tests/playwright/auth-storage/.auth/user.json') }
           : {}),
       },
       ...(hasAuth ? { dependencies: ['setup'] } : {}),
@@ -184,7 +202,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
         ...(hasAuth
-          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          ? { storageState: fromRoot('e2e-tests/playwright/auth-storage/.auth/user.json') }
           : {}),
       },
       ...(hasAuth ? { dependencies: ['precondition'] } : {}),
@@ -204,7 +222,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
         ...(hasAuth
-          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          ? { storageState: fromRoot('e2e-tests/playwright/auth-storage/.auth/user.json') }
           : {}),
       },
       ...(hasAuth ? { dependencies: ['setup'] } : {}),
@@ -233,7 +251,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: defaultLaunchOptions,
         ...(hasAuth
-          ? { storageState: 'e2e-tests/playwright/auth-storage/.auth/user.json' }
+          ? { storageState: fromRoot('e2e-tests/playwright/auth-storage/.auth/user.json') }
           : {}),
       },
       ...(hasAuth ? { dependencies: ['setup'] } : {}),
@@ -244,6 +262,7 @@ export default defineConfig({
   webServer: process.env.BASE_URL?.startsWith('http://localhost')
     ? {
         command: 'pnpm dev',
+        cwd: PROJECT_ROOT,
         url: process.env.BASE_URL || 'http://localhost:5173',
         reuseExistingServer: true,
         timeout: 120 * 1000,

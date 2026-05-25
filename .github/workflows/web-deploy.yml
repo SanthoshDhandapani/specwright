@@ -35,14 +35,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Pull Vercel project settings
-        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
-
-      - name: Build
-        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
-
-      - name: Deploy prebuilt
-        run: npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+      # Plain `vercel deploy` uploads source and lets Vercel's native build
+      # infrastructure compile it. We don't use `vercel build --prebuilt`
+      # because the CLI's `vercel build` auto-injects
+      # outputFileTracingRoot=apps/web, which conflicts with our explicit
+      # turbopack.root and breaks Turbopack's pnpm-monorepo resolution.
+      # Vercel's native build pipeline handles the monorepo correctly.
+      - name: Deploy to Vercel
+        run: npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: apps/web

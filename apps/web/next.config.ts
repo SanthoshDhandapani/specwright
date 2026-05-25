@@ -9,12 +9,16 @@ const withMDX = createMDX({
   },
 });
 
-// Turbopack must scan from the monorepo root to find `next` (pnpm hoists
-// it there). DO NOT set `outputFileTracingRoot` — when both are set Next 16
-// requires them to match, and pointing tracing at the monorepo causes
-// Vercel `--prebuilt` deploy to look for .next at apps/web/apps/web/
-// (path duplication). Letting Next auto-infer the tracing root keeps Vercel
-// happy while turbopack.root keeps the build resolving correctly.
+// Pin turbopack.root to this workspace (apps/web) so it matches the
+// outputFileTracingRoot that `vercel build` auto-sets — otherwise Next 16.2.4
+// emits "Both ... must have the same value" and silently falls back to the
+// Vercel-injected value, which conflicts with our config and breaks the
+// build.
+//
+// For Turbopack to find `next/package.json` from apps/web with this scope,
+// the package must be a REAL file (not a pnpm symlink to .pnpm/). That's
+// arranged by apps/web/.npmrc (node-linker=hoisted) which installs packages
+// directly under apps/web/node_modules/.
 const nextConfig: NextConfig = {
   pageExtensions: ["ts", "tsx", "md", "mdx"],
   turbopack: {

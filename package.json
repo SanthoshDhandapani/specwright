@@ -31,13 +31,14 @@
   },
   "packageManager": "pnpm@9.15.0",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.101",
+    "@anthropic-ai/sdk": "^0.98.0",
     "@specwright/mcp": "workspace:*",
-    "claude-runner": "^0.5.0"
+    "claude-runner": "^0.5.1"
   },
   "pnpm": {
     "overrides": {
-      "jwt-decode>husky": "-"
+      "jwt-decode>husky": "-",
+      "@anthropic-ai/sdk": "^0.98.0"
     },
     "patchedDependencies": {},
     "neverBuiltDependencies": [

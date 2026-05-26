@@ -5,6 +5,23 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.6] — 2026-05-26
+
+### Added
+
+- **`install-helpers.sh` — reusable bash helpers for install scripts.** New file shipped with the package, exposing three functions any install script can source: `safe_copy SRC DST` (copy only if target missing — preserves user customisations), `force_copy SRC DST` (always overwrite — framework files), and `walk_overrides SRC_DIR DST_DIR [SEED_PATTERN...]` (recursive copy with per-file seed protection).
+- **Helpers travel into the target on install.** `install.sh` now copies `install-helpers.sh` to `<target>/.specwright/install-helpers.sh` on every install/update. Overlay install scripts (e.g. `@fourkites/specwright-e2e-automator`) source from that path after the base plugin runs, avoiding duplicated bash logic across overlays.
+
+### Why
+
+Overlays were reinventing safe-copy / seed-protection logic — each one with slightly different edge cases (mtime preservation, parent dir creation, find-walker portability). The 1.3.6 fix in the FourKites overlay was the second copy of essentially the same walker. Centralising the pattern means every overlay gets the same battle-tested behaviour for free.
+
+### Internal
+
+`install.sh` itself now uses `safe_copy` / `force_copy` from `install-helpers.sh` instead of inlining the helper — single implementation, zero behavioural change for end users.
+
+---
+
 ## [0.5.5] — 2026-05-25
 
 ### Fixed

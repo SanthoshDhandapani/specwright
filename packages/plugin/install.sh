@@ -39,15 +39,11 @@ detect_pm() {
 }
 PM="${SPECWRIGHT_PM:-$(detect_pm "$TARGET_DIR")}"
 
-# Helper: copy file only if target doesn't exist (safe for user-customized files)
-safe_copy() {
-  local src="$1" dst="$2"
-  if [ ! -f "$dst" ]; then
-    cp "$src" "$dst"
-  else
-    echo "  ⏭️  $(basename "$dst") already exists — skipping"
-  fi
-}
+# Source shared install helpers. Defines safe_copy, force_copy, walk_overrides.
+# Overlay install scripts source the same file from <target>/.specwright/
+# after this script copies it there (see Step 0 below).
+# shellcheck source=./install-helpers.sh
+source "$PLUGIN_DIR/install-helpers.sh"
 
 echo "╔══════════════════════════════════════════════╗"
 echo "║  Specwright E2E Plugin — Installing           ║"
@@ -91,6 +87,9 @@ echo "  ✅ .claude/ installed"
 echo "📦 Step 2: Installing e2e-tests/ infrastructure..."
 mkdir -p "$TARGET_DIR/.specwright"
 touch "$TARGET_DIR/.specwright/.gitkeep"
+# Ship install-helpers.sh into the target so overlay install scripts can source
+# it. Force-copy on every run so the helpers always match the installed base.
+force_copy "$PLUGIN_DIR/install-helpers.sh" "$TARGET_DIR/.specwright/install-helpers.sh"
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/auth-storage/.auth"
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/generated"
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/test-data"

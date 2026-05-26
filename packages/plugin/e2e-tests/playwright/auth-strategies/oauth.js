@@ -14,6 +14,7 @@
  * Preferred: OAUTH_STORAGE_KEY → inject directly into localStorage (no popup)
  * Fallback:  OAUTH_BUTTON_TEST_ID → click the button (works for mock/same-page sign-in)
  */
+import fs from 'fs';
 // Default-import + destructure — see urlConfig.cjs header for why.
 import urlConfig from '../../data/urlConfig.cjs';
 const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
@@ -118,8 +119,7 @@ export async function authenticate(page, authFile) {
   await page.context().storageState({ path: authFile });
 
   if (splitAuth) {
-    const fsMod = await import('fs');
-    const state = JSON.parse(fsMod.readFileSync(authFile, 'utf-8'));
+    const state = JSON.parse(fs.readFileSync(authFile, 'utf-8'));
     const authOriginHost = new URL(authBaseUrl).host;
     const appOriginNorm = new URL(baseUrl).origin;
     const appOriginHost = new URL(baseUrl).host;
@@ -141,7 +141,7 @@ export async function authenticate(page, authFile) {
       return appOriginHost === dom || appOriginHost.endsWith(`.${dom}`);
     });
 
-    fsMod.writeFileSync(authFile, JSON.stringify(state, null, 2));
+    fs.writeFileSync(authFile, JSON.stringify(state, null, 2));
     console.log(`[auth:oauth] Split-auth rewrite: origins ${beforeOrigins} → ${state.origins.length} (at ${appOriginNorm}), cookies ${beforeCookies} → ${state.cookies.length}`);
   }
 

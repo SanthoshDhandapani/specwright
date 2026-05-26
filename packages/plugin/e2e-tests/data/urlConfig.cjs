@@ -16,16 +16,30 @@
  *   - getAuthUrl() → hosted signin host
  *   - getAppUrl()  → local app host
  *   - isSplitAuth() → true
+ *
+ * No default URL fallback: if BASE_URL is unset, every call throws. A
+ * silently-wrong URL is worse than a loud failure — tests would otherwise
+ * hit an arbitrary placeholder and produce confusing connection-refused
+ * or "wrong page" failures deep in the run.
  */
 
-const DEFAULT_BASE_URL = 'http://localhost:5173';
 const stripTrailingSlash = (s) => (s || '').replace(/\/$/, '');
 
-const getAuthUrl = () =>
-  stripTrailingSlash(process.env.AUTH_BASE_URL || process.env.BASE_URL || DEFAULT_BASE_URL);
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) {
+    throw new Error(
+      `[urlConfig] ${name} is not set. Define it in e2e-tests/.env.testing ` +
+      `(or override via the shell) before running tests.`,
+    );
+  }
+  return v;
+}
 
-const getAppUrl = () =>
-  stripTrailingSlash(process.env.BASE_URL || DEFAULT_BASE_URL);
+const getAuthUrl = () =>
+  stripTrailingSlash(process.env.AUTH_BASE_URL || requireEnv('BASE_URL'));
+
+const getAppUrl = () => stripTrailingSlash(requireEnv('BASE_URL'));
 
 const isSplitAuth = () => getAuthUrl() !== getAppUrl();
 

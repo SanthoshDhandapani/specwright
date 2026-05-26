@@ -5,6 +5,23 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.13] — 2026-05-26
+
+### Changed
+
+- **`urlConfig.cjs` no longer silently falls back to `http://localhost:5173`.** If `BASE_URL` is not set, `getAuthUrl()` / `getAppUrl()` / `isSplitAuth()` throw with a clear message:
+
+  ```
+  [urlConfig] BASE_URL is not set. Define it in e2e-tests/.env.testing
+  (or override via the shell) before running tests.
+  ```
+
+  A wrong-URL silent fallback would otherwise produce confusing connection-refused or "wrong page" failures deep in the test run. Failing loud at config-load time is cheaper to diagnose.
+
+- **`email-password.js` and `oauth.js` now import `fs` at the top.** Replaces the dynamic `const fsMod = await import('fs')` inside the function body. Functionally identical (Node caches the built-in either way) but cleaner — `fs` is a hard dependency of the file, not a conditional one.
+
+---
+
 ## [0.5.12] — 2026-05-26
 
 ### Changed

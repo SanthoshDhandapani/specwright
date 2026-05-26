@@ -11,6 +11,7 @@
  *
  * Reads locators and credentials from authenticationData.js
  */
+import fs from 'fs';
 import { authenticationData } from '../../data/authenticationData.js';
 // Default-import + destructure — see urlConfig.cjs header for why.
 import urlConfig from '../../data/urlConfig.cjs';
@@ -83,8 +84,7 @@ export async function authenticate(page, authFile, _config = {}) {
   // don't match the app origin are stripped (they'd be useless on localhost
   // anyway — browser refuses to send them across domains).
   if (splitAuth) {
-    const fsMod = await import('fs');
-    const state = JSON.parse(fsMod.readFileSync(authFile, 'utf-8'));
+    const state = JSON.parse(fs.readFileSync(authFile, 'utf-8'));
     const authOriginHost = new URL(AUTH_BASE_URL).host;
     const appOriginNorm = new URL(APP_BASE_URL).origin;
     const appOriginHost = new URL(APP_BASE_URL).host;
@@ -106,7 +106,7 @@ export async function authenticate(page, authFile, _config = {}) {
       return appOriginHost === dom || appOriginHost.endsWith(`.${dom}`);
     });
 
-    fsMod.writeFileSync(authFile, JSON.stringify(state, null, 2));
+    fs.writeFileSync(authFile, JSON.stringify(state, null, 2));
     console.log(`[auth:email-password] Split-auth rewrite: origins ${beforeOrigins} → ${state.origins.length} (at ${appOriginNorm}), cookies ${beforeCookies} → ${state.cookies.length}`);
   }
 

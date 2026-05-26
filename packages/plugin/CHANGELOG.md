@@ -5,6 +5,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.5] — 2026-05-25
+
+### Fixed
+
+- **Webpack runtime modules now excluded from coverage by default.** 0.5.4 added `/webpack/` to defaults, but webpack runtime entries are written without a leading slash (e.g. `webpack/runtime/jsonp chunk loading`, `webpack/bootstrap`, `webpack/before-startup`). They slipped through. Added `^webpack/` regex and bare `webpack-internal:` substring so all webpack runtime variants are filtered out.
+- **Static assets imported as JS modules now excluded from coverage by default.** Images, fonts, and media imported via webpack/Vite/Turbopack (file-loader, url-loader, SVGR, asset modules) become JS modules at runtime (`module.exports = "<url>"`), so V8 captures them as executed code. Added extension-based excludes for: `.svg`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.bmp`, `.ico`, `.tiff`, `.tif`, `.heic`, `.woff`, `.woff2`, `.ttf`, `.otf`, `.eot`, `.mp4`, `.webm`, `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.pdf`.
+
+### Why
+
+Validated against `core-frontend` (CRA-based React project). Before 0.5.5, the coverage report included 21 webpack runtime files and 5 SVG imports under `src/images/login/`. After 0.5.5, both categories are excluded by default with no per-project configuration needed. `COVERAGE_EXCLUDE` can still extend / override for project-specific patterns.
+
+---
+
 ## [0.5.4] — 2026-05-25
 
 ### Fixed

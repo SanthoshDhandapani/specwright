@@ -96,8 +96,11 @@ async function generateMergedCoverage() {
     '/out/',
     '/.next/',
     // Bundler runtime (webpack/Vite/Turbopack internals)
+    // Match paths starting with `webpack/...` (no leading slash) too
+    /^webpack\//,
     '/webpack/',
     '/webpack-internal:/',
+    'webpack-internal:',
     'webpack:///',
     // Virtual / generated modules
     'virtual:',
@@ -120,6 +123,37 @@ async function generateMergedCoverage() {
     '.sass',
     '.less',
     '.styl',
+    // Static assets imported via webpack/Vite/Turbopack as JS modules
+    // (file-loader / url-loader / SVGR / asset modules wrap them as
+    // `module.exports = "<url>"`, so V8 captures them as JS execution)
+    '.svg',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.avif',
+    '.bmp',
+    '.ico',
+    '.tiff',
+    '.tif',
+    '.heic',
+    // Fonts
+    '.woff',
+    '.woff2',
+    '.ttf',
+    '.otf',
+    '.eot',
+    // Media
+    '.mp4',
+    '.webm',
+    '.mp3',
+    '.wav',
+    '.ogg',
+    '.flac',
+    '.m4a',
+    // Documents
+    '.pdf',
     // Common CRA / Vite boilerplate that's not worth measuring
     '/reportWebVitals',
     '/serviceWorker',

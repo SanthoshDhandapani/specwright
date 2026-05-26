@@ -42,6 +42,7 @@ export const DOC_NAV: NavGroup[] = [
       { label: ".env.testing", href: "/docs/configuration/env-testing" },
       { label: "specwright.json", href: "/docs/configuration/specwright-json" },
       { label: "Auth Strategies", href: "/docs/configuration/auth-strategies" },
+      { label: "Split-Auth (Remote Signin)", href: "/docs/configuration/split-auth" },
       { label: "Field Types", href: "/docs/configuration/field-types" },
     ],
   },

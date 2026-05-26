@@ -56,6 +56,7 @@ CODEGEN_OUTPUT_PATH=e2e-tests/playwright/generated
 | Field | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost:5173` | Application base URL. Used as the starting point for auth flows and relative navigation. |
+| `AUTH_BASE_URL` | — | Optional. Set when real signin only works on a different host than `BASE_URL` (e.g. you run tests against `localhost` but auth requires a hosted environment). Enables [split-auth](/docs/configuration/split-auth) — signin happens at `AUTH_BASE_URL`, then the captured storage state is rewritten so tokens land on `BASE_URL`. |
 | `BASE_ENV` | `qat` | Environment label shown in reports (e.g. `qat`, `staging`, `prod`). |
 | `TEST_ENV` | — | Optional override for the environment label. When set, takes precedence over `BASE_ENV` in report output. |
 | `NODE_ENV` | `test` | Node environment. Affects framework-level behaviour (e.g. assertion verbosity). |

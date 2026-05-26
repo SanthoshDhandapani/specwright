@@ -31,6 +31,12 @@ TEST_USER_PICTURE=                  # optional, SVG initials auto-generated if b
 
 > **Finding your `OAUTH_STORAGE_KEY`:** Open your app in a browser, log in normally, then check `localStorage` in DevTools. Look for a key that contains a JWT or user object.
 
+## Sign in remotely, test locally
+
+When real signin only works on a hosted environment (SSO, 2FA, domain-scoped cookies) but you want tests + coverage to run against `localhost`, use **split-auth**: set `AUTH_BASE_URL` to the hosted host and the strategy signs in there, then rewrites the captured storage state so tokens land on `BASE_URL`. Works for both `email-password` and `oauth` (click-based) strategies.
+
+See [Split-Auth (Remote Signin)](/docs/configuration/split-auth) for the full design, configuration, and caveats.
+
 ## Storage state
 
 After successful authentication, Playwright saves browser storage state (cookies + localStorage) to:

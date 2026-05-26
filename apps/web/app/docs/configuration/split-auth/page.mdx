@@ -1,0 +1,151 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# Split-Auth — Sign In Remotely, Test Locally
+
+When real signin only works on a hosted environment (identity provider whitelist,
+SSO callbacks bound to a corporate domain, 2FA tied to production hosts), but
+you want tests + V8 coverage to run against `localhost`, use **split-auth**.
+
+The setup project signs in on the hosted host, captures the storage state,
+then rewrites the captured `origins[].origin` so the localStorage tokens
+land on `BASE_URL`. The rest of the suite runs against your local dev
+server with those tokens already in place.
+
+## When to use it
+
+Use split-auth when **all** of the following are true:
+
+- You want code coverage from your local source (so tests must hit `localhost:<port>`).
+- The real signin flow does not work against `localhost` (rejected callbacks,
+  missing 2FA provider, domain-scoped session cookies, etc.).
+- Your hosted environment's backend APIs accept tokens issued by the hosted
+  auth host and allow `localhost` as a request origin (or you're OK launching
+  Chromium with `--disable-web-security` to let cross-origin XHRs through).
+
+If signin works on localhost directly, stick with single-origin auth.
+
+## How it works
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│  setup project — auth.setup.js                                        │
+│  ─────────────                                                        │
+│  1. navigate to AUTH_BASE_URL/signin   (e.g. auth.example.com)        │
+│  2. real signin (email/password, 2FA, SSO, …)                         │
+│  3. page.context().storageState()                                     │
+│  4. REWRITE: origins[].origin  AUTH_BASE_URL → BASE_URL                │
+│  5. STRIP:   cookies whose domain doesn't match BASE_URL              │
+│  6. save user.json                                                    │
+└──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  Test projects (main-e2e, serial-execution, workflow-consumers, …)   │
+│  ─────────────                                                        │
+│  - baseURL = BASE_URL (e.g. http://localhost:3000)                    │
+│  - storageState = the rewritten user.json                             │
+│  - Local app reads tokens from localhost localStorage                 │
+│  - Cross-origin API calls allowed via --disable-web-security          │
+└──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  auth-tests project (@Authentication/*.spec.js)                       │
+│  ─────────────                                                        │
+│  - baseURL = AUTH_BASE_URL                                            │
+│  - No storageState — these scenarios exercise the real signin UI      │
+│  - Won't race against an empty BASE_URL/signin shell                  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## Configuration
+
+### `e2e-tests/.env.testing`
+
+```bash
+# Where tests RUN (local dev, for coverage instrumentation)
+BASE_URL=http://localhost:3000
+
+# Where signin happens (hosted host where real auth works).
+# Leave commented to use single-origin auth.
+AUTH_BASE_URL=https://auth.example.com
+
+# Required when AUTH_BASE_URL ≠ BASE_URL.
+# Chromium treats `Origin` as a forbidden header — overriding it from
+# Playwright (route.continue or setExtraHTTPHeaders) is silently ignored.
+# Relax CORS at browser launch instead.
+CHROME_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-web-security,--disable-features=IsolateOrigins"
+```
+
+### Everything else is automatic
+
+- `email-password.js` and `oauth.js` detect `AUTH_BASE_URL` and do the
+  signin + rewrite without any per-project code changes.
+- The `auth-tests` Playwright project automatically prefers `AUTH_BASE_URL`
+  for its `baseURL`, so `@Authentication` scenarios still run against the
+  real signin UI.
+- All other projects inherit `BASE_URL`.
+
+## Expected log lines
+
+A successful split-auth setup writes these lines to the run log:
+
+```text
+[auth:email-password] Split-auth: signin@https://auth.example.com → app@http://localhost:3000
+[auth:email-password] Split-auth rewrite: origins 2 → 2 (at http://localhost:3000), cookies 23 → 0
+```
+
+If you don't see them, `AUTH_BASE_URL` is unset or equal to `BASE_URL`.
+
+## Things that don't work — and why
+
+| Approach | Why it fails |
+|---|---|
+| `page.route('**/*', r => r.continue({ headers: { origin: ... } }))` | Chromium silently restores the real origin (`Origin` is a forbidden header). Also breaks `page.waitForResponse()` because the response event sequence changes when routes intercept. |
+| `context.setExtraHTTPHeaders({ origin: ... })` | Same forbidden-header restriction. Playwright's trace shows your override, but the wire-level request keeps the real origin. |
+| Just sharing the bearer token to localhost without storageState rewrite | The token reaches the local app, but every cross-origin XHR to the hosted backend trips browser CORS and returns status `-1`. |
+
+`--disable-web-security` at browser launch is the only dependable way to
+let `localhost:<port>` talk to hosted APIs in Chromium. It's an E2E-only
+flag — your production app and QA users are unaffected.
+
+## Caveats
+
+- **Token realm must match.** `AUTH_BASE_URL` must issue tokens that the
+  backend you call from `BASE_URL` actually accepts. A hosted staging
+  environment issuing tokens for its sibling staging API — works.
+  Mismatched realms (staging token sent to a production API) won't.
+- **Cookies are dropped.** If your backend requires session cookies in
+  addition to a bearer token, split-auth alone isn't enough. Use an
+  `/etc/hosts` redirect instead (map the hosted hostname to `127.0.0.1`)
+  so the browser keeps the cookies on the original domain.
+- **`--user-data-dir` is forbidden.** Older Chromium versions required
+  it alongside `--disable-web-security`, but Playwright forbids
+  `--user-data-dir` in `launch()` (it'd need `launchPersistentContext`).
+  Recent Chromium versions accept `--disable-web-security` standalone,
+  which is what the plugin uses.
+
+## Minimal end-to-end example
+
+```bash
+# e2e-tests/.env.testing
+AUTH_STRATEGY=email-password
+BASE_URL=http://localhost:3000
+AUTH_BASE_URL=https://auth.example.com
+TEST_USER_EMAIL=tester@example.com
+TEST_USER_PASSWORD=…
+CHROME_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-web-security,--disable-features=IsolateOrigins"
+```
+
+```bash
+# 1. Start the local dev server (separate terminal)
+yarn start    # or pnpm dev, npm run dev — whatever your app uses
+
+# 2. Run the suite (or just the coverage run)
+yarn test:bdd:coverage
+```
+
+Setup signs in on the hosted host, tokens land on localhost,
+the suite runs locally, and coverage is captured from your local sources.
+
+<DocsPrevNext />

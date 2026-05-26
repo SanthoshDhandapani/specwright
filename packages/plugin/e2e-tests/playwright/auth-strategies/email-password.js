@@ -12,22 +12,22 @@
  * Reads locators and credentials from authenticationData.js
  */
 import { authenticationData } from '../../data/authenticationData.js';
+// Default-import + destructure — see url-config.mjs header for why.
+import urlConfig from '../url-config.mjs';
+const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
 
 export async function authenticate(page, authFile, _config = {}) {
   console.log('[auth:email-password] Starting authentication...');
 
   const { validCredentials, locators, timeouts, twoFactor } = authenticationData;
 
-  // Split-auth mode: when AUTH_BASE_URL is set and differs from BASE_URL, sign
-  // in against AUTH_BASE_URL (typically a hosted environment where real auth
-  // works) and later rewrite the captured storageState so the localStorage
-  // tokens land on BASE_URL (typically localhost). Used when collecting
-  // coverage / running tests against a local dev server while the real auth
-  // backend only exists on a hosted environment. No-op when AUTH_BASE_URL is
-  // unset or equal to BASE_URL.
-  const APP_BASE_URL = authenticationData.baseUrl;
-  const AUTH_BASE_URL = process.env.AUTH_BASE_URL || APP_BASE_URL;
-  const splitAuth = AUTH_BASE_URL !== APP_BASE_URL;
+  // URL resolution — see e2e-tests/playwright/url-config.mjs for the full
+  // contract. In split-auth mode (AUTH_BASE_URL set and ≠ BASE_URL), signin
+  // runs at the hosted host and the captured storageState is later rewritten
+  // so tokens land on the local app host.
+  const APP_BASE_URL = getAppUrl();
+  const AUTH_BASE_URL = getAuthUrl();
+  const splitAuth = isSplitAuth();
   if (splitAuth) {
     console.log(`[auth:email-password] Split-auth: signin@${AUTH_BASE_URL} → app@${APP_BASE_URL}`);
   }

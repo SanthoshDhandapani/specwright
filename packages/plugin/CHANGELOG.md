@@ -5,6 +5,39 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.10] — 2026-05-26
+
+### Added
+
+- **`e2e-tests/playwright/url-config.mjs`** — single source of truth for `BASE_URL` / `AUTH_BASE_URL` resolution. Exposes `getAuthUrl()`, `getAppUrl()`, `isSplitAuth()` as a default-exported object so consumers do `import urlConfig from '../url-config.mjs'; const { getAuthUrl, ... } = urlConfig;`.
+
+### Changed
+
+- `email-password.js`, `oauth.js`, and the `auth-tests` Playwright project's `baseURL` now read URLs through the helper instead of inlining `process.env.AUTH_BASE_URL || process.env.BASE_URL || '...'` four times.
+
+### Why `.mjs` + default export
+
+The natural shape — `export function`/`export const` named exports from a `.js` helper — breaks in Playwright's test runner. Playwright's TypeScript loader transforms imported helpers into a CJS-wrapped form that strips ESM named-export metadata. The downstream import then fails with one of two errors:
+
+```
+SyntaxError: The requested module '../url-config.js' does not provide an export named 'getAppUrl'
+ReferenceError: exports is not defined in ES module scope
+```
+
+The `.js` extension under `"type": "module"` doesn't protect against this — neither does inline `export const` vs `export { ... }` declarations, nor relocating the file to `data/`, nor dynamic `await import(...)`. Reproduced across Playwright 1.59.x and 1.60.x.
+
+Two mitigations stack:
+1. **`.mjs` extension** — tells transformers unconditionally that this is ESM; many leave the file untouched.
+2. **Default export of an object** — only the default export name is validated at import time. Per-name validation (where the bug lives) is bypassed. Consumers destructure at runtime, which sees the real export object.
+
+The combined pattern survives Playwright's loader across versions.
+
+### Updated
+
+- `docs/SPLIT-AUTH.md` documents the `.mjs` + default-export convention and the failure modes that motivated it.
+
+---
+
 ## [0.5.9] — 2026-05-26
 
 ### Fixed

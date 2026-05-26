@@ -14,6 +14,9 @@
  * Preferred: OAUTH_STORAGE_KEY → inject directly into localStorage (no popup)
  * Fallback:  OAUTH_BUTTON_TEST_ID → click the button (works for mock/same-page sign-in)
  */
+// Default-import + destructure — see url-config.mjs header for why.
+import urlConfig from '../url-config.mjs';
+const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
 
 /**
  * Generate an initials-based SVG avatar as a data URL.
@@ -44,7 +47,7 @@ function generateInitialsAvatar(name) {
 }
 
 export async function authenticate(page, authFile) {
-  const baseUrl = process.env.BASE_URL || 'http://localhost:5173';
+  const baseUrl = getAppUrl();
   const timeout = parseInt(process.env.TEST_TIMEOUT || '30000');
 
   console.log('[auth:oauth] Starting authentication...');
@@ -93,8 +96,8 @@ export async function authenticate(page, authFile) {
   const buttonTestId = process.env.OAUTH_BUTTON_TEST_ID || 'google-signin-button';
   const postLoginUrl = process.env.OAUTH_POST_LOGIN_URL || '**/';
 
-  const authBaseUrl = process.env.AUTH_BASE_URL || baseUrl;
-  const splitAuth = authBaseUrl !== baseUrl;
+  const authBaseUrl = getAuthUrl();
+  const splitAuth = isSplitAuth();
   if (splitAuth) {
     console.log(`[auth:oauth] Split-auth: signin@${authBaseUrl} → app@${baseUrl}`);
   }

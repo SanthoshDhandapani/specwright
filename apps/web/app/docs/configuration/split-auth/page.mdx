@@ -109,6 +109,30 @@ If you don't see them, `AUTH_BASE_URL` is unset or equal to `BASE_URL`.
 let `localhost:<port>` talk to hosted APIs in Chromium. It's an E2E-only
 flag — your production app and QA users are unaffected.
 
+## URL helper (`url-config.mjs`)
+
+The plugin ships `e2e-tests/playwright/url-config.mjs` so config, auth strategies, and any step files that need the auth URL all read it from one place:
+
+```js
+import urlConfig from '../url-config.mjs';
+const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
+```
+
+- `getAuthUrl()` — where signin runs (`AUTH_BASE_URL` if set, else `BASE_URL`)
+- `getAppUrl()` — where the app under test lives (`BASE_URL`)
+- `isSplitAuth()` — `true` when those differ
+
+### Why `.mjs` + default export
+
+Playwright's TypeScript loader can transform ESM helpers into a CJS wrapper that strips named-export metadata. A named import from a regular `.js` helper imported by an auth strategy fails at import time with one of:
+
+```
+SyntaxError: ... does not provide an export named 'getAppUrl'
+ReferenceError: exports is not defined in ES module scope
+```
+
+The `.mjs` extension makes transformers leave the file alone. A default export of an object bypasses per-name validation entirely — only `default` is checked. Consumers destructure at runtime where the real exports are available. Verified across Playwright 1.59.x and 1.60.x.
+
 ## Caveats
 
 - **Token realm must match.** `AUTH_BASE_URL` must issue tokens that the

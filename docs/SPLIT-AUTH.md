@@ -109,11 +109,51 @@ The startup log makes the rewrite visible:
 |---|---|
 | `page.route('**/*', r => r.continue({ headers: { origin: ... } }))` | Origin is a forbidden header — Chromium silently restores the real origin. Also breaks `page.waitForResponse()` because the response event sequence changes. |
 | `context.setExtraHTTPHeaders({ origin: ... })` | Same forbidden-header restriction. Trace will show your override, but the wire-level request keeps the real origin. |
-| Just sharing `tfauth-token` to localhost | Auth itself works (the local app sees the token), but every cross-origin XHR to your hosted backend trips CORS and returns status `-1`. |
+| Just sharing the auth token to localhost | Auth itself works (the local app sees the token), but every cross-origin XHR to your hosted backend trips CORS and returns status `-1`. |
 
 `--disable-web-security` is the only dependable way to let
 `localhost:<port>` talk to hosted APIs in Chromium. It's an E2E-only
 flag — the production app and your QA users are unaffected.
+
+## URL helper convention (`url-config.mjs`)
+
+The plugin ships `e2e-tests/playwright/url-config.mjs` so config, auth
+strategies, and step files all read the URLs from one place:
+
+```js
+import urlConfig from '../url-config.mjs';
+const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
+```
+
+- `getAuthUrl()` — where signin runs (`AUTH_BASE_URL` if set, else `BASE_URL`).
+- `getAppUrl()`  — where the app under test lives (`BASE_URL`).
+- `isSplitAuth()` — `true` when those differ.
+
+### Why `.mjs` and a default-exported object?
+
+Playwright's TypeScript loader transforms ESM helpers into a CJS wrapper
+that strips named-export metadata. Named exports from a `.js` helper file
+imported by an auth strategy or setup file therefore fail at import-validation
+time:
+
+```
+SyntaxError: The requested module '../url-config.js' does not provide an export named 'getAppUrl'
+ReferenceError: exports is not defined in ES module scope
+```
+
+The `.mjs` extension tells transformers to leave the file alone. A default
+export of an object additionally bypasses per-name validation entirely
+(only `default` is checked). Consumers destructure at runtime, where the
+real export object is available. The combination is verified across
+Playwright 1.59.x and 1.60.x.
+
+If you need the helpers from a place where `.mjs` can't be imported
+(e.g. a step file picked up by playwright-bdd's `.{js,ts}` glob), read
+env directly — one line, no abstraction needed:
+
+```js
+const BASE_URL = (process.env.AUTH_BASE_URL || process.env.BASE_URL || '').replace(/\/$/, '');
+```
 
 ## Caveats
 

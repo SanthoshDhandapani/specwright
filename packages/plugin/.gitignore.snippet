@@ -33,3 +33,9 @@ reports/coverage/*
 
 # E2E coverage raw V8 data (temporary, merged into reports/coverage/)
 .raw-coverage/
+
+# Playwright per-scenario artifacts (videos, traces, failure screenshots).
+# Keep the test-results/ directory itself tracked (via .gitkeep) but
+# ignore every file inside — they are large and regenerated on every run.
+test-results/*
+!test-results/.gitkeep

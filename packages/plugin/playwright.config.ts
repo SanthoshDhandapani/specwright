@@ -62,7 +62,11 @@ const testDir = defineBddConfig({
     fromRoot('e2e-tests/features/playwright-bdd/shared/*.{js,ts}'),
     fromRoot('e2e-tests/playwright/fixtures.js'),
   ],
-  outputDir: fromRoot('.features-gen'),
+  // Output inside e2e-tests/ so generated .spec.js files inherit
+  // "type":"module" from e2e-tests/package.json. Without this, on Node ≥22
+  // the generated specs are treated as CJS but use ESM `import` for
+  // fixtures.js — triggering "Cannot require() ES Module ... in a cycle".
+  outputDir: fromRoot('e2e-tests/.features-gen'),
 });
 
 /**

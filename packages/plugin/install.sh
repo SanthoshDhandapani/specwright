@@ -126,6 +126,10 @@ safe_copy "$PLUGIN_DIR/e2e-tests/data/testConfig.js" "$TARGET_DIR/e2e-tests/data
 safe_copy "$PLUGIN_DIR/e2e-tests/instructions.js" "$TARGET_DIR/e2e-tests/instructions.js"
 safe_copy "$PLUGIN_DIR/e2e-tests/instructions.example.js" "$TARGET_DIR/e2e-tests/instructions.example.js"
 safe_copy "$PLUGIN_DIR/e2e-tests/.env.testing" "$TARGET_DIR/e2e-tests/.env.testing"
+# Ship e2e-tests/package.json with { "type": "module" } so .features-gen
+# specs (generated under e2e-tests/) inherit ESM scope on Node ≥22.
+# force_copy: the marker is framework-controlled, never user-edited.
+force_copy "$PLUGIN_DIR/e2e-tests/package.json" "$TARGET_DIR/e2e-tests/package.json"
 
 # Append any env vars that exist in the plugin template but are missing
 # from the user's .env.testing. Idempotent — safe to run on every update.
@@ -176,6 +180,8 @@ mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules"
 mkdir -p "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Workflows"
 touch "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Modules/.gitkeep"
 touch "$TARGET_DIR/e2e-tests/features/playwright-bdd/@Workflows/.gitkeep"
+mkdir -p "$TARGET_DIR/test-results"
+touch "$TARGET_DIR/test-results/.gitkeep"
 echo "  ✅ e2e-tests/ infrastructure installed"
 
 # ── Step 3: Install authentication module (unless --skip-auth) ──

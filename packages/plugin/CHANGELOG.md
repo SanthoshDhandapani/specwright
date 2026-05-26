@@ -5,6 +5,20 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.7] — 2026-05-26
+
+### Fixed
+
+- **`Cannot require() ES Module ... in a cycle` on Node ≥22.** Generated `.feature.spec.js` files use ESM `import` for `fixtures.js`, but the 0.5.3 path-anchoring change moved `.features-gen/` from `e2e-tests/.features-gen/` to `.features-gen/` at the project root. The project root has no `"type":"module"`, so Node treated the generated specs as CJS and rejected the ESM import as a require-cycle. Validated against `core-frontend` running `yarn test:bdd:coverage`: 0 passed before the fix (webServer/cycle error), 48 passed after.
+
+### Changes
+
+- **`playwright.config.ts`** — `outputDir` reverted to `fromRoot('e2e-tests/.features-gen')` so generated specs inherit the ESM scope from `e2e-tests/package.json`. The 0.5.3 path-anchoring guarantee (paths resolved against the config file, not cwd) is preserved.
+- **`e2e-tests/package.json`** — new file shipping `{ "type": "module" }`. Force-copied by `install.sh` on every install/update so the ESM scope marker is present in every consumer project regardless of how their root `package.json` is configured.
+- **`.gitignore.snippet`** — added `test-results/*` (with `!test-results/.gitkeep` exception). Playwright writes per-scenario artifacts (videos, traces, failure screenshots) under `test-results/` on every run; ignoring the contents prevents accidental commits of large binaries while keeping the directory itself tracked. `install.sh` now creates `test-results/.gitkeep`.
+
+---
+
 ## [0.5.6] — 2026-05-26
 
 ### Added

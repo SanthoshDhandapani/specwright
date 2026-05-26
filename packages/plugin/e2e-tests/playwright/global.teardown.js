@@ -93,19 +93,38 @@ async function generateMergedCoverage() {
     'node_modules',
     '/dist/',
     '/build/',
+    '/out/',
+    '/.next/',
+    // Bundler runtime (webpack/Vite/Turbopack internals)
+    '/webpack/',
+    '/webpack-internal:/',
+    'webpack:///',
     // Virtual / generated modules
     'virtual:',
+    'vite:',
+    '/@vite/',
+    '/@react-refresh',
+    '/@fs/',
     // Tests, specs, mocks, stories
-    /\.test\.(tsx?|jsx?)$/,
-    /\.spec\.(tsx?|jsx?)$/,
-    /\.stories\.(tsx?|jsx?)$/,
+    /\.test\.(tsx?|jsx?|mjs|cjs)/,
+    /\.spec\.(tsx?|jsx?|mjs|cjs)/,
+    /\.stories\.(tsx?|jsx?|mjs|cjs|mdx)/,
     '/__mocks__/',
     '/__tests__/',
+    '/setupTests',
     // Type-only files (no runtime code to measure)
-    /\.d\.ts$/,
-    // Non-JS resources
-    /\.css$/,
-    /\.scss$/,
+    /\.d\.ts/,
+    // Stylesheets (substring, not anchored — covers query strings + CSS modules)
+    '.css',
+    '.scss',
+    '.sass',
+    '.less',
+    '.styl',
+    // Common CRA / Vite boilerplate that's not worth measuring
+    '/reportWebVitals',
+    '/serviceWorker',
+    '/registerServiceWorker',
+    '/vite-env',
     // External hosts (e.g. accounts.google.com)
     /^[a-z0-9.-]+\.[a-z]{2,}\//i,
     // Localhost pseudo-paths (HTML, etc.)
@@ -134,16 +153,19 @@ async function generateMergedCoverage() {
       const url = entry.url || '';
       // Drop entries that aren't from our app origin (Google OAuth, third-party widgets)
       if (!url.startsWith('http://localhost') && !url.startsWith('https://localhost')) return false;
-      // Drop vendor / dev-server internals
+      // Drop vendor / dev-server internals (Vite + webpack + Next.js variants)
       if (url.includes('node_modules')) return false;
       if (url.includes('/@vite/')) return false;
       if (url.includes('/@fs/')) return false;
       if (url.includes('/@react-refresh')) return false;
-      // Drop non-JS resources (HTML pages, CSS — coverage tracks JS only)
+      if (url.includes('/webpack/')) return false;
+      if (url.includes('webpack-internal:')) return false;
+      if (url.includes('webpack:///')) return false;
+      // Drop non-JS resources (HTML pages, stylesheets — coverage tracks JS only)
       const path = url.split('?')[0];
       const isHtmlPath = !path.match(/\.(js|jsx|ts|tsx|mjs|cjs)$/) && !path.includes('/src/');
       if (isHtmlPath) return false;
-      if (path.endsWith('.css')) return false;
+      if (/\.(css|scss|sass|less|styl)(\?|$)/.test(path)) return false;
       return true;
     },
     // Filter source-mapped files — apply unified EXCLUDES list above

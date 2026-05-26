@@ -5,6 +5,30 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.4] — 2026-05-25
+
+### Fixed
+
+- **Coverage reports no longer include SCSS/CSS files, webpack runtime, or CRA boilerplate by default.** Existing defaults missed two things:
+  - The `.scss` / `.css` regex was anchored with `$` (end-of-string), so paths with query strings (`Header.module.scss?v=abc`) or wrapped paths (`webpack:///./src/styles.scss`) still slipped through.
+  - CRA-style boilerplate (`reportWebVitals`, `serviceWorker`, `vite-env`) and webpack runtime modules (`webpack/`, `webpack-internal:`, `webpack:///`) weren't excluded.
+
+### Changed
+
+`DEFAULT_EXCLUDES` and `entryFilter` in `global.teardown.js` now cover more out-of-the-box noise:
+
+- **Stylesheets** (substring match — handles query strings): `.css`, `.scss`, `.sass`, `.less`, `.styl`
+- **Bundler runtime**: `/webpack/`, `webpack-internal:`, `webpack:///`, `vite:`, `/@vite/`, `/@react-refresh`, `/@fs/`
+- **Build output**: `/dist/`, `/build/`, `/out/`, `/.next/`
+- **CRA / Vite boilerplate**: `/reportWebVitals`, `/serviceWorker`, `/registerServiceWorker`, `/vite-env`, `/setupTests`
+- **Test files**: regex relaxed from `\.test\.(tsx?|jsx?)$` to `\.test\.(tsx?|jsx?|mjs|cjs)` (no `$` anchor, includes more JS variants)
+- **Storybook**: `\.stories\.` now matches `.stories.mdx` too
+- **Type declarations**: `\.d\.ts` (substring) instead of `\.d\.ts$`
+
+Users can still override / extend via `COVERAGE_EXCLUDE` env var.
+
+---
+
 ## [0.5.3] — 2026-05-25
 
 ### Fixed

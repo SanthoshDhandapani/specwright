@@ -74,10 +74,14 @@ if (!isLocalhost && !allowRemote) {
 // Build project list dynamically:
 //   - "setup" only when auth is enabled
 //   - "main-e2e" is the parallel default — primary coverage source
+//   - "serial-execution" runs @serial-execution-tagged scenarios that main-e2e
+//     explicitly excludes via grepInvert; without it those scenarios match no
+//     project and silently never run (no warning, just zero coverage from them)
 //   - "auth-tests" / "workflow-consumers" / "precondition" added when relevant
 const projects = [];
 if (hasAuth) projects.push('setup');
 projects.push('main-e2e');
+projects.push('serial-execution');
 if (hasAuth) projects.push('auth-tests');
 if (includeWorkflows && hasAuth) {
   projects.push('precondition');

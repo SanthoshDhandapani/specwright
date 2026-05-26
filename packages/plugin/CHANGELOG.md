@@ -5,6 +5,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.9] — 2026-05-26
+
+### Fixed
+
+- **`run-coverage.js` now includes the `serial-execution` Playwright project.** Projects that tag a meaningful share of their scenarios with `@serial-execution` (state-dependent flows, shared-browser feature files) were silently excluded from coverage runs. `main-e2e` has `grepInvert: /@serial-execution/`, so without the `serial-execution` project those scenarios matched no project and never ran — `pnpm test:bdd:coverage` ended up covering only `@Authentication` (the auth-tests project) and any `@workflow-consumer`/`@precondition` scenarios when `--workflows` was passed. Adding `serial-execution` to the dynamic project list brings the coverage run in line with `test:bdd:all`.
+
+### Why
+
+The omission was a silent failure mode: zero warnings, the suite "passed", coverage was just artificially low. Reported against a real-world project where every non-auth scenario carries `@serial-execution` — only 1 of N spec files ran during `yarn test:bdd:coverage`.
+
+---
+
 ## [0.5.8] — 2026-05-26
 
 ### Added

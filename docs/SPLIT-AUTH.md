@@ -115,13 +115,13 @@ The startup log makes the rewrite visible:
 `localhost:<port>` talk to hosted APIs in Chromium. It's an E2E-only
 flag — the production app and your QA users are unaffected.
 
-## URL helper convention (`url-config.mjs`)
+## URL helper convention (`urlConfig.cjs`)
 
-The plugin ships `e2e-tests/playwright/url-config.mjs` so config, auth
+The plugin ships `e2e-tests/data/urlConfig.cjs` so config, auth
 strategies, and step files all read the URLs from one place:
 
 ```js
-import urlConfig from '../url-config.mjs';
+import urlConfig from '../../data/urlConfig.cjs';
 const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
 ```
 
@@ -129,27 +129,27 @@ const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
 - `getAppUrl()`  — where the app under test lives (`BASE_URL`).
 - `isSplitAuth()` — `true` when those differ.
 
-### Why `.mjs` and a default-exported object?
+### Why `.cjs` (CommonJS)?
 
-Playwright's TypeScript loader transforms ESM helpers into a CJS wrapper
-that strips named-export metadata. Named exports from a `.js` helper file
-imported by an auth strategy or setup file therefore fail at import-validation
-time:
+Playwright's TypeScript loader transforms ESM helpers imported by setup
+or test files into a wrapper that strips export metadata. Every ESM shape
+we tried still fails on at least one Playwright version:
 
-```
-SyntaxError: The requested module '../url-config.js' does not provide an export named 'getAppUrl'
-ReferenceError: exports is not defined in ES module scope
-```
+| Helper shape | Failure mode |
+|---|---|
+| `.js` with `export const getFoo = () => ...` | `does not provide an export named 'getFoo'` |
+| `.js` with `import * as` namespace import | `exports is not defined in ES module scope` |
+| `.mjs` with default-exported object | `does not provide an export named 'default'` |
 
-The `.mjs` extension tells transformers to leave the file alone. A default
-export of an object additionally bypasses per-name validation entirely
-(only `default` is checked). Consumers destructure at runtime, where the
-real export object is available. The combination is verified across
-Playwright 1.59.x and 1.60.x.
+CommonJS is a separate loader path the transformer leaves alone. Shipping
+the helper as `.cjs` with `module.exports` works on every Playwright
+version we've tested (1.59.x, 1.60.x). ESM consumers do
+`import urlConfig from '../../data/urlConfig.cjs';` — Node's built-in
+CJS-to-ESM interop handles it.
 
-If you need the helpers from a place where `.mjs` can't be imported
-(e.g. a step file picked up by playwright-bdd's `.{js,ts}` glob), read
-env directly — one line, no abstraction needed:
+If you need the helpers from a place where `.cjs` can't be imported (e.g.
+a step file picked up by playwright-bdd's `.{js,ts}` glob), read env
+directly — one line, no abstraction needed:
 
 ```js
 const BASE_URL = (process.env.AUTH_BASE_URL || process.env.BASE_URL || '').replace(/\/$/, '');

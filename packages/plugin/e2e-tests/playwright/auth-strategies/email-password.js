@@ -12,8 +12,8 @@
  * Reads locators and credentials from authenticationData.js
  */
 import { authenticationData } from '../../data/authenticationData.js';
-// Default-import + destructure — see url-config.mjs header for why.
-import urlConfig from '../url-config.mjs';
+// Default-import + destructure — see urlConfig.cjs header for why.
+import urlConfig from '../../data/urlConfig.cjs';
 const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
 
 export async function authenticate(page, authFile, _config = {}) {
@@ -21,7 +21,7 @@ export async function authenticate(page, authFile, _config = {}) {
 
   const { validCredentials, locators, timeouts, twoFactor } = authenticationData;
 
-  // URL resolution — see e2e-tests/playwright/url-config.mjs for the full
+  // URL resolution — see e2e-tests/data/urlConfig.cjs for the full
   // contract. In split-auth mode (AUTH_BASE_URL set and ≠ BASE_URL), signin
   // runs at the hosted host and the captured storageState is later rewritten
   // so tokens land on the local app host.

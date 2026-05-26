@@ -5,6 +5,46 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.12] — 2026-05-26
+
+### Changed
+
+- **URL helper moved to `e2e-tests/data/urlConfig.cjs`.** 0.5.10 and 0.5.11 shipped this as `e2e-tests/playwright/url-config.mjs` — a default-exported ESM module. Playwright's TypeScript loader transforms imported ESM helpers into a CJS wrapper that strips export metadata; the resulting import then fails with either `does not provide an export named 'X'` (named exports) or `does not provide an export named 'default'` (default export) depending on the Playwright version.
+
+  Final shape:
+  - **CJS module** (`.cjs` with `module.exports`) — the transformer leaves CJS alone.
+  - **`e2e-tests/data/` location** — Specwright owns this directory, so no collision risk with a project's own files. The previous `playwright/` placement required a `specwright-` prefix to avoid clashes.
+  - **camelCase filename** (`urlConfig.cjs`) — matches the helper's identifier and reads cleanly at import sites.
+
+  ESM consumers do:
+  ```js
+  import urlConfig from '../../data/urlConfig.cjs';
+  const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
+  ```
+
+  Node's built-in CJS-to-ESM interop handles the boundary; verified on Playwright 1.59.x and 1.60.x.
+
+### Why CommonJS instead of ESM
+
+Three ESM shapes were tried in 0.5.10 and 0.5.11 — all broken by Playwright's loader on at least one tested version:
+
+| Shape | Failure mode |
+|---|---|
+| `.js` with `export const getFoo = () => ...` | `does not provide an export named 'getFoo'` |
+| `.js` with `import * as` namespace import | `exports is not defined in ES module scope` |
+| `.mjs` with default-exported object | `does not provide an export named 'default'` |
+
+CommonJS is what survives.
+
+### Consumers updated
+
+- `playwright.config.ts` — `import urlConfig from './e2e-tests/data/urlConfig.cjs'`
+- `e2e-tests/playwright/auth-strategies/email-password.js` — same
+- `e2e-tests/playwright/auth-strategies/oauth.js` — same
+- `install.sh` — ships the new file under `e2e-tests/data/`
+
+---
+
 ## [0.5.11] — 2026-05-26
 
 ### Fixed

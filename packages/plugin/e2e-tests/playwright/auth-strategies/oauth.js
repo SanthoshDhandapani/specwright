@@ -14,8 +14,8 @@
  * Preferred: OAUTH_STORAGE_KEY → inject directly into localStorage (no popup)
  * Fallback:  OAUTH_BUTTON_TEST_ID → click the button (works for mock/same-page sign-in)
  */
-// Default-import + destructure — see url-config.mjs header for why.
-import urlConfig from '../url-config.mjs';
+// Default-import + destructure — see urlConfig.cjs header for why.
+import urlConfig from '../../data/urlConfig.cjs';
 const { getAuthUrl, getAppUrl, isSplitAuth } = urlConfig;
 
 /**

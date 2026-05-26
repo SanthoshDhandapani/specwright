@@ -106,7 +106,7 @@ cp "$PLUGIN_DIR/e2e-tests/playwright/fixtures.js" "$TARGET_DIR/e2e-tests/playwri
 cp "$PLUGIN_DIR/e2e-tests/playwright/auth.setup.js" "$TARGET_DIR/e2e-tests/playwright/"
 cp "$PLUGIN_DIR/e2e-tests/playwright/global.setup.js" "$TARGET_DIR/e2e-tests/playwright/"
 cp "$PLUGIN_DIR/e2e-tests/playwright/global.teardown.js" "$TARGET_DIR/e2e-tests/playwright/"
-cp "$PLUGIN_DIR/e2e-tests/playwright/url-config.mjs" "$TARGET_DIR/e2e-tests/playwright/"
+cp "$PLUGIN_DIR/e2e-tests/data/urlConfig.cjs" "$TARGET_DIR/e2e-tests/data/urlConfig.cjs"
 
 # Auth strategy modules
 mkdir -p "$TARGET_DIR/e2e-tests/playwright/auth-strategies"

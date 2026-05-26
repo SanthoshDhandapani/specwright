@@ -2,9 +2,9 @@ import path from 'path';
 import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig, cucumberReporter } from 'playwright-bdd';
 import dotenv from 'dotenv';
-// Default-import + destructure — see url-config.mjs header for why this
+// Default-import + destructure — see urlConfig.cjs header for why this
 // shape is required for Playwright loader compatibility.
-import urlConfig from './e2e-tests/playwright/url-config.mjs';
+import urlConfig from './e2e-tests/data/urlConfig.cjs';
 const { getAuthUrl } = urlConfig;
 
 // Resolve all framework paths relative to THIS config file, not the current

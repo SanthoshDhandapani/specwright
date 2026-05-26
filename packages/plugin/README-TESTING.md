@@ -367,6 +367,18 @@ OAUTH_BUTTON_TEST_ID=google-signin-btn # fallback: click-based login
 OAUTH_POST_LOGIN_URL=**/               # default: **/
 ```
 
+### Split-auth (sign in remotely, test locally)
+
+Set `AUTH_BASE_URL` when signin only works on a hosted host but you want tests + coverage to run against `localhost`. The auth strategy signs in at `AUTH_BASE_URL`, then rewrites the captured `storageState` so tokens land at `BASE_URL`. Cookies that don't match `BASE_URL` are stripped, and the `auth-tests` project automatically targets `AUTH_BASE_URL` (so its scenarios exercise the real signin UI, not the empty local shell).
+
+```
+BASE_URL=http://localhost:3000
+AUTH_BASE_URL=https://auth.example.com
+CHROME_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-web-security,--disable-features=IsolateOrigins"
+```
+
+`--disable-web-security` is required because Chromium treats `Origin` as a forbidden header — overriding it from JS won't work, so CORS must be relaxed at launch instead. See [`docs/SPLIT-AUTH.md`](../../docs/SPLIT-AUTH.md) for the full design, caveats, and what doesn't work and why.
+
 ### `none`
 
 No authentication — tests run without any auth setup. The `setup` project is skipped entirely.

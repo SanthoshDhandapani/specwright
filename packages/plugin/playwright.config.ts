@@ -133,7 +133,10 @@ export default defineConfig({
         ]
       : []),
 
-    // Authentication tests - run with clean state (no dependencies, no storageState)
+    // Authentication tests - run with clean state (no dependencies, no storageState).
+    // These tests exercise the real signin UI, so when AUTH_BASE_URL is set
+    // (split-auth mode), target it instead of BASE_URL — otherwise they'd hit
+    // the local dev shell at BASE_URL/signin which has no real auth backend.
     ...(hasAuth
       ? [
           {
@@ -142,6 +145,7 @@ export default defineConfig({
             use: {
               ...devices['Desktop Chrome'],
               launchOptions: defaultLaunchOptions,
+              baseURL: process.env.AUTH_BASE_URL || process.env.BASE_URL || 'http://localhost:5173',
               // Clean state for testing login/logout functionality
             },
           },

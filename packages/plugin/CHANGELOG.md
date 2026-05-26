@@ -5,6 +5,33 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.8] — 2026-05-26
+
+### Added
+
+- **Split-auth mode (`AUTH_BASE_URL`).** Lets you sign in against a hosted environment (where real auth, 2FA, and SSO work) while the rest of the suite runs against `localhost` (for V8 coverage instrumentation). Off by default — when `AUTH_BASE_URL` is unset or equal to `BASE_URL`, auth behaves exactly as before.
+
+  - `email-password.js` and `oauth.js` (click-based path) now navigate to `AUTH_BASE_URL/signin`, capture `storageState`, then rewrite each `origins[].origin` from the auth host to `BASE_URL` so localStorage tokens travel to the local origin. Cookies whose domain doesn't match `BASE_URL` are stripped (they'd be useless on localhost — browser refuses to send them across domains).
+  - `playwright.config.ts` — the `auth-tests` project now targets `AUTH_BASE_URL` when set. Its `@Authentication/*.spec.js` scenarios exercise the real signin UI, so they need the hosted host with the real backend.
+  - `.env.testing` template — documents `AUTH_BASE_URL` and the required `--disable-web-security` `CHROME_ARGS` for split-auth runs.
+
+### Documented
+
+- New [`docs/SPLIT-AUTH.md`](../../docs/SPLIT-AUTH.md) — full design, configuration, log expectations, caveats, and what doesn't work (and why). Linked from `README-TESTING.md` under "Authentication".
+
+### Why
+
+Real auth doesn't work on `localhost` for many enterprise apps — identity providers reject `localhost` callbacks, session cookies are bound to `*.your-company.com`, etc. Without split-auth, teams either skip local coverage entirely or hand-craft brittle storageState injection. Validated end-to-end against a real-world CRA + Redux Persist + react-select app where signin requires a hosted environment: `yarn test:bdd:coverage` previously failed wholesale; with split-auth + `--disable-web-security` it passes a representative subset of scenarios in ~35s.
+
+### What didn't work and is documented in `docs/SPLIT-AUTH.md`
+
+- `route.continue({ headers: { origin: AUTH_BASE_URL } })` — Chromium silently restores the real origin (it's a forbidden header). Also breaks `page.waitForResponse()` because the response event sequence changes.
+- `context.setExtraHTTPHeaders({ origin: ... })` — same forbidden-header restriction; the trace shows the override, but the wire-level request keeps the real origin.
+
+`--disable-web-security` (at browser launch) is the only dependable mechanism in Chromium, and is the supported approach.
+
+---
+
 ## [0.5.7] — 2026-05-26
 
 ### Fixed

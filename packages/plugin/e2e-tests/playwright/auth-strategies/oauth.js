@@ -86,12 +86,20 @@ export async function authenticate(page, authFile) {
     return;
   }
 
-  // Fallback: click-based sign-in (mock button or same-page OAuth)
+  // Fallback: click-based sign-in (mock button or same-page OAuth).
+  // Supports split-auth (AUTH_BASE_URL ≠ BASE_URL): sign in on the hosted env,
+  // then rewrite the captured storageState so tokens land on BASE_URL.
   const signinPath = process.env.OAUTH_SIGNIN_PATH || '/signin';
   const buttonTestId = process.env.OAUTH_BUTTON_TEST_ID || 'google-signin-button';
   const postLoginUrl = process.env.OAUTH_POST_LOGIN_URL || '**/';
 
-  await page.goto(`${baseUrl}${signinPath}`);
+  const authBaseUrl = process.env.AUTH_BASE_URL || baseUrl;
+  const splitAuth = authBaseUrl !== baseUrl;
+  if (splitAuth) {
+    console.log(`[auth:oauth] Split-auth: signin@${authBaseUrl} → app@${baseUrl}`);
+  }
+
+  await page.goto(`${authBaseUrl}${signinPath}`);
   await page.waitForLoadState('networkidle', { timeout });
   console.log(`[auth:oauth] Navigated to ${signinPath}`);
 
@@ -105,5 +113,34 @@ export async function authenticate(page, authFile) {
   console.log('[auth:oauth] Login successful');
 
   await page.context().storageState({ path: authFile });
+
+  if (splitAuth) {
+    const fsMod = await import('fs');
+    const state = JSON.parse(fsMod.readFileSync(authFile, 'utf-8'));
+    const authOriginHost = new URL(authBaseUrl).host;
+    const appOriginNorm = new URL(baseUrl).origin;
+    const appOriginHost = new URL(baseUrl).host;
+
+    const beforeOrigins = state.origins?.length || 0;
+    const beforeCookies = state.cookies?.length || 0;
+
+    state.origins = (state.origins || []).map((o) => {
+      try {
+        if (new URL(o.origin).host === authOriginHost) {
+          return { ...o, origin: appOriginNorm };
+        }
+      } catch { /* ignore unparseable origins */ }
+      return o;
+    });
+
+    state.cookies = (state.cookies || []).filter((c) => {
+      const dom = (c.domain || '').replace(/^\./, '');
+      return appOriginHost === dom || appOriginHost.endsWith(`.${dom}`);
+    });
+
+    fsMod.writeFileSync(authFile, JSON.stringify(state, null, 2));
+    console.log(`[auth:oauth] Split-auth rewrite: origins ${beforeOrigins} → ${state.origins.length} (at ${appOriginNorm}), cookies ${beforeCookies} → ${state.cookies.length}`);
+  }
+
   console.log(`[auth:oauth] State saved to: ${authFile}`);
 }

@@ -5,6 +5,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.5.11] — 2026-05-26
+
+### Fixed
+
+- **`install.sh` now copies `url-config.mjs` to the target.** 0.5.10 added the helper file to the package (it ships in the tarball via the `e2e-tests/` files glob), but `install.sh` uses explicit per-file `cp` lines for `e2e-tests/playwright/` and the new file wasn't added to that list. Result: after `npx @specwright/plugin update .`, `playwright.config.ts` imports `'./e2e-tests/playwright/url-config.mjs'` from a path that doesn't exist, and `yarn bddgen` fails with `Cannot find module './e2e-tests/playwright/url-config.mjs'`.
+
+### Why
+
+Reported against a real-world FourKites project after the 0.5.10 update. The helper file exists in the published tarball but never landed at the consumer's `e2e-tests/playwright/url-config.mjs`, breaking every script that goes through `playwright.config.ts` (`yarn test:bdd*`, coverage, etc.).
+
+---
+
 ## [0.5.10] — 2026-05-26
 
 ### Added

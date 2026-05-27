@@ -333,6 +333,22 @@ else
   echo "  ✅ Dependencies installed"
 fi
 
+# ── Step 9.5: Ensure Chromium binary matches the installed @playwright/test ──
+# Why: each Playwright release pins a different Chromium revision. Without this,
+# `pnpm install` updates the JS but the cached browser binary lags, producing:
+#   Error: browserType.launch: Executable doesn't exist at .../chromium-XXXX/...
+# Always run after install/update so the consumer never has to remember.
+if [ "$SKIP_INSTALL" = "true" ]; then
+  echo "⏭️  Step 9.5: Browser install — SKIPPED (--skip-install)"
+else
+  echo "📦 Step 9.5: Ensuring Chromium binary matches @playwright/test version..."
+  if (cd "$TARGET_DIR" && "$PM" exec playwright install chromium 2>&1); then
+    echo "  ✅ Chromium ready"
+  else
+    echo "  ⚠️  Browser install failed — run manually: $PM exec playwright install chromium"
+  fi
+fi
+
 # ── Done ──
 echo ""
 echo "╔══════════════════════════════════════════════╗"

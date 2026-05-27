@@ -5,6 +5,19 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.6.1] — 2026-05-27
+
+### Fixed
+
+- **Chromium binary drift on every `pnpm install`.** `package.json.snippet` previously declared `"@playwright/test": "^1.59.1"`. The caret allowed every dependency install to re-resolve to a newer Playwright minor, each of which bundles a different Chromium revision (e.g. chromium-1217 → chromium-1223). The cached binary on disk lagged behind, producing:
+  ```
+  Error: browserType.launch: Executable doesn't exist at .../chromium-XXXX/...
+  ```
+  Pinned to exact `"@playwright/test": "1.59.1"` so every consumer resolves to the same JS *and* the same browser revision until the plugin itself bumps it.
+- **`install.sh` now auto-runs `playwright install chromium`** as Step 9.5, immediately after the dependency install. Even when Playwright is intentionally bumped in a future plugin release, the matching browser is downloaded as part of the plugin install/update — no manual `pnpm exec playwright install chromium` needed.
+
+---
+
 ## [0.6.0] — 2026-05-27
 
 ### Added

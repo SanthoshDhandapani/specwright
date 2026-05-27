@@ -5,6 +5,36 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.6.0] — 2026-05-27
+
+### Added
+
+- **Capture-time URL filter in `e2e-tests/playwright/fixtures.js`.** Raw V8 entries are filtered before the JSON is written to `.raw-coverage/`. Drops `node_modules`, webpack/Vite virtual paths, `chrome-extension://`, sockjs/HMR, and test/spec/stories scripts. On a several-hundred-scenario run this trims raw output from tens of GB to a few GB and turns an OOM-ing merge into a fast one. The keep regex is bundler-agnostic (CRA `static/js/`, Vite `src/`, Next.js `_next/static/`).
+- **Disk-existence source filter in `e2e-tests/playwright/global.teardown.js`.** New `isPhantomSrc(p)` rejects any source path that claims to be under a configured source root but doesn't exist on disk. Catches library sourcemaps (html5-qrcode, react-idle-timer, broadcast-channel, leaflet, scheduler, etc.) that resolve to short names like `src/IdleTimer.js` and look like first-party code but aren't.
+- **CSS-module hash + `sources/` exclusions.** `DEFAULT_EXCLUDES` now drops `Foo.module.scss-baac` style compile artifacts and bundler virtual `sources/` paths.
+- **`e2e-tests/scripts/merge-coverage.js`** — standalone Node merge runner. Reads `.raw-coverage/*.json` one at a time and writes `reports/coverage/`. Safe to re-run when the in-process merge OOMs on very large suites. Recommended invocation: `node --max-old-space-size=16384`.
+- **`e2e-tests/scripts/coverage-expand.mjs`** — extends `reports/coverage/lcov.info` with zero-coverage SF: blocks for every `src/` file the suite never loaded. Output: `reports/coverage/lcov-full.info`. Counts code-ish lines so the LF total is realistic (skips blanks, comments, brace-only lines).
+- **`e2e-tests/scripts/coverage-istanbul.mjs`** — converts the extended lcov to an Istanbul coverage map and renders HTML — classic (multi-page tables with Statements / Branches / Functions / Lines) plus `html-spa` (single-page tree sidebar). Parses BRDA lines so branch coverage actually shows up.
+- **`e2e-tests/scripts/find-dead-code.mjs`** — diagnostic that lists files with zero imports (true dead code vs. files that are reachable but never exercised by tests).
+- **New `test:e2e:coverage:*` script family** in `package.json.snippet`:
+  - `test:e2e:coverage` — run E2E with coverage on
+  - `test:e2e:coverage:merge` — standalone raw-V8 merge
+  - `test:e2e:coverage:report:executed` — open the monocart report (files the suite loaded only)
+  - `test:e2e:coverage:report:all` — render the full Istanbul report (executed + untouched src/ files)
+- **Istanbul dev deps** in `package.json.snippet`: `istanbul-lib-coverage`, `istanbul-lib-report`, `istanbul-reports`.
+- **`install.sh`** copies the four new coverage scripts during plugin init / update so consumers pick them up automatically.
+
+### Removed
+
+- **`test:bdd:coverage` and `report:coverage` script entries** from `package.json.snippet`. Replaced by the clearer `test:e2e:coverage:*` family above. New consumers of `npx @specwright/plugin update` get only the new script set. **Action for upgraders:** projects that referenced the old script names in CI need to switch to the new names — a one-line find/replace.
+
+### Notes for upgraders
+
+- After `npx @specwright/plugin update`, the lockfile refresh may pull a newer `@playwright/test` patch whose Chromium build differs from the cached binary. Run `pnpm exec playwright install chromium` once after `pnpm install`.
+- Coverage still requires `BASE_URL=http://localhost:*` (source maps come from the dev server). Override with `COVERAGE_ALLOW_REMOTE=true` if you serve source maps from a hosted environment.
+
+---
+
 ## [0.5.13] — 2026-05-26
 
 ### Changed

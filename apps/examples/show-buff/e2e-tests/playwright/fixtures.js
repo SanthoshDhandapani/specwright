@@ -9,7 +9,10 @@ import { fileURLToPath } from 'url';
 // Raw V8 coverage accumulator — each scenario writes one JSON file here.
 // globalTeardown reads all of them and runs monocart-coverage-reports
 // to produce ONE merged report at reports/coverage/.
-const RAW_COVERAGE_DIR = '.raw-coverage';
+// Path anchored to the project root (two levels up from this file at
+// e2e-tests/playwright/fixtures.js) so the directory location is identical
+// regardless of which directory the test command was invoked from.
+const RAW_COVERAGE_DIR = path.resolve(fileURLToPath(import.meta.url), '../../..', '.raw-coverage');
 let _rawCoverageDirReady = false;
 async function ensureCoverageDir() {
   if (_rawCoverageDirReady) return;
@@ -18,6 +21,25 @@ async function ensureCoverageDir() {
     fsMod.mkdirSync(RAW_COVERAGE_DIR, { recursive: true });
   }
   _rawCoverageDirReady = true;
+}
+
+// Drop noise at capture time. V8 coverage includes every script the page
+// loaded — node_modules, react, polyfills, vendor chunks, browser internals —
+// which inflates raw files ~10× and risks OOM-ing the merge step on large
+// suites. Keep only app-source URLs. The regexes are intentionally permissive
+// across bundlers (CRA `static/js/`, Vite `src/`, Next.js `_next/static/`).
+const _COVERAGE_URL_KEEP =
+  /\/(src|static\/js|_next\/static\/chunks|@(fs|id|vite))\//;
+const _COVERAGE_URL_DROP =
+  /(node_modules|webpack:\/\/|chrome-extension:|sockjs|hot-update|runtime-main|\.test\.|\.spec\.|\.stories\.)/;
+function _filterCoverageEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter(e => {
+    const url = e?.url || '';
+    if (!url) return false;
+    if (_COVERAGE_URL_DROP.test(url)) return false;
+    return _COVERAGE_URL_KEEP.test(url);
+  });
 }
 
 // Capture env vars that should win over .env.testing values
@@ -281,13 +303,14 @@ export const test = base.extend({
       if (collectCoverage) {
         try {
           const coverage = await page.coverage.stopJSCoverage();
-          if (coverage?.length) {
+          const filtered = _filterCoverageEntries(coverage);
+          if (filtered.length) {
             await ensureCoverageDir();
             const fsMod = await import('node:fs');
             const pathMod = await import('node:path');
             const safeName = testInfo.title.replace(/[^a-z0-9]/gi, '_').slice(0, 60);
             const file = pathMod.join(RAW_COVERAGE_DIR, `${safeName}-${Date.now()}.json`);
-            fsMod.writeFileSync(file, JSON.stringify(coverage));
+            fsMod.writeFileSync(file, JSON.stringify(filtered));
           }
         } catch (err) {
           console.log(`[Coverage] Could not collect coverage: ${err.message}`);

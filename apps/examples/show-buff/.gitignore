@@ -27,3 +27,6 @@ reports/coverage/*
 .bootstrapping
 .specwright/*
 !.specwright/.gitkeep
+.raw-coverage/
+test-results/*
+!test-results/.gitkeep

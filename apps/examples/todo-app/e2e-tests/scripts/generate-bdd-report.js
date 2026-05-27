@@ -521,7 +521,7 @@ const generateReport = () => {
   // results to report.json AFTER a project that actually ran the tests wrote "passed".
   // Cross-reference results.json (the authoritative Playwright reporter) and promote any
   // scenario that Playwright recorded as "expected" (passed) but the cucumber reporter
-  // captured as all-steps-skipped (duration=0 for every non-hidden step).
+  // captured as containing skipped steps with duration=0 (grep-filtered ghost results).
   if (fs.existsSync(playwrightResultsPath)) {
     try {
       const pwResults = JSON.parse(fs.readFileSync(playwrightResultsPath, "utf8"));

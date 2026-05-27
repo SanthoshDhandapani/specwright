@@ -28,3 +28,7 @@ reports/screenshots/*
 .specwright/
 .specwright/*
 !.specwright/.gitkeep
+reports/coverage/*
+.raw-coverage/
+test-results/*
+!test-results/.gitkeep

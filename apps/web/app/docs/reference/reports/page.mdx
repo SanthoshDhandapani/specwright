@@ -107,11 +107,12 @@ pnpm report:playwright  # open Playwright HTML report
 
 ## Code Coverage Report
 
-Run `pnpm test:bdd:coverage` to also produce a **functional code coverage report** alongside the regular run. It tells you what percentage of `src/*` actually executes during your E2E tests, with file-by-file drill-down.
+Run `pnpm test:e2e:coverage` to also produce a **functional code coverage report** alongside the regular run. It tells you what percentage of `src/*` actually executes during your E2E tests, with file-by-file drill-down.
 
 ```bash
-pnpm test:bdd:coverage   # runs tests + writes reports/coverage/
-pnpm report:coverage     # opens the merged HTML report
+pnpm test:e2e:coverage                    # runs tests + writes reports/coverage/
+pnpm test:e2e:coverage:report:executed    # opens monocart report (loaded files only)
+pnpm test:e2e:coverage:report:all         # opens Istanbul report (full src/, untouched as 0%)
 ```
 
 This uses V8's native coverage API (no instrumentation needed), works with any build tool, and outputs LCOV for Codecov / Coveralls integration. Full details in the [Code Coverage reference](/docs/reference/code-coverage).

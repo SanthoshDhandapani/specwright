@@ -22,8 +22,6 @@
     "test:e2e:coverage:merge": "node --max-old-space-size=16384 --expose-gc e2e-tests/scripts/merge-coverage.js",
     "test:e2e:coverage:report:executed": "open reports/coverage/index.html",
     "test:e2e:coverage:report:all": "node e2e-tests/scripts/coverage-expand.mjs && node e2e-tests/scripts/coverage-istanbul.mjs && open reports/coverage-istanbul/index.html",
-    "test:bdd:coverage": "node e2e-tests/scripts/run-coverage.js --workflows",
-    "report:coverage": "open reports/coverage/index.html",
     "test:clean": "rm -rf reports .features-gen test-results e2e-tests/playwright/test-data/*.json .raw-coverage"
   },
 

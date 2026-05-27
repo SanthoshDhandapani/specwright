@@ -22,6 +22,17 @@ Works across JS/TS frameworks: TypeScript, JavaScript, JSX/TSX, ESM (`.mjs`), Co
 
 ---
 
+## Commands
+
+Specwright ships four `test:e2e:coverage*` scripts. Use them in this order:
+
+| Script | What it does |
+| --- | --- |
+| `pnpm test:e2e:coverage` | Runs the E2E suite with `ENABLE_COVERAGE=true`. Each scenario captures V8 coverage into `.raw-coverage/`, and `global.teardown.js` merges everything into `reports/coverage/` at the end. |
+| `pnpm test:e2e:coverage:merge` | Standalone merge runner. Re-runs the merge step against existing `.raw-coverage/` files — useful when the in-process merge OOMed on a very large suite (raised heap to 16 GB). |
+| `pnpm test:e2e:coverage:report:executed` | Opens `reports/coverage/index.html` — the monocart report showing **only files the suite loaded**. |
+| `pnpm test:e2e:coverage:report:all` | Renders `reports/coverage-istanbul/index.html` — an **Istanbul** report showing **every `src/` file** (loaded + untouched). Untouched files appear as 0% rows so you can scan which features have zero E2E exercise. |
+
 ## Quick start
 
 In your project (with the plugin installed):
@@ -35,10 +46,11 @@ In your project (with the plugin installed):
 pnpm dev
 
 # 3. Run coverage in another terminal
-pnpm test:bdd:coverage
+pnpm test:e2e:coverage
 
-# 4. Open the merged report
-pnpm report:coverage
+# 4. Open one of the reports
+pnpm test:e2e:coverage:report:executed   # only files tests touched
+pnpm test:e2e:coverage:report:all        # entire src/ tree, untouched files as 0%
 ```
 
 You'll see a console summary at the end of the run:
@@ -57,6 +69,15 @@ You'll see a console summary at the end of the run:
 ```
 
 The HTML report mirrors your `src/` directory tree, with line-by-line highlighting and per-file drill-down.
+
+### Executed vs. all — when to use each
+
+| Question you want answered | Run |
+| --- | --- |
+| "Of the files my tests loaded, how well are they exercised?" | `test:e2e:coverage:report:executed` |
+| "Of my whole src/ tree, what fraction is covered? Which features are untouched entirely?" | `test:e2e:coverage:report:all` |
+
+The two numbers will differ — the `:all` report includes files no scenario ever loaded (lazy chunks, untested routes, abandoned legacy code), which drags the headline % down. That's the honest measurement when answering "what % of our codebase has E2E coverage" — the `:executed` report answers the narrower "of what we touched, how deep did we go".
 
 ---
 
@@ -84,7 +105,7 @@ Coverage refuses to run unless `BASE_URL` points at `localhost` or `127.0.0.1`. 
 If you have enabled source maps in your hosted build and want to override:
 
 ```bash
-COVERAGE_ALLOW_REMOTE=true pnpm test:bdd:coverage
+COVERAGE_ALLOW_REMOTE=true pnpm test:e2e:coverage
 ```
 
 ---
@@ -196,7 +217,7 @@ Coverage works in CI the same way Cypress/Vitest do — start the dev server in 
   run: npx wait-on http://localhost:5173
 
 - name: Run coverage
-  run: pnpm test:bdd:coverage
+  run: pnpm test:e2e:coverage
 
 - name: Upload to Codecov
   uses: codecov/codecov-action@v4

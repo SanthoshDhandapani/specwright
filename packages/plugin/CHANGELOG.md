@@ -5,6 +5,14 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.6.2] — 2026-05-27
+
+### Removed
+
+- **`e2e-tests/scripts/find-dead-code.mjs`** should never have been shipped in 0.6.0. It was an ad-hoc diagnostic that reads `/tmp/gaps.txt` (a file produced only during a one-off internal audit) and serves no purpose for consumers. Removed from the package and from `install.sh` so it's no longer copied into projects on `init` / `update`. Projects that already received the file in 0.6.0 / 0.6.1 can safely `rm e2e-tests/scripts/find-dead-code.mjs`.
+
+---
+
 ## [0.6.1] — 2026-05-27
 
 ### Fixed

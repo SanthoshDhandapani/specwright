@@ -23,6 +23,25 @@ async function ensureCoverageDir() {
   _rawCoverageDirReady = true;
 }
 
+// Drop noise at capture time. V8 coverage includes every script the page
+// loaded — node_modules, react, polyfills, vendor chunks, browser internals —
+// which inflates raw files ~10× and risks OOM-ing the merge step on large
+// suites. Keep only app-source URLs. The regexes are intentionally permissive
+// across bundlers (CRA `static/js/`, Vite `src/`, Next.js `_next/static/`).
+const _COVERAGE_URL_KEEP =
+  /\/(src|static\/js|_next\/static\/chunks|@(fs|id|vite))\//;
+const _COVERAGE_URL_DROP =
+  /(node_modules|webpack:\/\/|chrome-extension:|sockjs|hot-update|runtime-main|\.test\.|\.spec\.|\.stories\.)/;
+function _filterCoverageEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter(e => {
+    const url = e?.url || '';
+    if (!url) return false;
+    if (_COVERAGE_URL_DROP.test(url)) return false;
+    return _COVERAGE_URL_KEEP.test(url);
+  });
+}
+
 // Capture env vars that should win over .env.testing values
 // (e.g. ENABLE_COVERAGE set by run-coverage.js wrapper script — must not be overridden)
 const _preservedEnv = {
@@ -284,13 +303,14 @@ export const test = base.extend({
       if (collectCoverage) {
         try {
           const coverage = await page.coverage.stopJSCoverage();
-          if (coverage?.length) {
+          const filtered = _filterCoverageEntries(coverage);
+          if (filtered.length) {
             await ensureCoverageDir();
             const fsMod = await import('node:fs');
             const pathMod = await import('node:path');
             const safeName = testInfo.title.replace(/[^a-z0-9]/gi, '_').slice(0, 60);
             const file = pathMod.join(RAW_COVERAGE_DIR, `${safeName}-${Date.now()}.json`);
-            fsMod.writeFileSync(file, JSON.stringify(coverage));
+            fsMod.writeFileSync(file, JSON.stringify(filtered));
           }
         } catch (err) {
           console.log(`[Coverage] Could not collect coverage: ${err.message}`);

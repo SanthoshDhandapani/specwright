@@ -120,6 +120,11 @@ done
 cp "$PLUGIN_DIR/e2e-tests/scripts/generate-bdd-report.js" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/run-coverage.js" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/extract-generate-context.js" "$TARGET_DIR/e2e-tests/scripts/"
+# Coverage reporting scripts (lcov expand → Istanbul HTML with statements/branches)
+cp "$PLUGIN_DIR/e2e-tests/scripts/merge-coverage.js" "$TARGET_DIR/e2e-tests/scripts/"
+cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-expand.mjs" "$TARGET_DIR/e2e-tests/scripts/"
+cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-istanbul.mjs" "$TARGET_DIR/e2e-tests/scripts/"
+cp "$PLUGIN_DIR/e2e-tests/scripts/find-dead-code.mjs" "$TARGET_DIR/e2e-tests/scripts/"
 
 # User-configurable files: only create if missing (never overwrite user's config)
 safe_copy "$PLUGIN_DIR/e2e-tests/data/authenticationData.js" "$TARGET_DIR/e2e-tests/data/authenticationData.js"

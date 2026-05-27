@@ -18,6 +18,10 @@
     "report:playwright": "playwright show-report reports/playwright",
     "report:bdd": "node e2e-tests/scripts/generate-bdd-report.js",
     "report:bdd:open": "open reports/cucumber-bdd/html-report/index.html",
+    "test:e2e:coverage": "node e2e-tests/scripts/run-coverage.js --workflows",
+    "test:e2e:coverage:merge": "node --max-old-space-size=16384 --expose-gc e2e-tests/scripts/merge-coverage.js",
+    "test:e2e:coverage:report:executed": "open reports/coverage/index.html",
+    "test:e2e:coverage:report:all": "node e2e-tests/scripts/coverage-expand.mjs && node e2e-tests/scripts/coverage-istanbul.mjs && open reports/coverage-istanbul/index.html",
     "test:bdd:coverage": "node e2e-tests/scripts/run-coverage.js --workflows",
     "report:coverage": "open reports/coverage/index.html",
     "test:clean": "rm -rf reports .features-gen test-results e2e-tests/playwright/test-data/*.json .raw-coverage"
@@ -27,6 +31,9 @@
     "@faker-js/faker": "^10.3.0",
     "@playwright/test": "^1.59.1",
     "dotenv": "^17.2.0",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-reports": "^3.1.7",
     "monocart-coverage-reports": "^2.12.0",
     "multiple-cucumber-html-reporter": "^3.10.0",
     "playwright-bdd": "^8.5.0"

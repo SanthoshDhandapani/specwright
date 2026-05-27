@@ -123,6 +123,10 @@ async function generateMergedCoverage() {
     '.sass',
     '.less',
     '.styl',
+    // CSS-module compile output with hash suffix (e.g. Foo.module.scss-baac)
+    /\.(scss|sass|css|less|styl)-[a-f0-9]+/i,
+    // Bundler virtual source-map "sources/..." prefixes
+    /^sources\//,
     // Static assets imported via webpack/Vite/Turbopack as JS modules
     // (file-loader / url-loader / SVGR / asset modules wrap them as
     // `module.exports = "<url>"`, so V8 captures them as JS execution)
@@ -179,6 +183,24 @@ async function generateMergedCoverage() {
     );
   };
 
+  // Phantom-path filter: library sourcemaps often resolve to short paths like
+  // "src/IdleTimer.js" or "src/MessageChannel/methods/broadcastChannel.js"
+  // (from html5-qrcode, react-idle-timer, broadcast-channel, etc.). They look
+  // like first-party app code but don't exist in this project. Reject any
+  // source path that claims to be under a configured source root but isn't
+  // present on disk. Result cached so the lookup runs once per unique path.
+  const _existsCache = new Map();
+  const isPhantomSrc = (p) => {
+    if (!p) return false;
+    // Only enforce for paths that LOOK like first-party src/ — leave others alone
+    if (!sourceRoots.some((r) => p.startsWith(`${r}/`) || p.startsWith('src/'))) return false;
+    if (_existsCache.has(p)) return _existsCache.get(p);
+    const abs = path.isAbsolute(p) ? p : path.join(PROJECT_ROOT, p);
+    const exists = fs.existsSync(abs);
+    _existsCache.set(p, !exists);
+    return !exists;
+  };
+
   const report = new CoverageReport({
     name: 'Specwright E2E Code Coverage',
     outputDir: path.join(PROJECT_ROOT, 'reports/coverage'),
@@ -202,8 +224,14 @@ async function generateMergedCoverage() {
       if (/\.(css|scss|sass|less|styl)(\?|$)/.test(path)) return false;
       return true;
     },
-    // Filter source-mapped files — apply unified EXCLUDES list above
-    sourceFilter: (sourcePath) => !isExcluded(sourcePath || ''),
+    // Filter source-mapped files — apply unified EXCLUDES list above and
+    // drop phantom library paths that don't exist on disk
+    sourceFilter: (sourcePath) => {
+      const p = sourcePath || '';
+      if (isExcluded(p)) return false;
+      if (isPhantomSrc(p)) return false;
+      return true;
+    },
     reports: [
       ['v8'],
       ['console-summary'],

@@ -22,7 +22,7 @@ import dotenv from 'dotenv';
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 // Capture CLI-provided env vars BEFORE dotenv.config() overrides them with .env.testing values.
-// Lets ad-hoc `BASE_URL=... pnpm test:bdd:coverage` work without editing .env.testing.
+// Lets ad-hoc `BASE_URL=... pnpm test:e2e:coverage` work without editing .env.testing.
 const cliBaseUrl = process.env.BASE_URL;
 
 // Reporters initialise BEFORE global.setup.js — ensure report dirs exist NOW
@@ -61,12 +61,12 @@ if (!isLocalhost && !allowRemote) {
 
     1. In e2e-tests/.env.testing:    BASE_URL=http://localhost:5173
     2. Start your dev server:        pnpm dev
-    3. Re-run:                       pnpm test:bdd:coverage
+    3. Re-run:                       pnpm test:e2e:coverage
 
   Or, if you've enabled source maps in your hosted build and want to
   proceed anyway:
 
-    COVERAGE_ALLOW_REMOTE=true pnpm test:bdd:coverage
+    COVERAGE_ALLOW_REMOTE=true pnpm test:e2e:coverage
 `);
   process.exit(1);
 }

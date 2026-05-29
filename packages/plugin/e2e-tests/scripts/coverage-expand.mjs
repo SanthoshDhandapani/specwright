@@ -21,7 +21,7 @@ const LCOV_OUT = "reports/coverage/lcov-full.info";
 const SRC = "src";
 
 if (!fs.existsSync(LCOV_IN)) {
-  console.error(`No coverage report at ${LCOV_IN}. Run 'yarn test:bdd:coverage' first.`);
+  console.error(`No coverage report at ${LCOV_IN}. Run 'pnpm test:e2e:coverage' first.`);
   process.exit(1);
 }
 

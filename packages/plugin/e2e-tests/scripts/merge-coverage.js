@@ -56,7 +56,7 @@ const mapsDir = path.join(rawDir, ".maps");
 // actually exist on disk under the project root?" — library sourcemaps often
 // resolve to phantom paths like src/IdleTimer.js or src/MessageChannel/*
 // (from html5-qrcode, react-idle-timer, broadcast-channel, etc.) that look
-// like yms-ui code but aren't.
+// like first-party source but aren't.
 const _existsCache = new Map();
 const sourceFilter = sourcePath => {
   if (!sourcePath) return false;

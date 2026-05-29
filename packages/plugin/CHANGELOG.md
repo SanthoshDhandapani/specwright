@@ -5,6 +5,14 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.6.4] — 2026-05-29
+
+### Fixed
+
+- **`.gitignore.snippet`**: switched report directory globs from `dir/*` to `dir/` so the directories themselves are ignored, not just their contents. Added missing entries for `reports/coverage-istanbul/` and `reports/coverage-istanbul-spa/` produced by the Istanbul report scripts.
+
+---
+
 ## [0.6.3] — 2026-05-29
 
 ### Fixed

@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { attachSourceMap } from '../scripts/coverage-sourcemaps.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -259,8 +260,12 @@ async function generateMergedCoverage() {
   });
 
   console.log(`[coverage] Merging ${files.length} raw coverage files...`);
+  const mapsDir = path.join(rawDir, '.maps');
   for (const f of files) {
     const data = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf8'));
+    // Attach pre-captured source maps so webpack/CRA bundle chunks resolve to
+    // real src/ paths offline. No-op for entries without a stored map.
+    for (const e of data) attachSourceMap(e, mapsDir);
     await report.add(data);
   }
   const summary = await report.generate();

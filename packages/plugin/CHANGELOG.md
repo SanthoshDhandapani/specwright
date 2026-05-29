@@ -5,6 +5,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.6.3] — 2026-05-29
+
+### Fixed
+
+- **Offline source-map resolution for webpack/CRA apps.** `page.coverage.stopJSCoverage()` returns bundle-chunk entries with external `.map` references. When the merge runs after the dev server has shut down, monocart cannot fetch those maps and falls back to chunk URLs — producing a useless coverage report (0% statements). Fix: `fixtures.js` now fetches each script's `.map` file via `page.request.get()` **while the dev server is alive** and stores it in `.raw-coverage/.maps/`. Both the teardown auto-merge and the standalone `merge-coverage.js` attach these stored maps before calling `report.add()`, so monocart resolves to real `src/` paths fully offline. Bundlers that emit **inline** source maps (Vite, Next.js dev) are unaffected — `saveSourceMap` detects `data:` URIs and returns immediately with zero overhead.
+
+### Added
+
+- **`e2e-tests/scripts/coverage-sourcemaps.mjs`** — shared `saveSourceMap` / `attachSourceMap` utilities (new file, installed by `install.sh`).
+
+### Changed
+
+- `e2e-tests/scripts/merge-coverage.js`: report name changed from hardcoded `"yms-ui E2E coverage"` to `"Specwright E2E Coverage"`.
+
+---
+
 ## [0.6.2] — 2026-05-27
 
 ### Removed

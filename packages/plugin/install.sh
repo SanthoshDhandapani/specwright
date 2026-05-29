@@ -121,6 +121,7 @@ cp "$PLUGIN_DIR/e2e-tests/scripts/generate-bdd-report.js" "$TARGET_DIR/e2e-tests
 cp "$PLUGIN_DIR/e2e-tests/scripts/run-coverage.js" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/extract-generate-context.js" "$TARGET_DIR/e2e-tests/scripts/"
 # Coverage reporting scripts (lcov expand → Istanbul HTML with statements/branches)
+cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-sourcemaps.mjs" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/merge-coverage.js" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-expand.mjs" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-istanbul.mjs" "$TARGET_DIR/e2e-tests/scripts/"

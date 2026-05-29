@@ -9,6 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { attachSourceMap } from "./coverage-sourcemaps.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +49,7 @@ function filterEntries(entries) {
 }
 
 const { default: CoverageReport } = await import("monocart-coverage-reports");
+const mapsDir = path.join(rawDir, ".maps");
 
 // Source-level filter (applied after sourcemap resolution).
 // Keeps only first-party app code. The most reliable rule is "does this file
@@ -80,7 +82,7 @@ const sourceFilter = sourcePath => {
 };
 
 const report = new CoverageReport({
-  name: "yms-ui E2E coverage",
+  name: "Specwright E2E Coverage",
   outputDir,
   reports: ["v8", "lcovonly", "console-summary"],
   cleanCache: true,
@@ -95,6 +97,7 @@ for (const file of rawFiles) {
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(rawDir, file), "utf8"));
     const filtered = filterEntries(raw);
+    for (const e of filtered) attachSourceMap(e, mapsDir);
     kept += filtered.length;
     dropped += raw.length - filtered.length;
     if (filtered.length > 0) {

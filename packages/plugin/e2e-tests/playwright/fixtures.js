@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { saveSourceMap } from '../scripts/coverage-sourcemaps.mjs';
 
 // Raw V8 coverage accumulator — each scenario writes one JSON file here.
 // globalTeardown reads all of them and runs monocart-coverage-reports
@@ -13,6 +14,9 @@ import { fileURLToPath } from 'url';
 // e2e-tests/playwright/fixtures.js) so the directory location is identical
 // regardless of which directory the test command was invoked from.
 const RAW_COVERAGE_DIR = path.resolve(fileURLToPath(import.meta.url), '../../..', '.raw-coverage');
+// Source maps captured while the dev server is alive → attached at merge time
+// so monocart resolves webpack/CRA bundle chunks to real src/ paths offline.
+const _MAPS_DIR = path.join(RAW_COVERAGE_DIR, '.maps');
 let _rawCoverageDirReady = false;
 async function ensureCoverageDir() {
   if (_rawCoverageDirReady) return;
@@ -305,6 +309,11 @@ export const test = base.extend({
           const coverage = await page.coverage.stopJSCoverage();
           const filtered = _filterCoverageEntries(coverage);
           if (filtered.length) {
+            // Capture each script's .map file now, while the dev server is alive.
+            // Vite inlines maps as data: URIs → saveSourceMap is a no-op for them.
+            // webpack/CRA serves external .map files → we fetch and store them so
+            // the offline merge resolves bundle chunks to real src/ paths.
+            for (const e of filtered) await saveSourceMap(page, e, _MAPS_DIR);
             await ensureCoverageDir();
             const fsMod = await import('node:fs');
             const pathMod = await import('node:path');

@@ -5,6 +5,16 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.6.5] — 2026-05-29
+
+### Fixed
+
+- `specwright.plugin.json` version synced to match `package.json` (was stuck at `0.4.2`).
+- Stale script name references updated: `test:bdd:coverage` → `test:e2e:coverage` in error messages and comments across `coverage-expand.mjs` and `run-coverage.js`.
+- Removed hardcoded project name from `merge-coverage.js` comment.
+
+---
+
 ## [0.6.4] — 2026-05-29
 
 ### Fixed

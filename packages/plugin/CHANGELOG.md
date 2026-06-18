@@ -5,6 +5,25 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.7.0] — 2026-06-18
+
+### Added
+
+- **`COVERAGE_EXCLUDE` is now actually honored.** `merge-coverage.js`, `coverage-expand.mjs`, and `coverage-istanbul.mjs` read it (shell env, falling back to `e2e-tests/.env.testing`) as comma-separated **glob/substring** patterns — entries without wildcards match as substrings, `*` matches one path segment, `**` across segments. Previously the value was documented but ignored (a hardcoded drop list was used instead).
+- **Configurable source roots.** `coverage-expand.mjs` walks every root in `COVERAGE_SOURCE_ROOTS` (e.g. `app`, or `src,lib`), not just `src`.
+- **Env-overridable report paths.** `LCOV_IN` / `LCOV_OUT` (`coverage-expand.mjs`) and `OUT_DIR` (`coverage-istanbul.mjs`) for CI / alternate merge flows.
+- **Jenkins CI pipeline template** at `e2e-tests/ci/e2e-pipeline.groovy` — generic declarative pipeline (pnpm/yarn/npm auto-detect, optional dev-server start, E2E with coverage, executed + full-tree reports, publish/archive). No host- or project-specific values.
+
+### Fixed
+
+- **Stale coverage no longer inflates a run.** `global.setup.js` clears leftover `.raw-coverage/*.json` from a previous (possibly killed) run when `ENABLE_COVERAGE=true`.
+- `coverage-expand.mjs` resolves the project root via `fileURLToPath(import.meta.url)` instead of `new URL().pathname` (correct on Windows and with spaces/percent-encoded paths) and normalizes absolute LCOV `SF:` paths to project-relative before comparison.
+- `coverage-istanbul.mjs`: O(1) function-name index for `FNDA` parsing; corrected the stale "run X first" error hint and the deps-install hint.
+- `run-coverage.js`: raise the child-process heap to avoid V8-coverage OOM on chunk-heavy apps.
+- `coverage-sourcemaps.mjs`: dropped the stale source-map `existsSync` cache guard so re-runs re-fetch maps.
+
+---
+
 ## [0.6.5] — 2026-05-29
 
 ### Fixed

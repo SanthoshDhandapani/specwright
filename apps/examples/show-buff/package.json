@@ -35,7 +35,7 @@
     "test:e2e:coverage:report:all": "node e2e-tests/scripts/coverage-expand.mjs && node e2e-tests/scripts/coverage-istanbul.mjs && open reports/coverage-istanbul/index.html"
   },
   "dependencies": {
-    "@react-oauth/google": "^0.12.1",
+    "@react-oauth/google": "^0.13.5",
     "jwt-decode": "^4.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

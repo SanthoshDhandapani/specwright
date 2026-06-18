@@ -86,6 +86,8 @@ e2e-tests/
 │   └── testConfig.js               ← Routes, timeouts, baseUrl
 ├── scripts/
 │   └── generate-bdd-report.js      ← Generates HTML cucumber report
+├── ci/
+│   └── e2e-pipeline.groovy         ← Generic Jenkins pipeline template (adapt per project)
 ├── instructions.js                 ← Agent pipeline config (add your entries)
 ├── instructions.example.js         ← Example configs (text, Jira, CSV, workflow)
 └── .env.testing                    ← Environment variable template

@@ -5,6 +5,14 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.8.1] — 2026-06-18
+
+### Fixed
+
+- **The CI pipeline template is now actually installed.** `install.sh` did not copy `e2e-tests/ci/` into the target project, so the `e2e-pipeline.groovy` template shipped in the tarball but never landed on `init` / `update` (regression introduced with the template in 0.8.0). It is now `safe_copy`d (created if missing, never overwriting a customized copy) and the target `e2e-tests/ci/` directory is created. `README-TESTING.md`'s project tree lists it.
+
+---
+
 ## [0.8.0] — 2026-06-18
 
 ### Added

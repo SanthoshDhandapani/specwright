@@ -99,6 +99,7 @@ mkdir -p "$TARGET_DIR/e2e-tests/data"
 mkdir -p "$TARGET_DIR/e2e-tests/scripts"
 mkdir -p "$TARGET_DIR/e2e-tests/.knowledge"
 mkdir -p "$TARGET_DIR/e2e-tests/plans"
+mkdir -p "$TARGET_DIR/e2e-tests/ci"
 cp -r "$PLUGIN_DIR/e2e-tests/templates" "$TARGET_DIR/e2e-tests/"
 
 # Framework files: always overwrite (these are the framework, not user code)
@@ -127,6 +128,8 @@ cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-expand.mjs" "$TARGET_DIR/e2e-tests/sc
 cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-istanbul.mjs" "$TARGET_DIR/e2e-tests/scripts/"
 
 # User-configurable files: only create if missing (never overwrite user's config)
+# CI pipeline template — adapted per project; never clobber a customized copy.
+safe_copy "$PLUGIN_DIR/e2e-tests/ci/e2e-pipeline.groovy" "$TARGET_DIR/e2e-tests/ci/e2e-pipeline.groovy"
 safe_copy "$PLUGIN_DIR/e2e-tests/data/authenticationData.js" "$TARGET_DIR/e2e-tests/data/authenticationData.js"
 safe_copy "$PLUGIN_DIR/e2e-tests/data/testConfig.js" "$TARGET_DIR/e2e-tests/data/testConfig.js"
 safe_copy "$PLUGIN_DIR/e2e-tests/instructions.js" "$TARGET_DIR/e2e-tests/instructions.js"

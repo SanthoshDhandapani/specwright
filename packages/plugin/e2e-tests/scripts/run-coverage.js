@@ -97,7 +97,14 @@ console.log(`[coverage] auth=${authStrategy}, projects: ${projects.join(', ')}`)
 const spawnOpts = {
   stdio: 'inherit',
   cwd: PROJECT_ROOT,
-  env: { ...process.env, ENABLE_COVERAGE: 'true' },
+  env: {
+    ...process.env,
+    ENABLE_COVERAGE: 'true',
+    // V8 coverage + source-map fetching holds large arrays in memory per worker.
+    // CRA / webpack apps with many chunks easily hit the default 4 GB heap when
+    // running multiple modules concurrently. Propagate to all child processes.
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --max-old-space-size=8192`.trim(),
+  },
 };
 
 // Step 1: compile features → specs

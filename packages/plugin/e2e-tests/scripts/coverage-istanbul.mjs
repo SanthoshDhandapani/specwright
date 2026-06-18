@@ -21,16 +21,17 @@ try {
   reports = require("istanbul-reports");
 } catch {
   console.error("Missing deps. Install with:");
-  console.error("  yarn add -D istanbul-lib-coverage istanbul-lib-report istanbul-reports");
+  console.error("  pnpm add -D istanbul-lib-coverage istanbul-lib-report istanbul-reports");
   process.exit(1);
 }
 
-const LCOV = "reports/coverage/lcov-full.info";
-const OUT = "reports/coverage-istanbul";
+// Paths are env-overridable so CI / alternate report flows can redirect them.
+const LCOV = process.env.LCOV_IN || "reports/coverage/lcov-full.info";
+const OUT = process.env.OUT_DIR || "reports/coverage-istanbul";
 const PROJECT_ROOT = path.resolve(".");
 
 if (!fs.existsSync(LCOV)) {
-  console.error(`No ${LCOV}. Run 'yarn coverage:expand' first.`);
+  console.error(`No ${LCOV}. Run 'pnpm test:e2e:coverage:report:all' (or 'node e2e-tests/scripts/coverage-expand.mjs') first.`);
   process.exit(1);
 }
 
@@ -44,6 +45,7 @@ for (const line of fs.readFileSync(LCOV, "utf8").split("\n")) {
       lines: {},
       fns: {},
       fnMap: {},
+      fnNameIndex: new Map(), // name → fn id, for O(1) FNDA lookup
       fnNext: 0,
       branches: {} // key = "line:block" → array of hit counts per branch
     };
@@ -54,13 +56,13 @@ for (const line of fs.readFileSync(LCOV, "utf8").split("\n")) {
     cur.lines[+n] = +c;
   } else if (line.startsWith("FN:")) {
     const [n, name] = line.slice(3).split(",");
-    cur.fnMap[cur.fnNext] = { name, line: +n };
-    cur.fnNext++;
+    const id = cur.fnNext++;
+    cur.fnMap[id] = { name, line: +n };
+    cur.fnNameIndex.set(name, id);
   } else if (line.startsWith("FNDA:")) {
     const [c, name] = line.slice(5).split(",");
-    for (const [id, fn] of Object.entries(cur.fnMap)) {
-      if (fn.name === name) cur.fns[id] = +c;
-    }
+    const id = cur.fnNameIndex.get(name);
+    if (id !== undefined) cur.fns[id] = +c;
   } else if (line.startsWith("BRDA:")) {
     // BRDA:<line>,<block>,<branch>,<taken|->
     const [lineNo, block, branch, taken] = line.slice(5).split(",");

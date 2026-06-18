@@ -16,6 +16,39 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../..");
 const rawDir = path.join(projectRoot, ".raw-coverage");
 const outputDir = path.join(projectRoot, "reports", "coverage");
+const envTesting = path.join(projectRoot, "e2e-tests", ".env.testing");
+
+// Minimal .env reader (no dotenv dependency) so the merge can honor
+// COVERAGE_EXCLUDE even when run standalone outside the Playwright runner.
+function readEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  const result = {};
+  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq < 0) continue;
+    result[t.slice(0, eq).trim()] = t.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+  }
+  return result;
+}
+
+// COVERAGE_EXCLUDE — comma-separated glob/substring patterns matched against
+// the source path. A shell env var takes priority over .env.testing. Patterns
+// without wildcards match as substrings (e.g. `src/api/`, `.stories.`); `*` and
+// `**` act as path-segment / multi-segment wildcards.
+function buildExcludes() {
+  const envSrc = process.env.COVERAGE_EXCLUDE || readEnvFile(envTesting).COVERAGE_EXCLUDE;
+  const patterns = (envSrc || "").split(",").map(p => p.trim()).filter(Boolean);
+  if (patterns.length) console.log(`[coverage] COVERAGE_EXCLUDE: ${patterns.join(", ")}`);
+  return patterns.map(p => {
+    const esc = p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "(.+)").replace(/\*/g, "([^/]+)");
+    return new RegExp(esc);
+  });
+}
+
+const USER_EXCLUDES = buildExcludes();
+const isExcluded = sourcePath => USER_EXCLUDES.some(re => re.test(sourcePath));
 
 if (!fs.existsSync(rawDir)) {
   console.error(`[coverage] ${rawDir} does not exist.`);
@@ -68,10 +101,10 @@ const sourceFilter = sourcePath => {
   if (/\.(scss|sass|css|less|svg|png|jpg|jpeg|gif|woff2?|ttf|eot)(\?|-[a-f0-9]+|$)/i.test(sourcePath))
     return false;
   if (/\.(test|spec|stories)\.[jt]sx?$/.test(sourcePath)) return false;
-  // Explicit drops — files that exist on disk but aren't worth measuring
-  // (utility wrappers, generated code, etc.). Add to this list as needed.
-  const EXPLICIT_DROP = [/(^|\/)src\/utils\/toast-utils\//];
-  if (EXPLICIT_DROP.some(re => re.test(sourcePath))) return false;
+  // User-configured exclusions via COVERAGE_EXCLUDE (env or .env.testing) —
+  // files that exist on disk but you don't want measured (legacy paths,
+  // generated code, utility wrappers, etc.).
+  if (isExcluded(sourcePath)) return false;
   if (!/(^|\/)src\//.test(sourcePath)) return false;
   // Must exist on disk in this project — drops phantom library src/ paths
   const rel = sourcePath.replace(/^.*\/(src\/)/, "$1");

@@ -15,25 +15,72 @@
  */
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const LCOV_IN = "reports/coverage/lcov.info";
-const LCOV_OUT = "reports/coverage/lcov-full.info";
-const SRC = "src";
+// Anchor to the script's own location (two levels up from e2e-tests/scripts/)
+// so PROJECT_ROOT is correct regardless of the cwd the script is invoked from.
+// fileURLToPath (not `new URL().pathname`) handles Windows drive paths and
+// percent-encoded characters (e.g. spaces) correctly.
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ENV_TESTING = path.join(PROJECT_ROOT, "e2e-tests", ".env.testing");
+
+// Paths are env-overridable so CI / alternate merge flows can redirect them.
+const LCOV_IN = process.env.LCOV_IN || "reports/coverage/lcov.info";
+const LCOV_OUT = process.env.LCOV_OUT || "reports/coverage/lcov-full.info";
+
+// Minimal .env reader (no dotenv dependency) for standalone runs.
+function readEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  const result = {};
+  for (const line of fs.readFileSync(filePath, "utf8").split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq < 0) continue;
+    result[t.slice(0, eq).trim()] = t.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+  }
+  return result;
+}
+
+const env = readEnvFile(ENV_TESTING);
+
+// Source roots to index — supports Next.js App Router (`app`), monorepos, or
+// multi-root layouts (`src,lib`). Mirrors COVERAGE_SOURCE_ROOTS in .env.testing.
+const SRC_ROOTS = (process.env.COVERAGE_SOURCE_ROOTS || env.COVERAGE_SOURCE_ROOTS || "src")
+  .split(",").map(s => s.trim()).filter(Boolean);
+
+// COVERAGE_EXCLUDE — comma-separated glob/substring patterns (shell env wins).
+function buildExcludes() {
+  const envSrc = process.env.COVERAGE_EXCLUDE || env.COVERAGE_EXCLUDE;
+  const patterns = (envSrc || "").split(",").map(p => p.trim()).filter(Boolean);
+  if (patterns.length) console.log(`COVERAGE_EXCLUDE: ${patterns.join(", ")}`);
+  return patterns.map(p => {
+    const esc = p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "(.+)").replace(/\*/g, "([^/]+)");
+    return new RegExp(esc);
+  });
+}
+const USER_EXCLUDES = buildExcludes();
+const isExcluded = p => USER_EXCLUDES.some(re => re.test(p));
 
 if (!fs.existsSync(LCOV_IN)) {
   console.error(`No coverage report at ${LCOV_IN}. Run 'pnpm test:e2e:coverage' first.`);
   process.exit(1);
 }
 
-// Read existing lcov and harvest the SF: paths
+// Read existing lcov and harvest the SF: paths, normalized to project-root-
+// relative so they compare cleanly against the on-disk walk() output below.
 const lcov = fs.readFileSync(LCOV_IN, "utf8");
 const covered = new Set();
 for (const line of lcov.split("\n")) {
-  if (line.startsWith("SF:")) covered.add(line.slice(3).trim());
+  if (!line.startsWith("SF:")) continue;
+  let p = line.slice(3).trim();
+  if (path.isAbsolute(p)) p = path.relative(PROJECT_ROOT, p);
+  covered.add(p);
 }
 
-// Walk src/ on disk
+// Walk source root(s) on disk
 function* walk(dir) {
+  if (!fs.existsSync(dir)) return;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
@@ -46,8 +93,10 @@ function* walk(dir) {
 }
 
 const untouched = [];
-for (const f of walk(SRC)) {
-  if (!covered.has(f)) untouched.push(f);
+for (const root of SRC_ROOTS) {
+  for (const f of walk(root)) {
+    if (!covered.has(f) && !isExcluded(f)) untouched.push(f);
+  }
 }
 
 console.log(`Existing lcov files:   ${covered.size}`);

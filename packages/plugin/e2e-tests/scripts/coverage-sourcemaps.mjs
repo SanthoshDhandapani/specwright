@@ -1,5 +1,5 @@
 /**
- * Source-map capture/attach for E2E V8 coverage (DYFN-12683).
+ * Source-map capture/attach for E2E V8 coverage.
  *
  * page.coverage.stopJSCoverage() returns { url, source, functions } but NO
  * source map. CRA / webpack serves external .map files from the dev server's
@@ -37,7 +37,6 @@ export async function saveSourceMap(page, entry, mapsDir) {
     const key = mapKey(url);
     if (_saved.has(key)) return;
     const file = path.join(mapsDir, `${key}.json`);
-    if (fs.existsSync(file)) { _saved.add(key); return; }
 
     const matches = [...(entry.source || "").matchAll(/\/\/[#@]\s*sourceMappingURL=(\S+)/g)];
     if (!matches.length) return;

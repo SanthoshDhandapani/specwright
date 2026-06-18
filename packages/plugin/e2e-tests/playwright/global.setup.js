@@ -13,6 +13,7 @@ const markerFile = path.join(__dirname, '.cleanup-done');
 const testDataDir = path.join(__dirname, 'test-data');
 const authStorageDir = path.join(__dirname, 'auth-storage/.auth');
 const reportsDir = path.join(__dirname, '../../reports');
+const rawCoverageDir = path.join(__dirname, '../../.raw-coverage');
 
 export default async function globalSetup() {
   console.log('[global.setup] Starting global setup...');
@@ -31,6 +32,18 @@ export default async function globalSetup() {
     const dirPath = path.join(reportsDir, dir);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
+    }
+  }
+
+  // When coverage is enabled, clear stale raw V8 coverage files from previous
+  // runs so the merge only sees data from the current run. A run that was killed
+  // or crashed before teardown leaves orphaned .raw-coverage/*.json behind, which
+  // would otherwise inflate the next report.
+  if (process.env.ENABLE_COVERAGE === 'true' && fs.existsSync(rawCoverageDir)) {
+    const stale = fs.readdirSync(rawCoverageDir).filter(f => f.endsWith('.json'));
+    stale.forEach(f => fs.unlinkSync(path.join(rawCoverageDir, f)));
+    if (stale.length > 0) {
+      console.log(`[global.setup] Cleared ${stale.length} stale raw coverage file(s) from .raw-coverage/`);
     }
   }
 

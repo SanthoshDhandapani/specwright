@@ -32,6 +32,8 @@ Specwright ships four `test:e2e:coverage*` scripts. Use them in this order:
 | `pnpm test:e2e:coverage:merge` | Standalone merge runner. Re-runs the merge step against existing `.raw-coverage/` files — useful when the in-process merge OOMed on a very large suite (raised heap to 16 GB). |
 | `pnpm test:e2e:coverage:report:executed` | Opens `reports/coverage/index.html` — the monocart report showing **only files the suite loaded**. |
 | `pnpm test:e2e:coverage:report:all` | Renders `reports/coverage-istanbul/index.html` — an **Istanbul** report showing **every `src/` file** (loaded + untouched). Untouched files appear as 0% rows so you can scan which features have zero E2E exercise. |
+| `pnpm test:e2e:coverage:total` | Folds the current run into a cumulative report at `reports/totalCoverage/` (see [Total coverage across runs](#total-coverage-across-runs)). |
+| `pnpm test:e2e:coverage:from-cache` | Re-renders `reports/coverage/` from the existing monocart cache — recovery path when `test:e2e:coverage:merge` runs out of memory on a very large suite. |
 
 ## Quick start
 
@@ -96,6 +98,37 @@ reports/coverage-istanbul/        ← Istanbul report (entire src/ tree)
 ```
 
 The monocart report (`reports/coverage/`) only shows files the test suite loaded. The Istanbul report (`reports/coverage-istanbul/`) walks the entire `src/` directory and shows every file — untouched files appear as 0% rows, giving you an honest picture of which features have zero E2E exercise.
+
+---
+
+## Total coverage across runs
+
+A single `test:e2e:coverage` run is a snapshot. When you want a **cumulative** picture across more than one run — fold in only the scenarios you changed without re-running everything, or combine E2E coverage with another LCOV source (a second browser project, a unit-test run) — use the total report:
+
+```bash
+pnpm test:e2e:coverage          # run (or just the subset you changed)
+pnpm test:e2e:coverage:total    # expand + fold this run into reports/totalCoverage/
+```
+
+`test:e2e:coverage:total` merges a **new** LCOV into a **baseline** LCOV — `DA:` hit counts are summed per line, files are unioned — and writes the result (HTML + `lcov.info` + JSON summary) to `reports/totalCoverage/`. Run it again after the next batch and the total accumulates. On the first run there's no baseline yet, so the run simply seeds the total.
+
+Point it at any sources via env vars:
+
+```bash
+# Combine E2E coverage with a unit-test LCOV into one total
+BASELINE_LCOV=reports/coverage/lcov-full.info \
+NEW_LCOV=coverage/lcov.info \
+OUT_DIR=reports/totalCoverage \
+  node e2e-tests/scripts/coverage-total.mjs
+```
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `BASELINE_LCOV` | `reports/totalCoverage/lcov.info` | The running total to append into (absent on first run → seeded) |
+| `NEW_LCOV` | `reports/coverage/lcov-full.info` | The run to fold in |
+| `OUT_DIR` | `reports/totalCoverage` | Output directory |
+
+`COVERAGE_EXCLUDE` and deleted-file filtering apply, same as the other reports.
 
 ---
 

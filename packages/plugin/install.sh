@@ -126,6 +126,8 @@ cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-sourcemaps.mjs" "$TARGET_DIR/e2e-test
 cp "$PLUGIN_DIR/e2e-tests/scripts/merge-coverage.js" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-expand.mjs" "$TARGET_DIR/e2e-tests/scripts/"
 cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-istanbul.mjs" "$TARGET_DIR/e2e-tests/scripts/"
+cp "$PLUGIN_DIR/e2e-tests/scripts/coverage-total.mjs" "$TARGET_DIR/e2e-tests/scripts/"
+cp "$PLUGIN_DIR/e2e-tests/scripts/generate-from-cache.mjs" "$TARGET_DIR/e2e-tests/scripts/"
 
 # User-configurable files: only create if missing (never overwrite user's config)
 # CI pipeline template — adapted per project; never clobber a customized copy.

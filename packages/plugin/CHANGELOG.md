@@ -5,7 +5,17 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
-## [0.8.1] — 2026-06-18
+## [0.9.0] — 2026-06-18
+
+### Added
+
+- **Total coverage across runs** (`coverage-total.mjs` + `pnpm test:e2e:coverage:total`). Merges a new LCOV into a running baseline (DA hits summed per line, files unioned) and writes a cumulative HTML + `lcov.info` + JSON summary to `reports/totalCoverage/`. Run it repeatedly to accumulate; the first run seeds the total. Sources are env-overridable (`BASELINE_LCOV` / `NEW_LCOV` / `OUT_DIR`), so it also serves as a generic "merge any two LCOV sources" tool (e.g. E2E + unit). Honors `COVERAGE_EXCLUDE` and skips deleted files. Generic — no merge tool is tied to any specific runner.
+- **Cache-fallback report** (`generate-from-cache.mjs` + `pnpm test:e2e:coverage:from-cache`). Re-renders `reports/coverage/` from the existing monocart cache without re-processing raw files — a recovery path when `test:e2e:coverage:merge` OOMs on a very large suite.
+- `.gitignore.snippet` now ignores `reports/totalCoverage/`; `install.sh` ships both new scripts.
+
+### Changed
+
+- Documented both on the Code Coverage docs page (new "Total coverage across runs" section + Commands rows).
 
 ### Fixed
 

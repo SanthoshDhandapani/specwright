@@ -1,0 +1,111 @@
+import { DocsPrevNext } from "@/components/docs/docs-prev-next";
+
+# CI / Continuous Integration
+
+Specwright runs in CI the same way any Playwright suite does — install, (optionally) start a dev server, run the suite, publish the reports. To save you the boilerplate, the plugin ships a ready-to-adapt **Jenkins declarative pipeline** at `e2e-tests/ci/e2e-pipeline.groovy`, and the pattern maps cleanly to GitHub Actions or any other runner.
+
+The bundled pipeline is intentionally **generic** — no host names, registries, credentials, or project-specific scripts. You wire it up with parameters.
+
+---
+
+## Bundled Jenkins pipeline
+
+After `init`, the template lands at `e2e-tests/ci/e2e-pipeline.groovy`. Point a Jenkins **Pipeline** job at that file (Pipeline script from SCM) and run it.
+
+### What it does
+
+| Stage | Detail |
+| --- | --- |
+| **Checkout** | Checks out the `BRANCH` parameter |
+| **Install Dependencies** | Auto-detects the package manager from the lockfile (`pnpm` / `yarn` / `npm`) and installs with the frozen lockfile |
+| **Configure Environment** | Merges any `ENV_OVERRIDES` (KEY=VALUE lines) into `e2e-tests/.env.testing`, replacing existing keys so the override wins |
+| **Start App** | If `APP_START_CMD` is set, starts your dev server in the background and waits (up to 5 min) for `BASE_URL` to respond |
+| **Run E2E Tests** | Runs the chosen `SCOPE` of the suite, with coverage when `RUN_COVERAGE` is true |
+| **BDD Report** | Generates the Cucumber-style BDD HTML report (`report:bdd`) |
+| **Coverage Reports** | When `RUN_COVERAGE` is true, merges V8 data and builds the executed + full-tree Istanbul reports |
+| **Publish & Archive** | Publishes the BDD, Playwright, and Coverage HTML reports and archives `reports/**` + `test-results/**` |
+| **Finalize** | Marks the build `UNSTABLE` (not failed) if any scenario failed, so reports stay viewable |
+
+The run is failure-tolerant by design: a test failure doesn't abort the pipeline — reports are still generated and published, and the build is flagged `UNSTABLE`.
+
+### Parameters
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `BRANCH` | `main` | Git branch to check out and test |
+| `BASE_URL` | `http://localhost:3000` | App URL under test. Use a localhost dev server for accurate coverage source maps. |
+| `SCOPE` | `all` | Which project group to run: `all`, `main`, `auth`, `serial`, or `workflows`. Kept in lockstep with the `test:bdd:*` scripts. Ignored when `RUN_COVERAGE` is true (coverage always runs the full coverage projects). |
+| `GREP` | (empty) | Optional Playwright `--grep` tag filter (e.g. `@smoke`), combined with `SCOPE` |
+| `WORKERS` | `4` | Parallel Playwright workers |
+| `RUN_COVERAGE` | `true` | Collect V8 coverage and build the coverage reports |
+| `ENV_OVERRIDES` | (empty) | KEY=VALUE lines merged into `.env.testing` for this run (e.g. a different `BASE_URL`, CI credentials) |
+| `APP_START_CMD` | (empty) | Command to start the app/dev server before tests (e.g. `pnpm dev`). Leave blank if `BASE_URL` already serves. |
+
+### Agent image
+
+The template uses the official `mcr.microsoft.com/playwright` image, which ships the browsers and system libraries — no `apt`/`apk` browser-install dance. **Pin the tag to match the `@playwright/test` version in your `package.json`.** If you run on a bare Node agent instead, add a step that runs `npx playwright install --with-deps chromium`.
+
+---
+
+## SCOPE → projects
+
+`SCOPE` composes Playwright `--project` flags directly (rather than calling the named scripts), which keeps it package-manager-agnostic and lets `GREP` combine cleanly:
+
+| SCOPE | Projects |
+| --- | --- |
+| `all` | `setup`, `auth-tests`, `serial-execution`, `precondition`, `workflow-consumers`, `main-e2e` |
+| `main` | `setup`, `main-e2e` |
+| `auth` | `setup`, `auth-tests` |
+| `serial` | `setup`, `serial-execution` |
+| `workflows` | `setup`, `precondition`, `workflow-consumers` |
+
+See [Playwright Projects](/docs/reference/playwright-projects) for what each project runs.
+
+---
+
+## Coverage in CI
+
+Set `RUN_COVERAGE=true` (the default). Coverage needs source maps, so point `BASE_URL` at a **localhost dev server** — start it via `APP_START_CMD` or run it as a prior step. The pipeline then builds both the executed-only and full-tree reports and publishes them. Full details, exclusions, and the LCOV artifact are documented in [Code Coverage](/docs/reference/code-coverage).
+
+---
+
+## GitHub Actions
+
+The same shape works on Actions — start the server, run the suite, build/upload the reports:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: pnpm/action-setup@v4
+- uses: actions/setup-node@v4
+  with: { node-version: 22, cache: pnpm }
+- run: pnpm install --frozen-lockfile
+
+# Start your dev server (coverage needs localhost source maps)
+- run: pnpm dev &
+- run: npx wait-on http://localhost:3000
+
+- run: pnpm test:e2e:coverage          # or: pnpm test:bdd
+- run: pnpm report:bdd                  # BDD HTML report
+
+- uses: actions/upload-artifact@v4
+  with:
+    name: e2e-reports
+    path: reports/
+
+# Optional: upload LCOV to a coverage service
+- uses: codecov/codecov-action@v4
+  with:
+    files: ./reports/coverage/lcov.info
+```
+
+---
+
+## What's intentionally not included
+
+The template stays generic, so these are left for you to add per your environment:
+
+- **Notifications** (email, Slack) — wire into the `post` block.
+- **Secrets** — inject test credentials via your CI's secret store and `ENV_OVERRIDES`, never commit them.
+- **Deploy / promotion** — out of scope; this pipeline tests, it doesn't ship.
+
+<DocsPrevNext />

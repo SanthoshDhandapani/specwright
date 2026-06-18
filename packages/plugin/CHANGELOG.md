@@ -5,6 +5,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 ---
 
+## [0.8.0] — 2026-06-18
+
+### Added
+
+- **CI pipeline parity with a full E2E flow.** The bundled `e2e-tests/ci/e2e-pipeline.groovy` template gained:
+  - a `SCOPE` parameter (`all` / `main` / `auth` / `serial` / `workflows`) that composes the matching Playwright `--project` flags;
+  - `ENV_OVERRIDES` — per-run `KEY=VALUE` lines merged into `e2e-tests/.env.testing` (existing keys replaced) for credentials / a different `BASE_URL` without editing files;
+  - a **BDD HTML report** stage (`report:bdd`) plus publish, alongside the Playwright and coverage reports.
+
+### Changed
+
+- Documented CI usage on a dedicated **Reference → CI / Continuous Integration** docs page (Jenkins template stages + parameters, `SCOPE → projects` mapping, GitHub Actions equivalent); the Code Coverage page now links to it.
+
+---
+
 ## [0.7.0] — 2026-06-18
 
 ### Added

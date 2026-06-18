@@ -233,9 +233,7 @@ Coverage works in CI the same way Cypress/Vitest do — start the dev server in 
 
 The `lcov.info` artifact is the standard format accepted by Codecov, Coveralls, SonarQube, and most IDE coverage plugins.
 
-### Bundled Jenkins pipeline template
-
-For Jenkins users, the plugin ships a ready-to-adapt declarative pipeline at `e2e-tests/ci/e2e-pipeline.groovy`. It auto-detects the package manager (pnpm/yarn/npm), optionally starts your dev server and waits for it, runs the suite with coverage, builds both the executed and full-tree reports, and publishes/archives the HTML. Point a Pipeline job at the file and fill in the parameters (`BASE_URL`, `BRANCH`, `WORKERS`, `APP_START_CMD`); it carries no host- or project-specific values.
+For a ready-made pipeline, the plugin ships a generic Jenkins declarative template at `e2e-tests/ci/e2e-pipeline.groovy` that runs the suite with coverage and publishes the reports — see [CI / Continuous Integration](/docs/reference/ci-pipeline) for its stages and parameters.
 
 ### Advanced: redirecting paths
 

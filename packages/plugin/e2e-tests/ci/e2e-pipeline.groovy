@@ -1,18 +1,19 @@
 // ---------------------------------------------------------------------------
 // Specwright E2E + Coverage — generic Jenkins declarative pipeline (TEMPLATE)
 //
-// A starting point for running playwright-bdd E2E tests with V8 code coverage
-// in CI. It is intentionally tool-agnostic and carries no project-, host-, or
-// vendor-specific values — fill in the parameters and (optionally) APP_START_CMD
-// for your app, then point a Jenkins Pipeline job at this file.
+// A starting point for running playwright-bdd E2E tests (optionally with V8 code
+// coverage) in CI. It is intentionally tool-agnostic and carries no project-,
+// host-, or vendor-specific values — fill in the parameters and (optionally)
+// APP_START_CMD for your app, then point a Jenkins Pipeline job at this file.
 //
 // What it does:
 //   1. Checks out the chosen branch
 //   2. Installs dependencies (auto-detects pnpm / yarn / npm from the lockfile)
-//   3. Optionally starts your dev server and waits for it to come up
-//   4. Runs the E2E suite — with coverage when RUN_COVERAGE is true
-//   5. Builds the coverage reports (executed-only + full-tree Istanbul)
-//   6. Publishes and archives the HTML reports
+//   3. Applies per-run ENV_OVERRIDES into e2e-tests/.env.testing
+//   4. Optionally starts your dev server and waits for it to come up
+//   5. Runs the chosen SCOPE of the suite — with coverage when RUN_COVERAGE=true
+//   6. Builds the BDD HTML report and (when enabled) the coverage reports
+//   7. Publishes and archives the HTML reports
 //
 // Coverage note: accurate coverage needs source maps, which dev servers serve
 // but deployed builds usually strip. Point BASE_URL at a localhost dev server
@@ -33,9 +34,11 @@ pipeline {
     parameters {
         string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to check out and test')
         string(name: 'BASE_URL', defaultValue: 'http://localhost:3000', description: 'Application URL under test. Use a localhost dev server for accurate coverage source maps.')
+        choice(name: 'SCOPE', choices: ['all', 'main', 'auth', 'serial', 'workflows'], description: 'Which project group to run. all = full suite; main = parallel module tests; auth/serial/workflows = those projects only. (Ignored when RUN_COVERAGE is true — coverage always runs the full coverage projects.)')
+        string(name: 'GREP', defaultValue: '', description: 'Optional Playwright --grep tag filter (e.g. @smoke). Combined with SCOPE.')
         string(name: 'WORKERS', defaultValue: '4', description: 'Number of parallel Playwright workers')
-        string(name: 'GREP', defaultValue: '', description: 'Optional Playwright --grep tag filter (e.g. @smoke). Leave blank to run the full suite.')
         booleanParam(name: 'RUN_COVERAGE', defaultValue: true, description: 'Collect V8 code coverage and build the coverage reports')
+        text(name: 'ENV_OVERRIDES', defaultValue: '', description: 'Optional KEY=VALUE pairs (one per line) merged into e2e-tests/.env.testing before the run. Example:\nBASE_URL=http://localhost:5173\nTEST_USERNAME=ci@example.com')
         text(name: 'APP_START_CMD', defaultValue: '', description: 'Optional command to start the app/dev server in the background before tests (e.g. "pnpm dev"). Leave blank if BASE_URL is already serving.')
     }
 
@@ -84,6 +87,27 @@ pipeline {
             }
         }
 
+        stage('Configure Environment') {
+            when { expression { params.ENV_OVERRIDES?.trim() } }
+            steps {
+                // Merge each KEY=VALUE into e2e-tests/.env.testing, replacing any
+                // existing line for that key so the override actually wins.
+                sh '''
+                    set -e
+                    ENV_FILE=e2e-tests/.env.testing
+                    touch "$ENV_FILE"
+                    printf '%s\\n' "$ENV_OVERRIDES" | while IFS= read -r line; do
+                        case "$line" in ""|\\#*) continue ;; esac
+                        key="${line%%=*}"
+                        grep -v "^${key}=" "$ENV_FILE" > "$ENV_FILE.tmp" 2>/dev/null || true
+                        mv "$ENV_FILE.tmp" "$ENV_FILE"
+                        echo "$line" >> "$ENV_FILE"
+                        echo "Applied override: ${key}"
+                    done
+                '''
+            }
+        }
+
         stage('Start App') {
             when { expression { params.APP_START_CMD?.trim() } }
             steps {
@@ -119,16 +143,43 @@ pipeline {
                         // coverage projects, and writes raw V8 data to .raw-coverage/.
                         sh "set +e; ${runner} test:e2e:coverage; echo \$? > .test-exit-code; set -e; exit 0"
                     } else {
+                        // SCOPE → Playwright projects (kept in lockstep with the
+                        // test:bdd:* scripts in package.json). Composing --project
+                        // flags directly avoids package-manager arg-passing quirks.
+                        def projectsByScope = [
+                            all      : '--project setup --project auth-tests --project serial-execution --project precondition --project workflow-consumers --project main-e2e',
+                            main     : '--project setup --project main-e2e',
+                            auth     : '--project setup --project auth-tests',
+                            serial   : '--project setup --project serial-execution',
+                            workflows: '--project setup --project precondition --project workflow-consumers',
+                        ]
+                        def projects = projectsByScope[params.SCOPE] ?: projectsByScope.all
                         def grepArg = params.GREP?.trim() ? "--grep '${params.GREP}'" : ''
                         sh """
                             set +e
                             npx bddgen
-                            npx playwright test --workers ${params.WORKERS} ${grepArg}
+                            npx playwright test ${projects} --workers ${params.WORKERS} ${grepArg}
                             echo \$? > .test-exit-code
                             set -e
                             exit 0
                         """
                     }
+                }
+            }
+        }
+
+        stage('BDD Report') {
+            steps {
+                script {
+                    def pm = sh(script: '''
+                        if [ -f pnpm-lock.yaml ]; then echo pnpm;
+                        elif [ -f yarn.lock ]; then echo yarn;
+                        else echo npm; fi
+                    ''', returnStdout: true).trim()
+                    def runner = (pm == 'npm') ? 'npm run' : pm
+                    // Generate the Cucumber-style BDD HTML report (report:bdd →
+                    // generate-bdd-report.js → reports/cucumber-bdd/html-report/).
+                    sh "set +e; ${runner} report:bdd; set -e; exit 0"
                 }
             }
         }
@@ -154,11 +205,18 @@ pipeline {
                 archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
                 archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
                 script {
+                    if (fileExists('reports/cucumber-bdd/html-report/index.html')) {
+                        publishHTML([
+                            allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true,
+                            reportDir: 'reports/cucumber-bdd/html-report', reportFiles: 'index.html',
+                            reportName: 'BDD Test Report'
+                        ])
+                    }
                     if (fileExists('reports/playwright/index.html')) {
                         publishHTML([
                             allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true,
                             reportDir: 'reports/playwright', reportFiles: 'index.html',
-                            reportName: 'E2E Test Report'
+                            reportName: 'Playwright Report'
                         ])
                     }
                     if (params.RUN_COVERAGE && fileExists('reports/coverage-istanbul/index.html')) {
@@ -189,7 +247,7 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline finished — branch: ${params.BRANCH}, BASE_URL: ${params.BASE_URL}, coverage: ${params.RUN_COVERAGE}"
+            echo "Pipeline finished — branch: ${params.BRANCH}, scope: ${params.SCOPE}, BASE_URL: ${params.BASE_URL}, coverage: ${params.RUN_COVERAGE}"
         }
     }
 }

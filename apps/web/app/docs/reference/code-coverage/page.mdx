@@ -28,7 +28,7 @@ Specwright ships four `test:e2e:coverage*` scripts. Use them in this order:
 
 | Script | What it does |
 | --- | --- |
-| `pnpm test:e2e:coverage` | Runs the E2E suite with `ENABLE_COVERAGE=true`. Each scenario captures V8 coverage into `.raw-coverage/`, and `global.teardown.js` merges everything into `reports/coverage/` at the end. |
+| `pnpm test:e2e:coverage` | Runs the E2E suite with `ENABLE_COVERAGE=true`. Stale `.raw-coverage/*.json` from a previous (possibly killed) run is cleared at setup so it can't inflate this run. Each scenario captures V8 coverage into `.raw-coverage/`, and `global.teardown.js` merges everything into `reports/coverage/` at the end. |
 | `pnpm test:e2e:coverage:merge` | Standalone merge runner. Re-runs the merge step against existing `.raw-coverage/` files — useful when the in-process merge OOMed on a very large suite (raised heap to 16 GB). |
 | `pnpm test:e2e:coverage:report:executed` | Opens `reports/coverage/index.html` — the monocart report showing **only files the suite loaded**. |
 | `pnpm test:e2e:coverage:report:all` | Renders `reports/coverage-istanbul/index.html` — an **Istanbul** report showing **every `src/` file** (loaded + untouched). Untouched files appear as 0% rows so you can scan which features have zero E2E exercise. |
@@ -117,23 +117,24 @@ COVERAGE_ALLOW_REMOTE=true pnpm test:e2e:coverage
 
 ## Excluding files
 
-Files you don't want measured (generated code, type-only files, legacy dirs) can be excluded via the `COVERAGE_EXCLUDE` env var. Comma-separated substring patterns:
+Files you don't want measured (generated code, type-only files, legacy dirs) can be excluded via the `COVERAGE_EXCLUDE` env var — a shell env var takes priority over the value in `e2e-tests/.env.testing`. Comma-separated **glob/substring** patterns: entries without wildcards match as substrings; `*` matches a single path segment and `**` matches across segments.
 
 ```bash
 # In e2e-tests/.env.testing
-COVERAGE_EXCLUDE=src/api/,src/store/,.stories.,src/legacy/
+COVERAGE_EXCLUDE=src/api/,src/store/,.stories.,src/legacy/,**/*.generated.js
 ```
 
 | Pattern | What it excludes |
 | --- | --- |
-| `src/api/` | Entire `src/api/` directory |
-| `.stories.` | All Storybook files |
-| `/__mocks__/` | Common test-mock directories |
-| `.types.` | Type-only files |
-| `src/generated/` | Codegen output |
-| `serviceWorker.ts` | Specific file by name |
+| `src/api/` | Entire `src/api/` directory (substring) |
+| `.stories.` | All Storybook files (substring) |
+| `/__mocks__/` | Common test-mock directories (substring) |
+| `.types.` | Type-only files (substring) |
+| `src/generated/` | Codegen output (substring) |
+| `**/*.generated.js` | Any generated file, any depth (glob) |
+| `serviceWorker.ts` | Specific file by name (substring) |
 
-Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `*.css`, external hosts (e.g. `accounts.google.com`), and HTML pages.
+These exclusions are applied both during the merge (`merge-coverage.js`) and when building the full-tree Istanbul report (`coverage-expand.mjs`), so a file you exclude won't appear as a 0% row either. Built-in defaults already drop `node_modules`, `*.test.*`, `*.spec.*`, `*.stories.*`, CSS/asset modules, external hosts (e.g. `accounts.google.com`), and HTML pages.
 
 ---
 
@@ -231,6 +232,14 @@ Coverage works in CI the same way Cypress/Vitest do — start the dev server in 
 ```
 
 The `lcov.info` artifact is the standard format accepted by Codecov, Coveralls, SonarQube, and most IDE coverage plugins.
+
+### Bundled Jenkins pipeline template
+
+For Jenkins users, the plugin ships a ready-to-adapt declarative pipeline at `e2e-tests/ci/e2e-pipeline.groovy`. It auto-detects the package manager (pnpm/yarn/npm), optionally starts your dev server and waits for it, runs the suite with coverage, builds both the executed and full-tree reports, and publishes/archives the HTML. Point a Pipeline job at the file and fill in the parameters (`BASE_URL`, `BRANCH`, `WORKERS`, `APP_START_CMD`); it carries no host- or project-specific values.
+
+### Advanced: redirecting paths
+
+The report scripts honour optional path overrides for non-standard layouts or alternate merge flows: `LCOV_IN` / `LCOV_OUT` (input/output lcov for `coverage-expand.mjs`) and `OUT_DIR` (Istanbul output dir for `coverage-istanbul.mjs`). Defaults sit under `reports/coverage/`; you rarely need to set these.
 
 ---
 

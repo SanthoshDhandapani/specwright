@@ -13,7 +13,7 @@ BASE_ENV=qat
 # TEST_ENV=staging               # optional override
 NODE_ENV=test
 VITE_BUILD_ENVIRONMENT=testing
-# PIPELINE_TICKET_ID=ENG-1234    # required when org hooks enforce ticket IDs
+# PIPELINE_TICKET_ID=PROJ-123    # required when org hooks enforce ticket IDs
 
 # ── Authentication ────────────────────────────────────────────────────────────
 AUTH_STRATEGY=email-password     # email-password | oauth | none
@@ -61,7 +61,7 @@ CODEGEN_OUTPUT_PATH=e2e-tests/playwright/generated
 | `TEST_ENV` | — | Optional override for the environment label. When set, takes precedence over `BASE_ENV` in report output. |
 | `NODE_ENV` | `test` | Node environment. Affects framework-level behaviour (e.g. assertion verbosity). |
 | `VITE_BUILD_ENVIRONMENT` | `testing` | Injected into Vite apps via `import.meta.env`. Set to match your app's expected build environment string. |
-| `PIPELINE_TICKET_ID` | — | Jira or issue ticket ID (e.g. `ENG-1234`) prepended to pipeline run names. Required when org-level hooks enforce ticket IDs on all pipeline runs. |
+| `PIPELINE_TICKET_ID` | — | Jira or issue ticket ID (e.g. `PROJ-123`) prepended to pipeline run names. Required when org-level hooks enforce ticket IDs on all pipeline runs. |
 
 ---
 
@@ -145,7 +145,7 @@ Used when `AUTH_STRATEGY=oauth`. Specwright bypasses the OAuth popup entirely by
 | Field | Default | Description |
 |---|---|---|
 | `ENABLE_COVERAGE` | `false` | Capture V8 code coverage during the test run. Automatically set to `true` by `pnpm test:e2e:coverage`. Set globally if you want coverage on every `pnpm test:bdd` run. |
-| `COVERAGE_EXCLUDE` | (empty) | Comma-separated substring patterns to exclude from coverage measurement. Example: `src/api/,src/store/,.stories.,/__mocks__/`. Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `.d.ts`, `*.css`, and external hosts. |
+| `COVERAGE_EXCLUDE` | (empty) | Comma-separated glob/substring patterns to exclude from coverage measurement (a shell env var overrides this value). Patterns without wildcards match as substrings; `*` matches one path segment, `**` across segments. Example: `src/api/,.stories.,/__mocks__/,**/*.generated.js`. Built-in defaults already exclude `node_modules`, `*.test.*`, `*.spec.*`, `*.stories.*`, CSS/asset modules, and external hosts. |
 | `COVERAGE_SOURCE_ROOTS` | `src` | Comma-separated source root directories used to reconstruct full file paths in the report (when build tools emit bare basenames). Examples: `app` for Next.js App Router, `src,lib` for multi-root layouts, `packages/web/src` for monorepos. Walker indexes `.ts/.tsx/.js/.jsx/.mjs/.cjs/.vue/.svelte/.astro`. |
 | `COVERAGE_ALLOW_REMOTE` | `false` | Override the localhost-only guard. Set to `true` only if your deployed build ships source maps. Default behaviour refuses to run against non-localhost URLs because deployed bundles usually strip source maps, producing useless reports. |
 

@@ -31,14 +31,14 @@
   },
   "packageManager": "pnpm@9.15.0",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.100.1",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@specwright/mcp": "workspace:*",
     "claude-runner": "^0.5.1"
   },
   "pnpm": {
     "overrides": {
       "jwt-decode>husky": "-",
-      "@anthropic-ai/sdk": "^0.100.1",
+      "@anthropic-ai/sdk": "^0.105.0",
       "picomatch@<2.3.2": "2.3.2",
       "picomatch@>=4.0.0 <4.0.4": "4.0.4",
       "fast-uri@<=3.1.1": "3.1.2",

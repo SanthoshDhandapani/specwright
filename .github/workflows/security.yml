@@ -20,7 +20,7 @@ jobs:
       # version read from packageManager field in package.json automatically
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm

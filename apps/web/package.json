@@ -30,7 +30,7 @@
     "@types/node": "^20.19.41",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^9.39.4",
+    "eslint": "^10.10.0",
     "eslint-config-next": "16.2.6",
     "pagefind": "^1.5.2",
     "tailwindcss": "^4.3.0",
